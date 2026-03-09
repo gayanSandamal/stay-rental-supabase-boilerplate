@@ -5,9 +5,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-if (!process.env.POSTGRES_URL) {
-  throw new Error('POSTGRES_URL environment variable is not set');
+// Support both DATABASE_URL (Supabase/Vercel) and POSTGRES_URL (local)
+const connectionString =
+  process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+if (!connectionString) {
+  throw new Error(
+    'Database URL not set. Set DATABASE_URL or POSTGRES_URL in your environment.'
+  );
 }
 
-export const client = postgres(process.env.POSTGRES_URL);
+export const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
