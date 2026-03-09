@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   experimental: {
     ppr: true,
-    clientSegmentCache: true
+    clientSegmentCache: true,
   },
   images: {
     remotePatterns: [
@@ -13,9 +13,12 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '**.supabase.co', // If using Supabase storage
+        hostname: '*.supabase.co',
       },
-      // Add other image domains as needed
+      {
+        protocol: 'https',
+        hostname: '*.supabase.in',
+      },
     ],
   },
 };
