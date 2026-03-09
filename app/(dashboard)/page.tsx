@@ -5,6 +5,7 @@ import { TrustSignals } from '@/components/trust-signals';
 import { KeyDifferentiators } from '@/components/key-differentiators';
 import { HowItWorks } from '@/components/how-it-works';
 import { Testimonials } from '@/components/testimonials';
+import { ScrollReveal } from '@/components/scroll-reveal';
 import { ShieldCheck, Mail, Phone } from 'lucide-react';
 
 const FOOTER_LINKS = {
@@ -37,31 +38,33 @@ function SiteFooter() {
     >
       {/* CTA strip */}
       <div className="border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 flex flex-col lg:flex-row items-center justify-between gap-8">
-          <div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white leading-snug">
-              Ready to find your{' '}
-              <span className="gradient-text-gold">perfect home?</span>
-            </h3>
-            <p className="text-slate-400 mt-2 text-base max-w-md">
-              Join thousands of tenants who found verified, scam-free rentals through Stay Rental.
-            </p>
+        <ScrollReveal>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div>
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-white leading-snug">
+                Ready to find your{' '}
+                <span className="gradient-text-gold">perfect home?</span>
+              </h3>
+              <p className="text-slate-400 mt-2 text-base max-w-md">
+                Join thousands of tenants who found verified, scam-free rentals through Stay Rental.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 shrink-0">
+              <Link
+                href="/listings"
+                className="btn-primary-gradient px-6 py-3 rounded-xl text-white font-semibold text-sm"
+              >
+                Browse Listings
+              </Link>
+              <Link
+                href="/list-your-property"
+                className="btn-amber-gradient px-6 py-3 rounded-xl text-white font-semibold text-sm"
+              >
+                List Your Property
+              </Link>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3 shrink-0">
-            <Link
-              href="/listings"
-              className="btn-primary-gradient px-6 py-3 rounded-xl text-white font-semibold text-sm"
-            >
-              Browse Listings
-            </Link>
-            <Link
-              href="/list-your-property"
-              className="btn-amber-gradient px-6 py-3 rounded-xl text-white font-semibold text-sm"
-            >
-              List Your Property
-            </Link>
-          </div>
-        </div>
+        </ScrollReveal>
       </div>
 
       {/* Links grid */}

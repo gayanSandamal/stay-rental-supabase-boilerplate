@@ -1,4 +1,5 @@
 import { Zap, Droplet, Wifi, ShieldCheck, MapPin, Clock } from 'lucide-react';
+import { ScrollReveal } from './scroll-reveal';
 
 const FEATURES = [
   {
@@ -60,27 +61,27 @@ const FEATURES = [
 export function KeyDifferentiators() {
   return (
     <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section header */}
-        <div className="text-center mb-14">
-          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
-            Why Stay Rental
-          </span>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
-            We Solve What Others{' '}
-            <span className="relative inline-block">
-              <span className="gradient-text">Ignore</span>
+        <ScrollReveal>
+          <div className="text-center mb-14">
+            <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
+              Why Stay Rental
             </span>
-          </h2>
-          <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-            Renting in Sri Lanka has unique challenges. We built every feature to tackle them head-on.
-          </p>
-        </div>
+            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
+              We Solve What Others{' '}
+              <span className="relative inline-block">
+                <span className="gradient-text">Ignore</span>
+              </span>
+            </h2>
+            <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
+              Renting in Sri Lanka has unique challenges. We built every feature to tackle them head-on.
+            </p>
+          </div>
+        </ScrollReveal>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f, i) => {
             const Icon = f.icon;
             return (
@@ -88,12 +89,10 @@ export function KeyDifferentiators() {
                 key={i}
                 className="group bg-white rounded-2xl p-7 border border-slate-200/80 card-hover card-glow shadow-sm"
               >
-                {/* Icon */}
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-5 shadow-md group-hover:scale-110 transition-transform duration-300`}>
                   <Icon className="h-6 w-6 text-white" />
                 </div>
 
-                {/* Tag */}
                 <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full border mb-3 ${f.tagColor}`}>
                   {f.tag}
                 </span>
@@ -103,7 +102,7 @@ export function KeyDifferentiators() {
               </div>
             );
           })}
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   );

@@ -16,8 +16,8 @@ import {
   User,
   Phone,
   MessageCircle,
+  ChevronRight,
 } from 'lucide-react';
-import { ViewingRequestForm } from './viewing-request-form';
 import { PropertyImagesGallery } from '@/components/property-images-gallery';
 import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
@@ -72,37 +72,31 @@ export default async function ListingDetailPage({
     notFound();
   }
 
-  const listing = await getListingById(listingId);
+  const [listing, user] = await Promise.all([
+    getListingById(listingId),
+    getUser(),
+  ]);
 
   if (!listing) {
     notFound();
   }
 
-  // Active listings are public - anyone can view them
-  if (listing.status === 'active') {
-    // Continue to render the page
-  } else {
-    // Non-active listings require authentication and ownership check
-    const user = await getUser();
-    
+  // Active listings are public — anyone can view them.
+  // Non-active listings require authentication + ownership.
+  if (listing.status !== 'active') {
     if (!user) {
-      // Non-logged-in users cannot view non-active listings
       notFound();
     }
 
-    // Check if user has permission to view
     let canView = false;
 
-    // Admins and ops can view all listings
     if (user.role === 'admin' || user.role === 'ops') {
       canView = true;
     } else {
-      // Check if user is the owner (landlord or business account member)
       const userWithLandlord = await getUserWithLandlord(user.id);
       if (userWithLandlord?.landlord && userWithLandlord.landlord.id === listing.landlordId) {
         canView = true;
       } else {
-        // Check if user is a business account member who created this listing
         try {
           const member = await db.query.businessAccountMembers.findFirst({
             where: and(
@@ -117,7 +111,6 @@ export default async function ListingDetailPage({
             canView = true;
           }
         } catch (error: any) {
-          // If columns don't exist, just check createdBy
           if (listing.createdBy === user.id) {
             canView = true;
           }
@@ -129,6 +122,8 @@ export default async function ListingDetailPage({
       notFound();
     }
   }
+
+  const isLoggedIn = !!user;
 
   // Fetch publisher information
   let publisherName = 'Unknown';
@@ -203,6 +198,24 @@ export default async function ListingDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" className="mb-5">
+        <ol className="flex items-center gap-1 text-sm text-slate-500">
+          <li>
+            <a href="/" className="hover:text-teal-700 transition-colors">Home</a>
+          </li>
+          <li><ChevronRight className="h-3.5 w-3.5 text-slate-300" /></li>
+          <li>
+            <a href="/listings" className="hover:text-teal-700 transition-colors">Listings</a>
+          </li>
+          <li><ChevronRight className="h-3.5 w-3.5 text-slate-300" /></li>
+          <li className="text-slate-800 font-medium truncate max-w-[240px]">
+            {listing.title}
+          </li>
+        </ol>
+      </nav>
+
       {listing.status !== 'active' && (
         <div className={`mb-4 p-4 rounded-lg ${
           listing.status === 'pending' 
@@ -299,64 +312,6 @@ export default async function ListingDetailPage({
               </div>
             </CardContent>
           </Card>
-
-          {/* Contact Numbers - Only show verified ones on public page */}
-          {listing.contactNumbers && listing.contactNumbers.length > 0 && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {listing.contactNumbers
-                    .filter((lc) => {
-                      const contact = lc.contactNumber;
-                      return contact && contact.isActive && contact.verified;
-                    })
-                    .map((lc) => {
-                      const contact = lc.contactNumber;
-                      if (!contact) return null;
-                      
-                      return (
-                        <div
-                          key={contact.id}
-                          className="flex items-center justify-between p-3 border border-green-200 bg-green-50 rounded-lg"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Phone className="h-5 w-5 text-gray-500" />
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{contact.phoneNumber}</span>
-                                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">
-                                  Verified
-                                </span>
-                              </div>
-                              {contact.label && (
-                                <div className="text-sm text-gray-500">{contact.label}</div>
-                              )}
-                            </div>
-                          </div>
-                          {contact.isWhatsApp && (
-                            <div className="flex items-center gap-1 text-green-600">
-                              <MessageCircle className="h-4 w-4" />
-                              <span className="text-sm">WhatsApp</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  {listing.contactNumbers.filter((lc) => {
-                    const contact = lc.contactNumber;
-                    return contact && contact.isActive && contact.verified;
-                  }).length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      No verified contact numbers available
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {listing.description && (
             <Card className="mb-6">
@@ -545,13 +500,129 @@ export default async function ListingDetailPage({
                 )}
               </div>
 
+              {/* Contact Owner / Publisher */}
               {listing.status === 'active' && (
-                <ViewingRequestForm listingId={listing.id} />
+                <>
+                  {isLoggedIn ? (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-teal-700" />
+                        Contact {publisherType === 'business' ? 'Publisher' : 'Owner'}
+                      </h4>
+
+                      {(() => {
+                        const verifiedContacts = listing.contactNumbers?.filter((lc) => {
+                          const c = lc.contactNumber;
+                          return c && c.isActive && c.verified;
+                        }) ?? [];
+
+                        const activeContacts = verifiedContacts.length > 0
+                          ? verifiedContacts
+                          : (listing.contactNumbers?.filter((lc) => lc.contactNumber?.isActive) ?? []);
+
+                        const publisherPhone = listing.landlord?.user?.phone ?? null;
+
+                        if (activeContacts.length > 0) {
+                          return (
+                            <div className="space-y-2">
+                              {activeContacts.map((lc) => {
+                                const contact = lc.contactNumber;
+                                if (!contact) return null;
+                                return (
+                                  <div key={contact.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="font-semibold text-sm text-gray-900">{contact.phoneNumber}</span>
+                                      {contact.verified && (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded">
+                                          Verified
+                                        </span>
+                                      )}
+                                      {contact.label && (
+                                        <span className="text-xs text-gray-500">· {contact.label}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <a
+                                        href={`tel:${contact.phoneNumber}`}
+                                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition-colors"
+                                      >
+                                        <Phone className="h-3.5 w-3.5" />
+                                        Call
+                                      </a>
+                                      {contact.isWhatsApp && (
+                                        <a
+                                          href={`https://wa.me/${contact.phoneNumber.replace(/[^0-9+]/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                        >
+                                          <MessageCircle className="h-3.5 w-3.5" />
+                                          WhatsApp
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+
+                        if (publisherPhone) {
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-semibold text-sm text-gray-900">{publisherPhone}</span>
+                                <span className="text-xs text-gray-500">· Publisher</span>
+                              </div>
+                              <a
+                                href={`tel:${publisherPhone}`}
+                                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition-colors"
+                              >
+                                <Phone className="h-3.5 w-3.5" />
+                                Call
+                              </a>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <p className="text-sm text-gray-500 py-2">
+                            No contact numbers available for this listing.
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-5 text-center">
+                      <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-3">
+                        <Phone className="h-5 w-5 text-teal-700" />
+                      </div>
+                      <p className="text-sm font-semibold text-gray-800 mb-1">
+                        Contact the {publisherType === 'business' ? 'publisher' : 'owner'}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        Sign in to view verified contact numbers and reach the property {publisherType === 'business' ? 'publisher' : 'owner'} directly.
+                      </p>
+                      <Button asChild className="w-full bg-teal-700 hover:bg-teal-800 text-white">
+                        <a href={`/sign-in?redirect=/listings/${listing.id}`}>
+                          Sign in to see contact details
+                        </a>
+                      </Button>
+                      <p className="text-[10px] text-gray-400 mt-2">
+                        Don&apos;t have an account?{' '}
+                        <a href={`/sign-up?redirect=/listings/${listing.id}`} className="text-teal-700 font-medium hover:underline">
+                          Sign up free
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
               {listing.status !== 'active' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-yellow-800">
-                    This listing is {listing.status}. Viewing requests are only available for active listings.
+                    This listing is currently <span className="font-semibold capitalize">{listing.status}</span>.
                   </p>
                 </div>
               )}

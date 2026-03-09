@@ -139,7 +139,7 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
     },
     submitButton: {
       label: 'Apply Filters',
-      className: 'w-full bg-teal-800 hover:bg-teal-900',
+      className: 'hidden',
     },
     cancelButton: {
       show: false,

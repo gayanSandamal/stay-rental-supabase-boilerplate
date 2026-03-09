@@ -55,7 +55,7 @@ const signInSchema = z.object({
   password: z.string().min(8).max(100)
 });
 
-export const signIn = validatedAction(signInSchema, async (data) => {
+export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
 
   const [foundUser] = await db
@@ -87,8 +87,10 @@ export const signIn = validatedAction(signInSchema, async (data) => {
 
   await setSession(foundUser);
 
-  // Redirect based on user role
-  if (foundUser.role === 'ops' || foundUser.role === 'admin') {
+  const redirectTo = formData.get('redirect') as string | null;
+  if (redirectTo && redirectTo.startsWith('/')) {
+    redirect(redirectTo);
+  } else if (foundUser.role === 'ops' || foundUser.role === 'admin') {
     redirect('/dashboard');
   } else {
     redirect('/listings');
@@ -101,7 +103,7 @@ const signUpSchema = z.object({
   role: z.enum(['tenant', 'landlord']).optional()
 });
 
-export const signUp = validatedAction(signUpSchema, async (data) => {
+export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const { email, password, role = 'tenant' } = data;
 
   const existingUser = await db
@@ -138,8 +140,10 @@ export const signUp = validatedAction(signUpSchema, async (data) => {
 
   await setSession(createdUser);
 
-  // Redirect based on user role
-  if (createdUser.role === 'landlord') {
+  const redirectTo = formData.get('redirect') as string | null;
+  if (redirectTo && redirectTo.startsWith('/')) {
+    redirect(redirectTo);
+  } else if (createdUser.role === 'landlord') {
     redirect('/dashboard');
   } else {
     redirect('/listings');

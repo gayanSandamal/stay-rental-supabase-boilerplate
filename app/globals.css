@@ -255,9 +255,33 @@
   50%       { transform: translateY(-8px); }
 }
 
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%      { transform: translateY(-12px) rotate(1deg); }
+  66%      { transform: translateY(4px) rotate(-1deg); }
+}
+
+@keyframes float-reverse {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(10px); }
+}
+
+@keyframes drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  25%  { transform: translate(30px, -20px) scale(1.05); }
+  50%  { transform: translate(-10px, 15px) scale(0.98); }
+  75%  { transform: translate(-25px, -10px) scale(1.02); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(15, 92, 90, 0); }
   50%       { box-shadow: 0 0 20px 4px rgba(15, 92, 90, 0.25); }
+}
+
+@keyframes search-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(15, 92, 90, 0), 0 25px 50px -12px rgba(0,0,0,0.25); }
+  50%       { box-shadow: 0 0 30px 8px rgba(15, 92, 90, 0.15), 0 25px 50px -12px rgba(0,0,0,0.25); }
 }
 
 @keyframes shimmer {
@@ -276,17 +300,172 @@
   100% { background-position: 0% 50%; }
 }
 
+/* Scroll-triggered reveal animations */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reveal-left {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes reveal-right {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes reveal-scale {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes grow-width {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
 /* ─── Utility classes ───────────────────────────────────────────────────── */
 .animate-float {
   animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 5s ease-in-out infinite;
+}
+
+.animate-drift {
+  animation: drift 20s ease-in-out infinite;
+}
+
+.animate-drift-slow {
+  animation: drift 30s ease-in-out infinite;
+}
+
+.animate-drift-fast {
+  animation: drift 14s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
+.animate-search-glow {
+  animation: search-glow 3s ease-in-out infinite;
+}
+
 .animate-slide-up {
   animation: slide-up 0.5s ease-out both;
+}
+
+/* Hero entrance cascade — each child fades up with staggered delays */
+.hero-enter > * {
+  opacity: 0;
+  transform: translateY(28px);
+  animation: reveal-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.hero-enter > *:nth-child(1) { animation-delay: 0.05s; }
+.hero-enter > *:nth-child(2) { animation-delay: 0.15s; }
+.hero-enter > *:nth-child(3) { animation-delay: 0.30s; }
+.hero-enter > *:nth-child(4) { animation-delay: 0.45s; }
+.hero-enter > *:nth-child(5) { animation-delay: 0.60s; }
+.hero-enter > *:nth-child(6) { animation-delay: 0.75s; }
+
+/* ScrollReveal: hidden by default, animated when .in-view is added */
+.sr-hidden {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sr-hidden.from-left  { transform: translateX(-40px); }
+.sr-hidden.from-right { transform: translateX(40px); }
+.sr-hidden.from-scale { transform: scale(0.92); }
+
+.sr-hidden.in-view {
+  opacity: 1;
+  transform: translateY(0) translateX(0) scale(1);
+}
+
+/* Stagger children within a scroll-revealed container */
+.sr-stagger > * {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sr-stagger.in-view > *:nth-child(1)  { opacity: 1; transform: none; transition-delay: 0.0s; }
+.sr-stagger.in-view > *:nth-child(2)  { opacity: 1; transform: none; transition-delay: 0.08s; }
+.sr-stagger.in-view > *:nth-child(3)  { opacity: 1; transform: none; transition-delay: 0.16s; }
+.sr-stagger.in-view > *:nth-child(4)  { opacity: 1; transform: none; transition-delay: 0.24s; }
+.sr-stagger.in-view > *:nth-child(5)  { opacity: 1; transform: none; transition-delay: 0.32s; }
+.sr-stagger.in-view > *:nth-child(6)  { opacity: 1; transform: none; transition-delay: 0.40s; }
+.sr-stagger.in-view > *:nth-child(n+7){ opacity: 1; transform: none; transition-delay: 0.48s; }
+
+/* Connector line grow animation */
+.step-connector-animated {
+  background: linear-gradient(90deg, #0F5C5A, #3A9E98);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s;
+}
+.in-view .step-connector-animated {
+  transform: scaleX(1);
+}
+
+/* ─── How-It-Works interactive scene animations ─────────────────────────── */
+
+/* Typing cursor blink for search bar scene */
+.hiw-typing::after {
+  content: '|';
+  animation: hiw-blink 0.8s step-end infinite;
+  color: #0F5C5A;
+  font-weight: 400;
+  margin-left: 1px;
+}
+@keyframes hiw-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* SVG stroke draw animation */
+.hiw-draw {
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Checkmark draw with overshoot */
+.hiw-draw-check {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: hiw-check-draw 0.5s cubic-bezier(0.65, 0, 0.35, 1) 1.3s forwards;
+}
+@keyframes hiw-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter > *,
+  .sr-hidden,
+  .sr-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  .animate-float, .animate-float-slow, .animate-float-reverse,
+  .animate-drift, .animate-drift-slow, .animate-drift-fast,
+  .animate-search-glow {
+    animation: none !important;
+  }
+  .hiw-typing::after { animation: none !important; }
+  .hiw-draw { transition: none !important; stroke-dashoffset: 0 !important; }
+  .hiw-draw-check { animation: none !important; stroke-dashoffset: 0 !important; }
 }
 
 .gradient-text {

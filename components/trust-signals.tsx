@@ -1,5 +1,6 @@
 import { ShieldCheck, CheckCircle2, Eye, Building2 } from 'lucide-react';
 import { getActiveListings } from '@/lib/db/queries';
+import { AnimatedCounter } from './animated-counter';
 
 const STATS = [
   {
@@ -10,6 +11,7 @@ const STATS = [
     color: 'text-emerald-600',
     bg: 'bg-emerald-50',
     border: 'border-emerald-100',
+    isPercent: true,
   },
   {
     icon: CheckCircle2,
@@ -54,7 +56,6 @@ export async function TrustSignals() {
   return (
     <section className="bg-white py-14 border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <p className="text-center text-xs font-semibold tracking-widest text-slate-500 uppercase mb-10">
           Trusted by renters across Sri Lanka
         </p>
@@ -62,16 +63,24 @@ export async function TrustSignals() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {STATS.map((stat, i) => {
             const Icon = stat.icon;
-            const val = stat.value ?? String(counts[stat.key as keyof typeof counts] ?? '0');
+            const rawVal = stat.value ?? String(counts[stat.key as keyof typeof counts] ?? '0');
+            const numericVal = parseFloat(rawVal.replace(/[^0-9.]/g, ''));
+
             return (
               <div
                 key={i}
                 className={`flex flex-col items-center text-center p-6 rounded-2xl border ${stat.border} ${stat.bg} card-hover`}
               >
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 bg-white shadow-sm`}>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 bg-white shadow-sm">
                   <Icon className={`h-6 w-6 ${stat.color}`} />
                 </div>
-                <div className={`text-3xl font-extrabold ${stat.color} mb-1`}>{val}</div>
+                <div className={`text-3xl font-extrabold ${stat.color} mb-1`}>
+                  <AnimatedCounter
+                    value={numericVal}
+                    suffix={stat.isPercent ? '%' : ''}
+                    duration={1600 + i * 200}
+                  />
+                </div>
                 <div className="text-sm font-semibold text-slate-800">{stat.label}</div>
                 <div className="text-xs text-slate-600 mt-0.5">{stat.sub}</div>
               </div>

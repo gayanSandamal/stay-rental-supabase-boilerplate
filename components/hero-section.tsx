@@ -2,9 +2,35 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, MapPin, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Search, MapPin, ArrowRight, ShieldCheck, Zap, Building2, Clock } from 'lucide-react';
 
 const POPULAR = ['Colombo 3', 'Nugegoda', 'Kandy', 'Galle', 'Negombo', 'Battaramulla'];
+
+function FloatingCard({
+  icon: Icon,
+  label,
+  value,
+  className,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  className: string;
+}) {
+  return (
+    <div
+      className={`absolute hidden lg:flex items-center gap-3 px-4 py-3 rounded-2xl glass border border-white/15 shadow-2xl pointer-events-none select-none ${className}`}
+    >
+      <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+        <Icon className="h-4.5 w-4.5 text-teal-300" />
+      </div>
+      <div>
+        <div className="text-sm font-bold text-white leading-none">{value}</div>
+        <div className="text-[10px] text-slate-300 mt-0.5">{label}</div>
+      </div>
+    </div>
+  );
+}
 
 export function HeroSection() {
   const router = useRouter();
@@ -32,16 +58,37 @@ export function HeroSection() {
         ].join(', '),
       }}
     >
-      {/* Decorative orbs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-600/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 right-1/3 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* ── Animated background orbs ── */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-600/20 rounded-full blur-3xl pointer-events-none animate-drift-slow" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none animate-drift" />
+      <div className="absolute top-1/2 right-1/3 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none animate-drift-fast" />
 
       {/* Dot pattern overlay */}
       <div className="absolute inset-0 dot-pattern opacity-40 pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-        {/* Badge */}
+      {/* ── Floating glass feature cards (desktop only) ── */}
+      <FloatingCard
+        icon={ShieldCheck}
+        label="All landlords"
+        value="KYC Verified"
+        className="top-[22%] left-[6%] animate-float-slow"
+        />
+      <FloatingCard
+        icon={Building2}
+        label="Across Sri Lanka"
+        value="150+ Properties"
+        className="top-[18%] right-[5%] animate-float-reverse"
+        />
+      <FloatingCard
+        icon={Clock}
+        label="Avg. response"
+        value="Under 24h"
+        className="bottom-[28%] right-[7%] animate-float-slow [animation-delay:2s]"
+      />
+
+      {/* ── Main content with staggered entrance ── */}
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 hero-enter">
+        {/* 1 · Badge */}
         <div className="flex justify-center mb-6">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal-500/25 text-teal-200 border border-teal-400/35 backdrop-blur-sm">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -49,7 +96,7 @@ export function HeroSection() {
           </span>
         </div>
 
-        {/* Headline */}
+        {/* 2 · Headline */}
         <div className="text-center mb-8">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white leading-[1.08] tracking-tight">
             Find Your Perfect
@@ -57,16 +104,18 @@ export function HeroSection() {
               <span className="gradient-text">Stay in Sri Lanka</span>
             </span>
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed">
-            Mid-to-long-term rentals with{' '}
-            <span className="text-amber-300 font-semibold">KYC-verified</span> landlords,{' '}
-            power backup filters, fiber internet info, and fast viewing coordination.
-          </p>
         </div>
 
-        {/* Search */}
+        {/* 3 · Subtitle */}
+        <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
+          Mid-to-long-term rentals with{' '}
+          <span className="text-amber-300 font-semibold">KYC-verified</span> landlords,{' '}
+          power backup filters, fiber internet info, and fast viewing coordination.
+        </p>
+
+        {/* 4 · Search bar with breathing glow */}
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto mb-8">
-          <div className="glass rounded-2xl p-1.5 shadow-2xl shadow-teal-900/50">
+          <div className="glass rounded-2xl p-1.5 animate-search-glow [animation-delay:1.5s]">
             <div className="flex flex-col sm:flex-row gap-1.5">
               <div className="flex-1 flex items-center gap-3 bg-white/15 rounded-xl px-4 py-3">
                 <MapPin className="h-5 w-5 text-teal-300 shrink-0" />
@@ -89,7 +138,7 @@ export function HeroSection() {
           </div>
         </form>
 
-        {/* Popular searches */}
+        {/* 5 · Popular searches */}
         <div className="flex flex-wrap justify-center gap-2 mb-10">
           {POPULAR.map((place) => (
             <button
@@ -102,7 +151,7 @@ export function HeroSection() {
           ))}
         </div>
 
-        {/* CTA row */}
+        {/* 6 · CTA row */}
         <div className="flex flex-wrap items-center justify-center gap-4">
           <button
             onClick={() => router.push('/listings')}
