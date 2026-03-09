@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Search, Phone, MessageCircle, CheckCircle2, Home, ArrowRight, Wifi, Zap, ShieldCheck, MapPin } from 'lucide-react';
+import { Search, Phone, MessageCircle, Home, ArrowRight, Wifi, Zap, ShieldCheck } from 'lucide-react';
 
 /* ─── Step data ─────────────────────────────────────────────────────────── */
 
@@ -27,18 +27,8 @@ const STEPS = [
     accentBg: 'bg-amber-500',
   },
   {
-    icon: CheckCircle2,
-    num: '03',
-    title: 'Confirm & Visit',
-    description:
-      'Get a WhatsApp or email confirmation within 24 hours. Walk through the property stress-free.',
-    gradient: 'from-emerald-600 to-teal-700',
-    ringColor: 'ring-emerald-400/40',
-    accentBg: 'bg-emerald-500',
-  },
-  {
     icon: Home,
-    num: '04',
+    num: '03',
     title: 'Move Into Your Home',
     description:
       'Finalise the rental agreement and move in. We\'re here every step of the way — from first search to first night.',
@@ -173,63 +163,6 @@ function SceneContact({ active }: { active: boolean }) {
   );
 }
 
-function SceneConfirm({ active }: { active: boolean }) {
-  const base = 'transition-all duration-500 ease-out';
-
-  return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 p-4">
-      {/* Phone frame */}
-      <div className={`${base} ${active ? 'opacity-100 scale-100' : 'opacity-0 scale-90'} w-[180px] bg-white rounded-2xl shadow-lg border border-slate-200 p-3 space-y-2.5`}>
-        {/* Header */}
-        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center">
-            <span className="text-[7px] font-bold text-white">SR</span>
-          </div>
-          <div>
-            <div className="text-[9px] font-bold text-slate-800">Stay Rental</div>
-            <div className="text-[7px] text-emerald-500 font-medium">online</div>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div
-          className={`${base} ${active ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'} ml-auto bg-teal-50 rounded-xl rounded-tr-sm px-2.5 py-2 max-w-[140px]`}
-          style={{ transitionDelay: active ? '0.4s' : '0s' }}
-        >
-          <p className="text-[8px] text-slate-700 leading-relaxed">
-            Hi! I&apos;d like to view the 2BR apartment in Colombo 3.
-          </p>
-          <span className="text-[6px] text-slate-400 float-right mt-0.5">10:30 AM</span>
-        </div>
-
-        {/* Typing indicator then response */}
-        <div
-          className={`${base} ${active ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'} bg-slate-50 rounded-xl rounded-tl-sm px-2.5 py-2 max-w-[150px]`}
-          style={{ transitionDelay: active ? '0.8s' : '0s' }}
-        >
-          <p className="text-[8px] text-slate-700 leading-relaxed">
-            Confirmed! Your viewing is set for <strong className="text-teal-700">Saturday, 2:00 PM</strong>. See you there!
-          </p>
-          <span className="text-[6px] text-slate-400 float-right mt-0.5">10:32 AM</span>
-        </div>
-      </div>
-
-      {/* Checkmark badge */}
-      <div
-        className={`${base} ${active ? 'opacity-100 scale-100' : 'opacity-0 scale-0'} flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200`}
-        style={{ transitionDelay: active ? '1.2s' : '0s' }}
-      >
-        <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 13l4 4L19 7" className={active ? 'hiw-draw-check' : ''} />
-          </svg>
-        </div>
-        <span className="text-[10px] font-bold text-emerald-700">Viewing Confirmed</span>
-      </div>
-    </div>
-  );
-}
-
 function SceneMoveIn({ active }: { active: boolean }) {
   const base = 'transition-all duration-700 ease-out';
 
@@ -307,7 +240,7 @@ function SceneMoveIn({ active }: { active: boolean }) {
   );
 }
 
-const SCENES = [SceneBrowse, SceneContact, SceneConfirm, SceneMoveIn];
+const SCENES = [SceneBrowse, SceneContact, SceneMoveIn];
 
 /* ─── Timeline step wrapper ─────────────────────────────────────────────── */
 
@@ -395,7 +328,7 @@ export function HowItWorks() {
   useEffect(() => {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced) {
-      setActiveSteps(new Set([0, 1, 2, 3]));
+      setActiveSteps(new Set([0, 1, 2]));
       setHeaderVisible(true);
       return;
     }
@@ -447,7 +380,7 @@ export function HowItWorks() {
             <span className="gradient-text">Move-In</span>
           </h2>
           <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-            Four straightforward steps — no middlemen, no hidden fees, no surprises.
+            Three straightforward steps — no middlemen, no hidden fees, no surprises.
           </p>
         </div>
 
@@ -490,9 +423,9 @@ export function HowItWorks() {
         {/* CTA */}
         <div
           className={`mt-16 lg:mt-20 text-center transition-all duration-700 ease-out ${
-            activeSteps.has(3) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+            activeSteps.has(2) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
-          style={{ transitionDelay: activeSteps.has(3) ? '0.5s' : '0s' }}
+          style={{ transitionDelay: activeSteps.has(2) ? '0.5s' : '0s' }}
         >
           <a
             href="/listings"
