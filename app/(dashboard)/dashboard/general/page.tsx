@@ -10,6 +10,8 @@ import { updateAccount } from '@/app/(login)/actions';
 import { User } from '@/lib/db/schema';
 import useSWR from 'swr';
 import { Suspense } from 'react';
+import { Shield } from 'lucide-react';
+import Link from 'next/link';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -84,7 +86,7 @@ export default function GeneralPage() {
         General Settings
       </h1>
 
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle>Account Information</CardTitle>
         </CardHeader>
@@ -101,7 +103,7 @@ export default function GeneralPage() {
             )}
             <Button
               type="submit"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={isPending}
             >
               {isPending ? (
@@ -114,6 +116,23 @@ export default function GeneralPage() {
               )}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Security & Privacy</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 mb-4">
+            Manage your password, security settings, and account deletion.
+          </p>
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href="/dashboard/security" className="flex items-center">
+              <Shield className="mr-2 h-4 w-4" />
+              Go to Security Settings
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </section>

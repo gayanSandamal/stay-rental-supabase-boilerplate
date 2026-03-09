@@ -1,12 +1,30 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
-import { getUser, getTeamForUser } from '@/lib/db/queries';
+import { getUser } from '@/lib/db/queries';
 import { SWRConfig } from 'swr';
 
 export const metadata: Metadata = {
-  title: 'Next.js SaaS Starter',
-  description: 'Get started quickly with Next.js, Postgres, and Stripe.'
+  title: {
+    default: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
+    template: '%s | Stay Rental',
+  },
+  description: 'Find verified mid-to-long-term rentals (1-12+ months) in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.',
+  keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals'],
+  openGraph: {
+    type: 'website',
+    locale: 'en_LK',
+    url: process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk',
+    siteName: 'Stay Rental',
+    title: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
+    description: 'Find verified mid-to-long-term rentals in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Stay Rental - Verified Rentals in Sri Lanka',
+    description: 'Find verified mid-to-long-term rentals in Sri Lanka.',
+  },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk'),
 };
 
 export const viewport: Viewport = {
@@ -32,7 +50,6 @@ export default function RootLayout({
               // We do NOT await here
               // Only components that read this data will suspend
               '/api/user': getUser(),
-              '/api/team': getTeamForUser()
             }
           }}
         >

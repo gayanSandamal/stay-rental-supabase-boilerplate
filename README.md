@@ -1,119 +1,179 @@
-# Next.js SaaS Starter
+# Stay Rental - Verified Rentals in Sri Lanka
 
-This is a starter template for building a SaaS application using **Next.js** with support for authentication, Stripe integration for payments, and a dashboard for logged-in users.
+A mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and fast viewing coordination.
 
-**Demo: [https://next-saas-start.vercel.app/](https://next-saas-start.vercel.app/)**
+**📖 [Full User Manual](./USER_MANUAL.md)** - Complete guide for all users
 
-## Features
+## Quick Start
 
-- Marketing landing page (`/`) with animated Terminal element
-- Pricing page (`/pricing`) which connects to Stripe Checkout
-- Dashboard pages with CRUD operations on users/teams
-- Basic RBAC with Owner and Member roles
-- Subscription management with Stripe Customer Portal
-- Email/password authentication with JWTs stored to cookies
-- Global middleware to protect logged-in routes
-- Local middleware to protect Server Actions or validate Zod schemas
-- Activity logging system for any user events
-
-## Tech Stack
-
-- **Framework**: [Next.js](https://nextjs.org/)
-- **Database**: [Postgres](https://www.postgresql.org/)
-- **ORM**: [Drizzle](https://orm.drizzle.team/)
-- **Payments**: [Stripe](https://stripe.com/)
-- **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
-
-## Getting Started
+### Running Locally
 
 ```bash
-git clone https://github.com/nextjs/saas-starter
-cd saas-starter
+# Install dependencies
 pnpm install
-```
 
-## Running Locally
-
-[Install](https://docs.stripe.com/stripe-cli) and log in to your Stripe account:
-
-```bash
-stripe login
-```
-
-Use the included setup script to create your `.env` file:
-
-```bash
+# Set up database (creates .env file)
 pnpm db:setup
-```
 
-Run the database migrations and seed the database with a default user and team:
-
-```bash
+# Run migrations
 pnpm db:migrate
+
+# Seed database with sample data
 pnpm db:seed
-```
 
-This will create the following user and team:
-
-- User: `test@test.com`
-- Password: `admin123`
-
-You can also create new users through the `/sign-up` route.
-
-Finally, run the Next.js development server:
-
-```bash
+# Start development server
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the app in action.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can listen for Stripe webhooks locally through their CLI to handle subscription change events:
+### Test Accounts
+
+- **Admin**: `admin@stayrental.com` / `admin123`
+- **Ops**: `ops@stayrental.com` / `ops123`
+- **Tenant**: `tenant@test.com` / `tenant123`
+- **Landlord**: `landlord@test.com` / `landlord123`
+
+## Features
+
+### For Tenants
+- Browse verified property listings
+- Search and filter by location, price, features
+- Sri Lanka-specific filters (power backup, water source, fiber internet)
+- Request property viewings
+- View detailed property information
+
+### For Landlords
+- Submit properties for listing (assisted by ops team)
+- KYC verification process
+- Property visit coordination
+- Lead notifications
+
+### For Operations Team
+- Dashboard with key metrics
+- Listing management (create, edit, verify)
+- Lead management and tracking
+- Viewing scheduling and coordination
+- Verification workflow (KYC + property visits)
+
+## Key Pages
+
+- **Homepage** (`/`): Landing page with featured listings
+- **Listings** (`/listings`): Browse all available properties
+- **Listing Detail** (`/listings/[id]`): View property details and request viewing
+- **Dashboard** (`/dashboard`): Operations dashboard (ops/admin only)
+  - Overview: Statistics and quick actions
+  - Listings: Manage all property listings
+  - Leads: View and manage viewing requests
+  - Viewings: Schedule and track property viewings
+
+## Sri Lanka-Specific Features
+
+- **Power Resilience**: Filter by generator, solar, UPS, or none
+- **Water Resilience**: Tank size, borehole, water source information
+- **Connectivity**: Fiber internet availability and ISP options
+- **Climate**: AC units, fans, ventilation quality
+- **Safety**: Gated communities, security guards, CCTV, burglar bars
+- **Local Norms**: 3-6 month deposits, notice periods, utilities inclusion
+
+## Tech Stack
+
+- **Framework**: [Next.js](https://nextjs.org/) 15
+- **Database**: [Postgres](https://www.postgresql.org/)
+- **ORM**: [Drizzle](https://orm.drizzle.team/)
+- **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
+- **Styling**: Tailwind CSS
+
+## Database Schema
+
+### Core Tables
+- `users`: User accounts with roles (tenant, landlord, ops, admin)
+- `landlords`: Landlord profiles with KYC information
+- `listings`: Property listings with Sri Lanka-specific features
+- `leads`: Viewing requests from tenants
+- `viewings`: Scheduled property viewings
+- `saved_searches`: Saved search criteria for tenants
+
+### Status Enums
+- **Listing Status**: `pending`, `active`, `rented`, `archived`
+- **Lead Status**: `new`, `contacted`, `view_scheduled`, `no_show`, `interested`, `closed_won`, `closed_lost`
+
+## Business Workflows
+
+### Tenant Journey
+1. Browse active listings
+2. View property details
+3. Request viewing (name, phone, email, preferred time)
+4. Receive confirmation via WhatsApp/email
+5. Attend viewing
+6. Outcome tracked by ops team
+
+### Landlord Journey
+1. Provide property data to ops
+2. Submit ownership docs (KYC)
+3. Ops verifies + visits property
+4. Listing published (active status)
+5. Receive lead notifications
+6. Confirm viewing slots via ops
+
+### Ops Workflow
+1. Listing intake: collect data, photos, docs
+2. Verification: KYC check, ownership proof, property visit
+3. Publish: set status to active
+4. Lead management: triage, contact tenant, confirm with landlord
+5. Viewing scheduling: coordinate between tenant and landlord
+6. Outcome tracking: record interested/passed/closed won/lost
+
+## Development
+
+### Database Commands
 
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
+# Generate migration from schema changes
+pnpm db:generate
+
+# Run migrations
+pnpm db:migrate
+
+# Seed database
+pnpm db:seed
+
+# Open Drizzle Studio (database GUI)
+pnpm db:studio
 ```
 
-## Testing Payments
+### Project Structure
 
-To test Stripe payments, use the following test card details:
+```
+app/
+  (dashboard)/          # Protected dashboard routes
+    dashboard/          # Ops dashboard
+    page.tsx            # Homepage
+  (login)/              # Authentication pages
+  api/                  # API routes
+  listings/             # Public listing pages
+    [id]/               # Listing detail page
+lib/
+  db/                   # Database schema, queries, migrations
+  auth/                 # Authentication utilities
+components/
+  ui/                   # shadcn/ui components
+```
 
-- Card Number: `4242 4242 4242 4242`
-- Expiration: Any future date
-- CVC: Any 3-digit number
+## Environment Variables
 
-## Going to Production
+Required environment variables (created by `pnpm db:setup`):
 
-When you're ready to deploy your SaaS application to production, follow these steps:
+- `POSTGRES_URL`: Database connection string
+- `BASE_URL`: Application URL (default: http://localhost:3000)
+- `AUTH_SECRET`: Secret key for JWT tokens
 
-### Set up a production Stripe webhook
+## Documentation
 
-1. Go to the Stripe Dashboard and create a new webhook for your production environment.
-2. Set the endpoint URL to your production API route (e.g., `https://yourdomain.com/api/stripe/webhook`).
-3. Select the events you want to listen for (e.g., `checkout.session.completed`, `customer.subscription.updated`).
+- **[User Manual](./USER_MANUAL.md)**: Complete guide for tenants, landlords, and ops team
+- **API Routes**: See `app/api/` directory
+- **Database Schema**: See `lib/db/schema.ts`
 
-### Deploy to Vercel
+## License
 
-1. Push your code to a GitHub repository.
-2. Connect your repository to [Vercel](https://vercel.com/) and deploy it.
-3. Follow the Vercel deployment process, which will guide you through setting up your project.
-
-### Add environment variables
-
-In your Vercel project settings (or during deployment), add all the necessary environment variables. Make sure to update the values for the production environment, including:
-
-1. `BASE_URL`: Set this to your production domain.
-2. `STRIPE_SECRET_KEY`: Use your Stripe secret key for the production environment.
-3. `STRIPE_WEBHOOK_SECRET`: Use the webhook secret from the production webhook you created in step 1.
-4. `POSTGRES_URL`: Set this to your production database URL.
-5. `AUTH_SECRET`: Set this to a random string. `openssl rand -base64 32` will generate one.
-
-## Other Templates
-
-While this template is intentionally minimal and to be used as a learning resource, there are other paid versions in the community which are more full-featured:
-
-- https://achromatic.dev
-- https://shipfa.st
-- https://makerkit.dev
-- https://zerotoshipped.com
-- https://turbostarter.dev
+See [LICENSE](./LICENSE) file for details.

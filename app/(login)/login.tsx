@@ -83,6 +83,16 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 placeholder="Enter your password"
               />
             </div>
+            {mode === 'signin' && (
+              <div className="mt-2 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-orange-600 hover:text-orange-700 hover:underline"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+            )}
           </div>
 
           {state?.error && (
@@ -92,7 +102,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
           <div>
             <Button
               type="submit"
-              className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-full shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+              className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-full shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 h-10"
               disabled={pending}
             >
               {pending ? (

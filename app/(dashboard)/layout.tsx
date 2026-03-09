@@ -1,97 +1,120 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useState, Suspense } from 'react';
-import { Button } from '@/components/ui/button';
-import { CircleIcon, Home, LogOut } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { signOut } from '@/app/(login)/actions';
-import { useRouter } from 'next/navigation';
-import { User } from '@/lib/db/schema';
-import useSWR, { mutate } from 'swr';
+import { Suspense, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { Home, List, PlusCircle, Menu, X } from 'lucide-react';
+import { UserMenu } from '@/components/user-menu';
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-function UserMenu() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { data: user } = useSWR<User>('/api/user', fetcher);
-  const router = useRouter();
-
-  async function handleSignOut() {
-    await signOut();
-    mutate('/api/user');
-    router.push('/');
-  }
-
-  if (!user) {
-    return (
-      <>
-        <Link
-          href="/pricing"
-          className="text-sm font-medium text-gray-700 hover:text-gray-900"
-        >
-          Pricing
-        </Link>
-        <Button asChild className="rounded-full">
-          <Link href="/sign-up">Sign Up</Link>
-        </Button>
-      </>
-    );
-  }
-
-  return (
-    <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-      <DropdownMenuTrigger>
-        <Avatar className="cursor-pointer size-9">
-          <AvatarImage alt={user.name || ''} />
-          <AvatarFallback>
-            {user.email
-              .split(' ')
-              .map((n) => n[0])
-              .join('')}
-          </AvatarFallback>
-        </Avatar>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="flex flex-col gap-1">
-        <DropdownMenuItem className="cursor-pointer">
-          <Link href="/dashboard" className="flex w-full items-center">
-            <Home className="mr-2 h-4 w-4" />
-            <span>Dashboard</span>
-          </Link>
-        </DropdownMenuItem>
-        <form action={handleSignOut} className="w-full">
-          <button type="submit" className="flex w-full">
-            <DropdownMenuItem className="w-full flex-1 cursor-pointer">
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Sign out</span>
-            </DropdownMenuItem>
-          </button>
-        </form>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+const NAV_LINKS = [
+  { href: '/', label: 'Home', icon: Home },
+  { href: '/listings', label: 'Browse Listings', icon: List },
+  { href: '/list-your-property', label: 'List Property', icon: PlusCircle },
+];
 
 function Header() {
+  const pathname = usePathname();
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const isHome = pathname === '/';
+
   return (
-    <header className="border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-        <Link href="/" className="flex items-center">
-          <CircleIcon className="h-6 w-6 text-orange-500" />
-          <span className="ml-2 text-xl font-semibold text-gray-900">ACME</span>
-        </Link>
-        <div className="flex items-center space-x-4">
-          <Suspense fallback={<div className="h-9" />}>
-            <UserMenu />
-          </Suspense>
+    <header
+      className={`sticky top-0 z-50 transition-all duration-300 ${
+        isHome && !scrolled
+          ? 'bg-transparent border-b border-white/5'
+          : 'bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-sm'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white">
+                <path d="M3 9.5L12 3l9 6.5V21H3V9.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="rgba(255,255,255,0.2)" />
+                <rect x="9" y="14" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
+              </svg>
+            </div>
+            <div>
+              <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHome && !scrolled ? 'text-white' : 'text-slate-900'}`}>
+                Stay<span className="text-indigo-500">Rental</span>
+              </span>
+              <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHome && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
+                Verified Rentals · Sri Lanka
+              </span>
+            </div>
+          </Link>
+
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map(({ href, label }) => {
+              const active = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    active
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                      : isHome && !scrolled
+                      ? 'text-white/80 hover:text-white hover:bg-white/10'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right side */}
+          <div className="flex items-center gap-3">
+            <Suspense fallback={<div className="h-9 w-24 bg-slate-200 rounded-lg animate-pulse" />}>
+              <UserMenu />
+            </Suspense>
+            {/* Mobile menu toggle */}
+            <button
+              className={`md:hidden p-2 rounded-lg transition-colors ${isHome && !scrolled ? 'text-white hover:bg-white/10' : 'text-slate-600 hover:bg-slate-100'}`}
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Toggle menu"
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Nav Drawer */}
+      {mobileOpen && (
+        <div className="md:hidden bg-white border-t border-gray-100 shadow-lg px-4 py-3 flex flex-col gap-1">
+          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </header>
   );
 }
