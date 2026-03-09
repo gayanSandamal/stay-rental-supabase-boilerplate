@@ -7,8 +7,8 @@ const STEPS = [
     description:
       'Use our Sri Lanka-specific filters — power backup, water source, fiber internet — to instantly narrow down properties you\'ll love.',
     step: '01',
-    color: 'from-indigo-500 to-violet-600',
-    numColor: 'text-indigo-200',
+    color: 'from-teal-700 to-teal-900',
+    numColor: 'text-teal-200',
   },
   {
     icon: Calendar,
@@ -16,7 +16,7 @@ const STEPS = [
     description:
       'Pick your preferred date and time with a single form. No back-and-forth calls needed — we handle all coordination.',
     step: '02',
-    color: 'from-amber-400 to-orange-500',
+    color: 'from-amber-500 to-amber-700',
     numColor: 'text-amber-200',
   },
   {
@@ -25,7 +25,7 @@ const STEPS = [
     description:
       'Get a WhatsApp or email confirmation within 24 hours. Walk through the property stress-free with full listing details in hand.',
     step: '03',
-    color: 'from-emerald-400 to-teal-600',
+    color: 'from-emerald-600 to-teal-700',
     numColor: 'text-emerald-200',
   },
   {
@@ -34,8 +34,8 @@ const STEPS = [
     description:
       'Finalise the rental agreement and move in. We\'re here every step of the way from first search to first night.',
     step: '04',
-    color: 'from-rose-400 to-pink-600',
-    numColor: 'text-rose-200',
+    color: 'from-teal-500 to-teal-700',
+    numColor: 'text-teal-200',
   },
 ];
 
@@ -45,7 +45,7 @@ export function HowItWorks() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center mb-16">
-          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-violet-600 bg-violet-50 border border-violet-200 rounded-full uppercase mb-4">
+          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
             Simple Process
           </span>
           <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
@@ -95,7 +95,7 @@ export function HowItWorks() {
         <div className="mt-14 text-center">
           <a
             href="/listings"
-            className="btn-primary-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-indigo-500/25"
+            className="btn-primary-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-teal-800/25"
           >
             Start Browsing Now
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">

@@ -35,7 +35,7 @@ export function AlertDialog({
       case 'warning':
         return <AlertCircle className="h-5 w-5 text-yellow-600" />;
       default:
-        return <AlertCircle className="h-5 w-5 text-blue-600" />;
+        return <AlertCircle className="h-5 w-5 text-teal-700" />;
     }
   };
 
@@ -48,7 +48,7 @@ export function AlertDialog({
       case 'warning':
         return 'bg-yellow-100';
       default:
-        return 'bg-blue-100';
+        return 'bg-teal-100';
     }
   };
 

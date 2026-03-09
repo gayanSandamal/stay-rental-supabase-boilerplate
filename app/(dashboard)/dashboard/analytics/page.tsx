@@ -133,7 +133,7 @@ export default async function AnalyticsPage() {
             <div className="space-y-3">
               {[
                 { label: 'New', key: 'new', color: 'bg-gray-200' },
-                { label: 'Contacted', key: 'contacted', color: 'bg-blue-200' },
+                { label: 'Contacted', key: 'contacted', color: 'bg-teal-200' },
                 { label: 'View Scheduled', key: 'view_scheduled', color: 'bg-yellow-200' },
                 { label: 'Interested', key: 'interested', color: 'bg-orange-200' },
                 { label: 'Closed Won', key: 'closed_won', color: 'bg-green-200' },
@@ -171,7 +171,7 @@ export default async function AnalyticsPage() {
               {[
                 { label: 'Active', key: 'active', color: 'bg-green-500', textColor: 'text-green-800' },
                 { label: 'Pending', key: 'pending', color: 'bg-yellow-500', textColor: 'text-yellow-800' },
-                { label: 'Rented', key: 'rented', color: 'bg-blue-500', textColor: 'text-blue-800' },
+                { label: 'Rented', key: 'rented', color: 'bg-teal-600', textColor: 'text-teal-900' },
                 { label: 'Expired', key: 'expired', color: 'bg-orange-500', textColor: 'text-orange-800' },
                 { label: 'Rejected', key: 'rejected', color: 'bg-red-500', textColor: 'text-red-800' },
                 { label: 'Archived', key: 'archived', color: 'bg-gray-500', textColor: 'text-gray-800' },

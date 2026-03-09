@@ -160,7 +160,7 @@ export function ContactNumberSelector({
               key={contactNumber.id}
               className={`flex items-center justify-between p-3 border rounded-lg ${
                 value.includes(contactNumber.id)
-                  ? 'border-blue-500 bg-blue-50'
+                  ? 'border-teal-600 bg-teal-50'
                   : 'border-gray-200'
               }`}
             >
@@ -169,7 +169,7 @@ export function ContactNumberSelector({
                   type="checkbox"
                   checked={value.includes(contactNumber.id)}
                   onChange={() => handleToggle(contactNumber.id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-teal-700 border-gray-300 rounded focus:ring-teal-600"
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">

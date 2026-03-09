@@ -61,7 +61,7 @@ export default async function ViewingsPage() {
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs mt-1">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-50 text-teal-900 border border-teal-100">
                           <Home className="h-3 w-3" />
                           Listing #{viewing.listingId}
                         </span>

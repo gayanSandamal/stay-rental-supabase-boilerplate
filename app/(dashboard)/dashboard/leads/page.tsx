@@ -55,7 +55,7 @@ export default async function LeadsPage({
                 <span
                   className={`px-3 py-1 rounded text-xs font-medium ${
                     lead.status === 'new'
-                      ? 'bg-blue-100 text-blue-800'
+                      ? 'bg-teal-100 text-teal-900'
                       : lead.status === 'contacted'
                       ? 'bg-yellow-100 text-yellow-800'
                       : lead.status === 'view_scheduled'

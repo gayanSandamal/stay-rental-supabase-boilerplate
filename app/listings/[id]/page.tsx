@@ -208,7 +208,7 @@ export default async function ListingDetailPage({
           listing.status === 'pending' 
             ? 'bg-yellow-50 border border-yellow-200' 
             : listing.status === 'rented'
-            ? 'bg-blue-50 border border-blue-200'
+            ? 'bg-teal-50 border border-teal-200'
             : listing.status === 'rejected'
             ? 'bg-red-50 border border-red-200'
             : 'bg-gray-50 border border-gray-200'
@@ -217,7 +217,7 @@ export default async function ListingDetailPage({
             listing.status === 'pending'
               ? 'text-yellow-800'
               : listing.status === 'rented'
-              ? 'text-blue-800'
+              ? 'text-teal-800'
               : listing.status === 'rejected'
               ? 'text-red-800'
               : 'text-gray-800'
@@ -278,7 +278,7 @@ export default async function ListingDetailPage({
                 <div className="flex items-center">
                   {publisherType === 'business' ? (
                     <>
-                      <Building2 className="h-5 w-5 mr-2 text-blue-600" />
+                      <Building2 className="h-5 w-5 mr-2 text-teal-700" />
                       <span className="font-medium">{publisherName}</span>
                     </>
                   ) : (
@@ -435,7 +435,7 @@ export default async function ListingDetailPage({
                 )}
                 {listing.hasFiber && (
                   <div className="flex items-center">
-                    <Wifi className="h-5 w-5 mr-2 text-blue-500" />
+                    <Wifi className="h-5 w-5 mr-2 text-teal-600" />
                     <span className="text-gray-700">
                       Fiber Internet Available
                       {listing.fiberISPs && ` (${listing.fiberISPs})`}

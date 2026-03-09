@@ -92,7 +92,7 @@ export function PropertyImagesGallery({ images, title = 'Property' }: PropertyIm
                 onClick={() => setCurrentIndex(index)}
                 className={`relative aspect-square rounded-md overflow-hidden ${
                   index === currentIndex
-                    ? 'ring-2 ring-blue-500 ring-offset-2'
+                    ? 'ring-2 ring-teal-600 ring-offset-2'
                     : 'opacity-60 hover:opacity-100'
                 } transition-all`}
               >

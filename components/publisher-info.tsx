@@ -25,7 +25,7 @@ export function PublisherInfo({
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         {publisherType === 'business' ? (
-          <Building2 className={`${iconSize} text-blue-600`} />
+          <Building2 className={`${iconSize} text-teal-800`} />
         ) : (
           <User className={`${iconSize} text-gray-600`} />
         )}

@@ -65,7 +65,7 @@ export default function BackOfficeLayout({
               <Button
                 variant={pathname === item.href ? 'secondary' : 'ghost'}
                 className={`shadow-none my-1 w-full justify-start ${
-                  pathname === item.href ? 'bg-blue-100 text-blue-900' : ''
+                  pathname === item.href ? 'bg-teal-50 text-teal-900' : ''
                 }`}
                 onClick={() => setIsSidebarOpen(false)}
               >

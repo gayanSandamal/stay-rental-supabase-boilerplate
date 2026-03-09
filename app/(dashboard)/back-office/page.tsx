@@ -59,8 +59,8 @@ export default async function BackOfficePage() {
       title: 'Business Accounts',
       value: totalBusinessAccounts.count,
       icon: Building2,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'text-teal-800',
+      bgColor: 'bg-teal-100',
     },
     {
       title: 'Active Team Members',

@@ -19,7 +19,7 @@ export async function FeaturedListings() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
           <div>
-            <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full uppercase mb-3">
+            <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-3">
               {isVerified ? 'Hand-picked' : 'Latest'}
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
@@ -33,7 +33,7 @@ export async function FeaturedListings() {
           </div>
           <Link
             href="/listings"
-            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all duration-200"
+            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-800 hover:text-white hover:border-teal-800 transition-all duration-200"
           >
             View All Listings
             <ArrowRight className="h-4 w-4" />

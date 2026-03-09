@@ -183,7 +183,7 @@ export function ListingApprovalForm({ listing }: ListingApprovalFormProps) {
             <span className="text-sm text-gray-600">Visited</span>
             <span className={`px-2 py-1 text-xs rounded ${
               listing.visited 
-                ? 'bg-blue-100 text-blue-800' 
+                ? 'bg-teal-100 text-teal-900' 
                 : 'bg-gray-100 text-gray-800'
             }`}>
               {listing.visited ? 'Yes' : 'No'}

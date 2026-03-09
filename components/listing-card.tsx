@@ -39,8 +39,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   sizes="(max-width: 768px) 100vw, 256px"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-50 to-violet-100">
-                  <Home className="h-12 w-12 text-indigo-300" />
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
+                  <Home className="h-12 w-12 text-teal-300" />
                 </div>
               )}
               {(listing.verified || listing.visited) && (
@@ -51,7 +51,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                     </span>
                   )}
                   {listing.visited && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-bold shadow">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-700 text-white text-[10px] font-bold shadow">
                       <Eye className="h-2.5 w-2.5" /> Visited
                     </span>
                   )}
@@ -63,7 +63,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             <div className="flex-1 p-6 flex flex-col">
               <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2 mb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors">
+                  <h3 className="text-lg font-bold text-slate-900 leading-snug group-hover:text-teal-700 transition-colors">
                     {listing.title}
                   </h3>
                   <div className="flex items-center text-slate-500 text-sm mt-1 gap-1">
@@ -95,7 +95,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   </span>
                 )}
                 {listing.hasFiber && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-200">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-800 text-xs font-medium border border-teal-200">
                     <Wifi className="h-3 w-3" /> Fiber
                   </span>
                 )}
@@ -140,8 +140,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-50 to-violet-100">
-              <Home className="h-16 w-16 text-indigo-300" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
+              <Home className="h-16 w-16 text-teal-300" />
             </div>
           )}
 
@@ -157,7 +157,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 </span>
               )}
               {listing.visited && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-700/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
                   <Eye className="h-2.5 w-2.5" /> Visited
                 </span>
               )}
@@ -167,7 +167,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
 
         {/* Content */}
         <div className="p-5 flex flex-col flex-1">
-          <h3 className="font-bold text-slate-900 leading-snug mb-1.5 line-clamp-2 group-hover:text-indigo-600 transition-colors">
+          <h3 className="font-bold text-slate-900 leading-snug mb-1.5 line-clamp-2 group-hover:text-teal-700 transition-colors">
             {listing.title}
           </h3>
           <div className="flex items-center text-slate-500 text-xs mb-3 gap-1">
@@ -192,7 +192,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
               </span>
             )}
             {listing.hasFiber && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-semibold border border-indigo-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-50 text-teal-800 text-[10px] font-semibold border border-teal-200">
                 <Wifi className="h-2.5 w-2.5" /> Fiber
               </span>
             )}
@@ -228,8 +228,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 <div className="text-xs text-slate-500">Deposit: {listing.depositMonths} mo</div>
               )}
             </div>
-            <span className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-600 transition-colors duration-200">
-              <ArrowRight className="h-4 w-4 text-indigo-400 group-hover:text-white transition-colors duration-200" />
+            <span className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center group-hover:bg-teal-800 transition-colors duration-200">
+              <ArrowRight className="h-4 w-4 text-teal-600 group-hover:text-white transition-colors duration-200" />
             </span>
           </div>
         </div>

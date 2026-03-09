@@ -139,7 +139,7 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
     },
     submitButton: {
       label: 'Apply Filters',
-      className: 'w-full bg-blue-600 hover:bg-blue-700',
+      className: 'w-full bg-teal-800 hover:bg-teal-900',
     },
     cancelButton: {
       show: false,
@@ -164,7 +164,7 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
             <SlidersHorizontal className="h-5 w-5 text-gray-600" />
             <h2 className="text-xl font-semibold text-gray-900">Filter Listings</h2>
             {hasActiveFilters && (
-              <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+              <span className="text-sm bg-teal-100 text-teal-900 px-2 py-1 rounded-full">
                 {Array.from(searchParams.keys()).length} active
               </span>
             )}
@@ -211,7 +211,7 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
                 form.requestSubmit();
               }
             }}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-teal-800 hover:bg-teal-900"
           >
             Apply Filters
           </Button>

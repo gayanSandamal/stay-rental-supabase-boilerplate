@@ -48,7 +48,7 @@ export function RequestReReviewButton({ listingId }: RequestReReviewButtonProps)
       <Button
         onClick={handleReRequest}
         disabled={isLoading}
-        className="w-full bg-blue-600 hover:bg-blue-700"
+        className="w-full bg-teal-800 hover:bg-teal-900"
       >
         {isLoading ? (
           <>

@@ -180,7 +180,7 @@ export default async function ListingEditPage({
                   <p className="text-xs text-gray-500 mb-1">Publisher</p>
                   <div className="flex items-center gap-2">
                     {publisherType === 'business' ? (
-                      <Building2 className="h-4 w-4 text-blue-600" />
+                      <Building2 className="h-4 w-4 text-teal-800" />
                     ) : (
                       <User className="h-4 w-4 text-gray-600" />
                     )}
@@ -222,7 +222,7 @@ export default async function ListingEditPage({
                   <p className="text-xs text-gray-500 mb-2">Publisher</p>
                   <div className="flex items-center gap-2 mb-1">
                     {publisherType === 'business' ? (
-                      <Building2 className="h-4 w-4 text-blue-600" />
+                      <Building2 className="h-4 w-4 text-teal-800" />
                     ) : (
                       <User className="h-4 w-4 text-gray-600" />
                     )}
@@ -358,7 +358,7 @@ export default async function ListingEditPage({
                           : listing.status === 'pending'
                           ? 'bg-yellow-100 text-yellow-800'
                           : listing.status === 'rented'
-                          ? 'bg-blue-100 text-blue-800'
+                          ? 'bg-teal-100 text-teal-900'
                           : listing.status === 'rejected'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-gray-100 text-gray-800'

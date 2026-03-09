@@ -131,7 +131,7 @@ export function ActiveFiltersChips() {
         <button
           key={filter.key}
           onClick={() => removeFilter(filter.key)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-100 text-teal-900 rounded-full text-sm font-medium hover:bg-teal-200 transition-colors"
         >
           <span>{filter.label}</span>
           <X className="h-3.5 w-3.5" />

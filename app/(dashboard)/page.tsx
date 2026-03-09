@@ -31,8 +31,8 @@ function SiteFooter() {
     <footer
       className="hero-bg text-white"
       style={{
-        backgroundColor: '#0f0c29',
-        backgroundImage: 'linear-gradient(135deg, #0f0c29 0%, #1a1a4e 35%, #12123a 65%, #0d1117 100%)',
+        backgroundColor: '#062C2B',
+        backgroundImage: 'linear-gradient(135deg, #062C2B 0%, #0A3F3D 35%, #083432 65%, #051F1E 100%)',
       }}
     >
       {/* CTA strip */}
@@ -70,13 +70,13 @@ function SiteFooter() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-700 to-teal-900 flex items-center justify-center shadow-lg shadow-teal-800/30">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white">
                   <path d="M3 9.5L12 3l9 6.5V21H3V9.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="rgba(255,255,255,0.2)" />
                   <rect x="9" y="14" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
                 </svg>
               </div>
-              <span className="text-lg font-bold">Stay<span className="text-indigo-400">Rental</span></span>
+              <span className="text-lg font-bold">Stay<span className="text-teal-400">Rental</span></span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-5 max-w-xs">
               Sri Lanka&apos;s trusted platform for verified mid-to-long-term rentals. No scams. No surprises.

@@ -7,7 +7,7 @@ const FEATURES = [
     description:
       'Every landlord provides ownership documents and a government-issued ID. Our ops team cross-checks before publishing.',
     tag: 'Zero Scams',
-    gradient: 'from-emerald-400 to-teal-500',
+    gradient: 'from-emerald-600 to-teal-700',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
   {
@@ -16,7 +16,7 @@ const FEATURES = [
     description:
       'Filter by generator, solar, UPS, or utility only. Find properties that match your power needs — crucial for Sri Lanka.',
     tag: 'Sri Lanka Specific',
-    gradient: 'from-amber-400 to-orange-500',
+    gradient: 'from-amber-500 to-amber-700',
     tagColor: 'bg-amber-50 text-amber-700 border-amber-200',
   },
   {
@@ -25,7 +25,7 @@ const FEATURES = [
     description:
       'Know the water source before you commit — mains, tank, borehole. Essential transparency for long-term stays.',
     tag: 'Full Transparency',
-    gradient: 'from-sky-400 to-blue-500',
+    gradient: 'from-sky-500 to-teal-600',
     tagColor: 'bg-sky-50 text-sky-700 border-sky-200',
   },
   {
@@ -34,8 +34,8 @@ const FEATURES = [
     description:
       'Filter by fiber availability and ISP options per property. Stay connected seamlessly — perfect for remote workers.',
     tag: 'Work From Home',
-    gradient: 'from-violet-400 to-purple-500',
-    tagColor: 'bg-violet-50 text-violet-700 border-violet-200',
+    gradient: 'from-teal-600 to-teal-800',
+    tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
   },
   {
     icon: MapPin,
@@ -43,8 +43,8 @@ const FEATURES = [
     description:
       'Built from the ground up for the Sri Lankan rental market. Every filter, every field, every feature designed locally.',
     tag: 'Built for SL',
-    gradient: 'from-rose-400 to-pink-500',
-    tagColor: 'bg-rose-50 text-rose-700 border-rose-200',
+    gradient: 'from-amber-600 to-amber-800',
+    tagColor: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   {
     icon: Clock,
@@ -52,21 +52,21 @@ const FEATURES = [
     description:
       'Request a viewing in 30 seconds. Our team contacts the landlord and sends you a confirmation via WhatsApp or email.',
     tag: '24h Response',
-    gradient: 'from-indigo-400 to-blue-600',
-    tagColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    gradient: 'from-teal-700 to-teal-900',
+    tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
   },
 ];
 
 export function KeyDifferentiators() {
   return (
-    <section className="py-20 bg-slate-50 relative overflow-hidden">
+    <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center mb-14">
-          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full uppercase mb-4">
+          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
             Why Stay Rental
           </span>
           <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">

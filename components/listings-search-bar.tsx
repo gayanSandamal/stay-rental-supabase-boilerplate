@@ -49,7 +49,7 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
       <div className="flex items-center justify-between gap-4 w-full">
         {/* Logo on the left */}
         <Link href="/" className="flex items-center flex-shrink-0">
-          <CircleIcon className="h-6 w-6 text-blue-600" />
+          <CircleIcon className="h-6 w-6 text-teal-700" />
           <div className="ml-2 hidden sm:block">
             <span className="text-lg font-semibold text-gray-900">Stay Rental</span>
           </div>
@@ -65,7 +65,7 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
                 placeholder="Search by location, property type, features..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
               />
             </div>
           </form>
@@ -78,7 +78,7 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
             {user && (
               <Button
                 asChild
-                className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                className="bg-teal-800 hover:bg-teal-900 whitespace-nowrap"
               >
                 <Link href="/dashboard/listings/new">
                   <Plus className="mr-2 h-4 w-4" />

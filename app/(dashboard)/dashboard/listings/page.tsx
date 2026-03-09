@@ -105,7 +105,7 @@ export default async function ListingsPage({
                       : listing.status === 'pending'
                       ? 'bg-yellow-100 text-yellow-800'
                       : listing.status === 'rented'
-                      ? 'bg-blue-100 text-blue-800'
+                      ? 'bg-teal-100 text-teal-900'
                       : listing.status === 'rejected'
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
@@ -153,7 +153,7 @@ export default async function ListingsPage({
                   </span>
                 )}
                 {listing.visited && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-100 text-blue-800 text-xs">
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-teal-100 text-teal-900 text-xs">
                     <Eye className="h-3 w-3 mr-1" />
                     Visited
                   </span>

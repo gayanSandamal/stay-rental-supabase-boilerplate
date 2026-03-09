@@ -34,7 +34,7 @@ export const addTeamMemberFormConfig: FormConfig = {
   ],
   submitButton: {
     label: 'Add Team Member',
-    className: 'bg-blue-600 hover:bg-blue-700',
+    className: 'bg-teal-800 hover:bg-teal-900',
     loadingLabel: 'Adding...',
   },
   cancelButton: {

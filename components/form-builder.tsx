@@ -332,7 +332,7 @@ export function FormBuilder({ config }: FormBuilderProps) {
           type="submit"
           disabled={isSubmitting}
           className={cn(
-            'bg-blue-600 hover:bg-blue-700',  // Changed from orange
+            'bg-teal-800 hover:bg-teal-900',  // Changed from orange
             config.submitButton?.className
           )}
         >

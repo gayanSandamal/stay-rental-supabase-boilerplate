@@ -19,7 +19,7 @@ export default async function BusinessAccountsPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Business Accounts</h1>
-        <Button asChild className="bg-blue-600 hover:bg-blue-700">
+        <Button asChild className="bg-teal-800 hover:bg-teal-900">
           <Link href="/back-office/business-accounts/new">
             <Plus className="mr-2 h-4 w-4" />
             Create Business Account
@@ -32,7 +32,7 @@ export default async function BusinessAccountsPage() {
           <CardContent className="py-12 text-center">
             <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 mb-4">No business accounts yet.</p>
-            <Button asChild className="bg-blue-600 hover:bg-blue-700">
+            <Button asChild className="bg-teal-800 hover:bg-teal-900">
               <Link href="/back-office/business-accounts/new">
                 <Plus className="mr-2 h-4 w-4" />
                 Create Your First Business Account
@@ -46,7 +46,7 @@ export default async function BusinessAccountsPage() {
             <Card key={account.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <Building2 className="h-5 w-5 text-blue-600" />
+                  <Building2 className="h-5 w-5 text-teal-800" />
                   <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                     account.status === 'active' 
                       ? 'bg-green-100 text-green-800' 

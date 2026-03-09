@@ -8,7 +8,7 @@ const TESTIMONIALS = [
     rating: 5,
     text: 'Found my perfect apartment in just 2 weeks. The KYC verification gave me real confidence, and the viewing was coordinated the same day I requested it.',
     initials: 'SM',
-    gradient: 'from-indigo-400 to-violet-500',
+    gradient: 'from-teal-600 to-teal-800',
   },
   {
     name: 'David Karunaratne',
@@ -17,7 +17,7 @@ const TESTIMONIALS = [
     rating: 5,
     text: 'The power backup and fiber internet filters are genuinely game-changing. I found a place with solar and SLT fiber in one search — could not have done it anywhere else.',
     initials: 'DK',
-    gradient: 'from-emerald-400 to-teal-500',
+    gradient: 'from-emerald-600 to-teal-700',
   },
   {
     name: 'Priya Senanayake',
@@ -26,13 +26,13 @@ const TESTIMONIALS = [
     rating: 5,
     text: 'As a student on a budget I was worried about scams. Every listing here is verified so I rented with full confidence. The team even WhatsApp\'d me to confirm the viewing.',
     initials: 'PS',
-    gradient: 'from-rose-400 to-pink-500',
+    gradient: 'from-amber-500 to-amber-700',
   },
 ];
 
 export function Testimonials() {
   return (
-    <section className="py-20 bg-slate-50 relative overflow-hidden">
+    <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
       {/* Decoration */}
       <div className="absolute top-0 left-0 right-0 h-px divider-gradient" />
       <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
@@ -40,7 +40,7 @@ export function Testimonials() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-14">
-          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-rose-600 bg-rose-50 border border-rose-200 rounded-full uppercase mb-4">
+          <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-amber-700 bg-amber-50 border border-amber-200 rounded-full uppercase mb-4">
             Real Stories
           </span>
           <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">

@@ -42,8 +42,8 @@ export default async function NewListingPage() {
   return (
     <section className="flex-1 p-4 lg:px-8">
       {businessMember && (
-        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
+        <div className="mb-4 bg-teal-50 border border-teal-200 rounded-lg p-4">
+          <p className="text-sm text-teal-900">
             <strong>Business Account:</strong> {businessMember.businessAccount.name}
             <br />
             This listing will be tracked under your business account.

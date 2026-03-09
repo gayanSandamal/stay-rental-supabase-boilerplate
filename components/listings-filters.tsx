@@ -143,7 +143,7 @@ export function ListingsFilters() {
     },
     submitButton: {
       label: 'Apply Filters',
-      className: 'w-full bg-blue-600 hover:bg-blue-700',  // Changed from orange
+      className: 'w-full bg-teal-800 hover:bg-teal-900',  // Changed from orange
     },
     cancelButton: {
       show: false,

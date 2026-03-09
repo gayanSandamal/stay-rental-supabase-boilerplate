@@ -37,7 +37,7 @@ function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-200">
+            <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-teal-700 to-teal-900 shadow-lg shadow-teal-800/30 group-hover:scale-105 transition-transform duration-200">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white">
                 <path d="M3 9.5L12 3l9 6.5V21H3V9.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="rgba(255,255,255,0.2)" />
                 <rect x="9" y="14" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
@@ -45,7 +45,7 @@ function Header() {
             </div>
             <div>
               <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHome && !scrolled ? 'text-white' : 'text-slate-900'}`}>
-                Stay<span className="text-indigo-500">Rental</span>
+                Stay<span className="text-teal-700">Rental</span>
               </span>
               <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHome && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
                 Verified Rentals · Sri Lanka
@@ -63,7 +63,7 @@ function Header() {
                   href={href}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     active
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                      ? 'bg-teal-800 text-white shadow-md shadow-teal-800/30'
                       : isHome && !scrolled
                       ? 'text-white/80 hover:text-white hover:bg-white/10'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -104,7 +104,7 @@ function Header() {
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                   active
-                    ? 'bg-indigo-50 text-indigo-700'
+                    ? 'bg-teal-50 text-teal-800'
                     : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
