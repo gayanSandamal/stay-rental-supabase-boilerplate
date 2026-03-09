@@ -36,7 +36,7 @@ const propertyPhotos = [
   'https://images.unsplash.com/photo-1600585154084-4e5fe7c39198?w=800',
 ];
 
-function randomElement<T>(array: T[]): T {
+function randomElement<T>(array: readonly T[]): T {
   return array[Math.floor(Math.random() * array.length)];
 }
 

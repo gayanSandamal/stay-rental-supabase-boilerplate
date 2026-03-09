@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CircleIcon, Loader2 } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { resetPassword } from '../actions';
 import type { ActionState } from '@/lib/auth/middleware';
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get('token') || '';
 
@@ -26,9 +26,7 @@ export default function ResetPasswordPage() {
       <div className="min-h-[100dvh] flex flex-col justify-center items-center bg-gray-50 px-4">
         <div className="sm:max-w-md w-full text-center">
           <CircleIcon className="h-12 w-12 text-orange-500 mx-auto" />
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">
-            Invalid reset link
-          </h2>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Invalid reset link</h2>
           <p className="mt-2 text-sm text-gray-600">
             This password reset link is missing or invalid. Please request a new link.
           </p>
@@ -66,10 +64,7 @@ export default function ResetPasswordPage() {
           <input type="hidden" name="token" value={effectiveToken} />
 
           <div>
-            <Label
-              htmlFor="newPassword"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
               New password
             </Label>
             <div className="mt-1">
@@ -88,10 +83,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <div>
-            <Label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
               Confirm new password
             </Label>
             <div className="mt-1">
@@ -109,12 +101,8 @@ export default function ResetPasswordPage() {
             </div>
           </div>
 
-          {state?.error && (
-            <div className="text-red-500 text-sm">{state.error}</div>
-          )}
-          {showSuccess && (
-            <div className="text-green-600 text-sm">{state.success}</div>
-          )}
+          {state?.error && <div className="text-red-500 text-sm">{state.error}</div>}
+          {showSuccess && <div className="text-green-600 text-sm">{state.success}</div>}
 
           <div>
             <Button
@@ -135,10 +123,7 @@ export default function ResetPasswordPage() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <Link
-            href="/sign-in"
-            className="text-orange-600 hover:text-orange-700 hover:underline"
-          >
+          <Link href="/sign-in" className="text-orange-600 hover:text-orange-700 hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -147,3 +132,24 @@ export default function ResetPasswordPage() {
   );
 }
 
+function ResetPasswordSkeleton() {
+  return (
+    <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-4 animate-pulse">
+        <div className="h-12 w-12 rounded-full bg-gray-200 mx-auto" />
+        <div className="h-8 bg-gray-200 rounded-lg w-3/4 mx-auto" />
+        <div className="h-10 bg-gray-200 rounded-full w-full mt-8" />
+        <div className="h-10 bg-gray-200 rounded-full w-full" />
+        <div className="h-10 bg-orange-200 rounded-full w-full" />
+      </div>
+    </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordSkeleton />}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}

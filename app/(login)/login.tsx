@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +10,14 @@ import { CircleIcon, Loader2 } from 'lucide-react';
 import { signIn, signUp } from './actions';
 import { ActionState } from '@/lib/auth/middleware';
 
-export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect');
-  const priceId = searchParams.get('priceId');
-  const inviteId = searchParams.get('inviteId');
+interface LoginProps {
+  mode?: 'signin' | 'signup';
+  redirect?: string;
+  priceId?: string;
+  inviteId?: string;
+}
+
+function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = '' }: LoginProps) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     mode === 'signin' ? signIn : signUp,
     { error: '' }
@@ -27,22 +30,18 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
           <CircleIcon className="h-12 w-12 text-orange-500" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          {mode === 'signin'
-            ? 'Sign in to your account'
-            : 'Create your account'}
+          {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
         </h2>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <form className="space-y-6" action={formAction}>
-          <input type="hidden" name="redirect" value={redirect || ''} />
-          <input type="hidden" name="priceId" value={priceId || ''} />
-          <input type="hidden" name="inviteId" value={inviteId || ''} />
+          <input type="hidden" name="redirect" value={redirect} />
+          <input type="hidden" name="priceId" value={priceId} />
+          <input type="hidden" name="inviteId" value={inviteId} />
+
           <div>
-            <Label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Email
             </Label>
             <div className="mt-1">
@@ -61,10 +60,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
           </div>
 
           <div>
-            <Label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </Label>
             <div className="mt-1">
@@ -72,9 +68,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete={
-                  mode === 'signin' ? 'current-password' : 'new-password'
-                }
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 defaultValue={state.password}
                 required
                 minLength={8}
@@ -126,9 +120,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-gray-50 text-gray-500">
-                {mode === 'signin'
-                  ? 'New to our platform?'
-                  : 'Already have an account?'}
+                {mode === 'signin' ? 'New to our platform?' : 'Already have an account?'}
               </span>
             </div>
           </div>
@@ -140,13 +132,48 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
               }${priceId ? `&priceId=${priceId}` : ''}`}
               className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
             >
-              {mode === 'signin'
-                ? 'Create an account'
-                : 'Sign in to existing account'}
+              {mode === 'signin' ? 'Create an account' : 'Sign in to existing account'}
             </Link>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Reads search params and passes them as plain props — must be inside <Suspense>
+function LoginWithSearchParams({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
+  const searchParams = useSearchParams();
+  return (
+    <LoginForm
+      mode={mode}
+      redirect={searchParams.get('redirect') ?? ''}
+      priceId={searchParams.get('priceId') ?? ''}
+      inviteId={searchParams.get('inviteId') ?? ''}
+    />
+  );
+}
+
+// Simple loading skeleton — does NOT call useSearchParams
+function LoginSkeleton() {
+  return (
+    <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-4 animate-pulse">
+        <div className="h-12 w-12 rounded-full bg-gray-200 mx-auto" />
+        <div className="h-8 bg-gray-200 rounded-lg w-3/4 mx-auto" />
+        <div className="h-10 bg-gray-200 rounded-full w-full mt-8" />
+        <div className="h-10 bg-gray-200 rounded-full w-full" />
+        <div className="h-10 bg-orange-200 rounded-full w-full" />
+      </div>
+    </div>
+  );
+}
+
+// Public export — wraps the searchParams reader in Suspense with a safe fallback
+export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginWithSearchParams mode={mode} />
+    </Suspense>
   );
 }
