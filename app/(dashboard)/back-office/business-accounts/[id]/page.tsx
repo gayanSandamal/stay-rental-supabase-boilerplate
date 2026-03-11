@@ -171,7 +171,7 @@ export default async function BusinessAccountDetailPage({
               {accountListings.map((listing) => (
                 <Link
                   key={listing.id}
-                  href={`/back-office/listings/${listing.id}`}
+                  href={`/listings/${listing.id}`}
                   className="block p-3 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
                 >
                   <p className="font-medium">{listing.title}</p>
