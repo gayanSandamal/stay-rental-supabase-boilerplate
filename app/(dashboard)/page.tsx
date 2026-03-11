@@ -3,6 +3,7 @@ import { HeroSection } from '@/components/hero-section';
 import { TrustSignals } from '@/components/trust-signals';
 import { KeyDifferentiators } from '@/components/key-differentiators';
 import { HowItWorks } from '@/components/how-it-works';
+import { PricingSection } from '@/components/pricing-section';
 import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
 import { SiteFooter } from '@/components/site-footer';
@@ -35,6 +36,7 @@ export default async function HomePage() {
 
         <KeyDifferentiators />
         <HowItWorks />
+        <PricingSection />
         <ForLandlordsSection />
         <Testimonials />
       </main>

@@ -1,4 +1,4 @@
-import { Zap, Droplet, Wifi, ShieldCheck, MapPin, Clock } from 'lucide-react';
+import { Zap, Droplet, Wifi, ShieldCheck, MapPin, Clock, Wallet } from 'lucide-react';
 import { ScrollReveal } from './scroll-reveal';
 
 const FEATURES = [
@@ -49,12 +49,21 @@ const FEATURES = [
   },
   {
     icon: Clock,
-    title: 'Fast Viewing Coordination',
+    title: 'Direct Contact',
     description:
-      'Request a viewing in 30 seconds. Our team contacts the landlord and sends you a confirmation via WhatsApp or email.',
-    tag: '24h Response',
+      'Contact landlords directly via call or WhatsApp. No middlemen, no booking fees — just you and the property owner.',
+    tag: 'Easy to Use',
     gradient: 'from-teal-700 to-teal-900',
     tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
+  },
+  {
+    icon: Wallet,
+    title: 'Affordable Plans',
+    description:
+      'Free to browse, view, and contact. Premium from LKR 300/month for priority contact, unlimited alerts, and exclusive listings.',
+    tag: 'Budget Friendly',
+    gradient: 'from-emerald-500 to-teal-600',
+    tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
 ];
 

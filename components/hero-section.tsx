@@ -109,9 +109,9 @@ export function HeroSection() {
 
         {/* 3 · Subtitle */}
         <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
-          Mid-to-long-term rentals with{' '}
-          <span className="text-amber-300 font-semibold">KYC-verified</span> landlords,{' '}
-          power backup filters, fiber internet info, and fast viewing coordination.
+          Affordable, verified rentals for{' '}
+          <span className="text-amber-300 font-semibold">office-goers</span>, couples, students, and families.
+          Short- or long-term — <span className="text-teal-300 font-semibold">KYC-verified</span> landlords, no scams.
         </p>
 
         {/* 4 · Search bar with breathing glow */}

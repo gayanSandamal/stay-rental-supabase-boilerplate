@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
-import { ShieldCheck, Mail, Phone } from 'lucide-react';
+import { ShieldCheck, Mail, Phone, Gift } from 'lucide-react';
 
 const FOOTER_LINKS = {
   Renters: [
@@ -59,7 +59,11 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <p className="text-slate-400 mt-2 text-base max-w-md">
                 {isLandlord
                   ? 'Join hundreds of landlords who trust Stay Rental to manage their listings and find qualified tenants.'
-                  : 'Join thousands of tenants who found verified, scam-free rentals through Stay Rental.'}
+                  : 'Join thousands of tenants who found verified, affordable rentals through Stay Rental.'}
+              </p>
+              <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
+                <Gift className="h-4 w-4" />
+                Refer a friend — both get LKR 500 off.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 shrink-0">
@@ -95,7 +99,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <span className="text-lg font-bold">Stay<span className="text-teal-400">Rental</span></span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-5 max-w-xs">
-              Sri Lanka&apos;s trusted platform for verified mid-to-long-term rentals. No scams. No surprises.
+              Sri Lanka&apos;s trusted, affordable platform for verified rentals. No scams. No surprises.
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 mb-2">
               <ShieldCheck className="h-3.5 w-3.5" />

@@ -18,8 +18,8 @@ export function ForLandlordsSection() {
               <span className="gradient-text">Stay Rental</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Reach verified tenants, get viewing coordination, and enjoy hassle-free
-              listing management. Free to list — our ops team handles the rest.
+              Reach verified tenants with plans from LKR 500/listing. Featured placement,
+              analytics, and unlimited listings for growing portfolios.
             </p>
           </div>
         </ScrollReveal>
