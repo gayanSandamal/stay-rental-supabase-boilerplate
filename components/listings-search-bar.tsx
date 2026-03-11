@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { FilterButtonWithModal } from '@/components/filter-button-with-modal';
 import { UserMenu } from '@/components/user-menu';
+import { SearchInputWithSuggestions } from '@/components/search-input-with-suggestions';
 
 type User = {
   id: number;
@@ -57,15 +58,25 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
 
         <div className="flex items-center w-full">
           {/* Search form in the middle */}
-          <form onSubmit={handleSubmit} className="flex-1 w-full max-w-2xl">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="flex-1 w-full max-w-2xl">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by location, property type, features..."
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+              <SearchInputWithSuggestions
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                onChange={setSearchQuery}
+                onSubmit={(q, item) => {
+                  if (item?.kind === 'listing' && 'listingId' in item) {
+                    router.push(`/listings/${item.listingId}`);
+                  } else {
+                    const params = new URLSearchParams(searchParams.toString());
+                    if (q.trim()) params.set('search', q.trim());
+                    else params.delete('search');
+                    router.push(`/listings?${params.toString()}`);
+                  }
+                }}
+                placeholder="Search by location, property type, features..."
+                variant="listings"
+                inputClassName="w-full h-10 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
               />
             </div>
           </form>

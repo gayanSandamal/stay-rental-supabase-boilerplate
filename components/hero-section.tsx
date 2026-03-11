@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, MapPin, ArrowRight, ShieldCheck, Zap, Building2, Clock } from 'lucide-react';
+import { SearchInputWithSuggestions } from '@/components/search-input-with-suggestions';
 
 const POPULAR = ['Colombo 3', 'Nugegoda', 'Kandy', 'Galle', 'Negombo', 'Battaramulla'];
 
@@ -119,12 +120,20 @@ export function HeroSection() {
             <div className="flex flex-col sm:flex-row gap-1.5">
               <div className="flex-1 flex items-center gap-3 bg-white/15 rounded-xl px-4 py-3">
                 <MapPin className="h-5 w-5 text-teal-300 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="City, area, district…"
+                <SearchInputWithSuggestions
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-white placeholder-slate-300 text-base outline-none"
+                  onChange={setQuery}
+                  onSubmit={(value, item) => {
+                    if (item?.kind === 'listing' && 'listingId' in item) {
+                      router.push(`/listings/${item.listingId}`);
+                    } else {
+                      go(value);
+                    }
+                  }}
+                  placeholder="City, area, district…"
+                  variant="hero"
+                  className="flex-1"
+                  inputClassName="flex-1 w-full bg-transparent text-white placeholder-slate-300 text-base outline-none"
                 />
               </div>
               <button

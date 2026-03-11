@@ -11,6 +11,7 @@ const MIGRATIONS = [
   '0006_contact_verification.sql',
   '0007_audit_log.sql',
   '0008_password_reset_tokens.sql',
+  '0009_search_fts.sql',
 ];
 
 function splitStatements(sql: string): string[] {

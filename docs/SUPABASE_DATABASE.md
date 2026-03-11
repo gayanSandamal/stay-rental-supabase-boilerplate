@@ -99,11 +99,14 @@ npm run db:seed-listings   # if you have listing seed data
 
 - In Vercel → **Project → Settings → Environment Variables**, add:
   - **`DATABASE_URL`** = your Supabase **Transaction mode (6543)** pooler URI.
+  - **`CRON_SECRET`** = a random secret (min 16 chars, e.g. `openssl rand -base64 32`). Required for the search suggestions cron job.
 - Redeploy. The app will use Supabase in production.
 - Run migrations from your **local** machine (with `DATABASE_URL` in `.env` pointing at the same Supabase DB) whenever you add new migrations:
   ```bash
-  npm run db:migrate
+  pnpm db:migrate-all
   ```
+
+**Search suggestions cron:** The `search_location_suggestions` materialized view is refreshed every 15 minutes via Vercel Cron (`/api/cron/refresh-suggestions`). Ensure `CRON_SECRET` is set in Vercel so the cron can authenticate.
 
 ---
 

@@ -10,6 +10,8 @@
     "db:seed-sample-data": "npx tsx lib/db/seed-sample-data.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate-all": "npx tsx lib/db/run-all-migrations.ts",
+    "db:refresh-suggestions": "npx tsx scripts/refresh-search-suggestions.ts",
     "db:studio": "drizzle-kit studio",
     "storage:setup": "npx tsx lib/db/setup-storage.ts"
   },

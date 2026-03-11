@@ -128,13 +128,24 @@ export async function getActiveListings(filters?: {
       gte(listings.expiresAt, new Date())
     ),
     
-    // Search
+    // Search (FTS when search_vector exists from migration 0009, else LIKE fallback)
     filters?.search
-      ? or(
-          like(listings.title, `%${filters.search}%`),
-          like(listings.address, `%${filters.search}%`),
-          like(listings.description, `%${filters.search}%`)
-        )
+      ? (() => {
+          const tokens = filters
+            .search!.trim()
+            .split(/\s+/)
+            .map((t) => t.replace(/\W/g, '') + ':*')
+            .filter((t) => t !== ':*');
+          const tsQuery = tokens.join(' & ');
+          if (tsQuery) {
+            return sql`"listings"."search_vector" @@ to_tsquery('simple', ${tsQuery})`;
+          }
+          return or(
+            like(listings.title, `%${filters.search}%`),
+            like(listings.address, `%${filters.search}%`),
+            like(listings.description, `%${filters.search}%`)
+          );
+        })()
       : undefined,
     
     // Location
