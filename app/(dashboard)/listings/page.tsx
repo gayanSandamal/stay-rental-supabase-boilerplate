@@ -6,8 +6,71 @@ import { ListingsSearchFilter } from '@/components/listings-search-filter';
 import { db } from '@/lib/db/drizzle';
 import { businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import type { Metadata } from 'next';
+
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  apartment: 'Apartments',
+  house: 'Houses',
+  room: 'Rooms',
+};
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+}): Promise<Metadata> {
+  const params = searchParams instanceof Promise ? await searchParams : searchParams;
+  const city = typeof params.city === 'string' ? params.city : undefined;
+  const propertyType = typeof params.propertyType === 'string' ? params.propertyType : undefined;
+  const minPrice = params.minPrice ? parseInt(String(params.minPrice)) : undefined;
+  const maxPrice = params.maxPrice ? parseInt(String(params.maxPrice)) : undefined;
+  const bedrooms = params.bedrooms ? parseInt(String(params.bedrooms)) : undefined;
+  const search = typeof params.search === 'string' ? params.search : undefined;
+
+  const parts: string[] = [];
+  if (city) parts.push(`in ${city}`);
+  if (propertyType && PROPERTY_TYPE_LABELS[propertyType]) parts.push(PROPERTY_TYPE_LABELS[propertyType]);
+  if (maxPrice && !minPrice) parts.push(`under LKR ${maxPrice.toLocaleString()}`);
+  if (minPrice && !maxPrice) parts.push(`from LKR ${minPrice.toLocaleString()}`);
+  if (minPrice && maxPrice) parts.push(`LKR ${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`);
+  if (bedrooms) parts.push(`${bedrooms} bedroom${bedrooms > 1 ? 's' : ''}`);
+  if (search) parts.push(`"${search}"`);
+
+  const title = parts.length > 0
+    ? `${parts.join(' ')} | Stay Rental`
+    : 'Browse Rentals in Sri Lanka';
+  const description = parts.length > 0
+    ? `Find verified mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.`
+    : 'Find verified mid-to-long-term rentals in Sri Lanka. Browse apartments, houses, and rooms. KYC-verified landlords, property visits, and fast viewing coordination.';
+
+  const canonicalParams = new URLSearchParams();
+  if (city) canonicalParams.set('city', city);
+  if (propertyType) canonicalParams.set('propertyType', propertyType);
+  if (minPrice) canonicalParams.set('minPrice', String(minPrice));
+  if (maxPrice) canonicalParams.set('maxPrice', String(maxPrice));
+  if (bedrooms) canonicalParams.set('bedrooms', String(bedrooms));
+  if (search) canonicalParams.set('search', search);
+  const canonical = canonicalParams.toString()
+    ? `${baseUrl}/listings?${canonicalParams.toString()}`
+    : `${baseUrl}/listings`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+    },
+  };
+}
 
 export default async function ListingsPage({
   searchParams,

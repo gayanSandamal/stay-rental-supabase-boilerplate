@@ -13,10 +13,15 @@ import type { Metadata } from 'next';
 import { ScrollReveal } from '@/components/scroll-reveal';
 import { SiteFooter } from '@/components/site-footer';
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+
 export const metadata: Metadata = {
-  title: 'List Your Property | Stay Rental',
+  title: 'List Your Property',
   description:
     'List your rental property on Stay Rental. Reach verified tenants, get viewing coordination, and enjoy a hassle-free listing experience in Sri Lanka.',
+  alternates: {
+    canonical: `${baseUrl}/list-your-property`,
+  },
 };
 
 const benefits = [

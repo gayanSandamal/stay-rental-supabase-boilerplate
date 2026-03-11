@@ -1,8 +1,13 @@
 import Link from 'next/link';
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+
 export const metadata = {
-  title: 'Terms of Service | Stay Rental',
+  title: 'Terms of Service',
   description: 'Terms of Service for Stay Rental - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
+  alternates: {
+    canonical: `${baseUrl}/terms-of-service`,
+  },
 };
 
 export default function TermsOfServicePage() {

@@ -25,6 +25,9 @@ import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { Metadata } from 'next';
+import { getFirstListingPhoto } from '@/lib/seo';
+
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
 
 export async function generateMetadata({
   params,
@@ -39,21 +42,30 @@ export async function generateMetadata({
   if (!listing || listing.status !== 'active') return {};
 
   const description = `${listing.bedrooms} bed rental in ${listing.city}${listing.district ? `, ${listing.district}` : ''} - LKR ${Number(listing.rentPerMonth).toLocaleString()}/month. ${listing.description?.slice(0, 140) ?? ''}`;
+  const listingUrl = `${baseUrl}/listings/${listing.id}`;
+  const firstPhoto = getFirstListingPhoto(listing.photos);
 
   return {
-    title: `${listing.title} | Stay Rental`,
+    title: listing.title,
     description,
+    alternates: {
+      canonical: listingUrl,
+    },
     openGraph: {
       title: listing.title,
       description,
       type: 'website',
-      url: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk'}/listings/${listing.id}`,
+      url: listingUrl,
       siteName: 'Stay Rental',
+      images: firstPhoto
+        ? [{ url: firstPhoto, width: 1200, height: 630, alt: listing.title }]
+        : undefined,
     },
     twitter: {
       card: 'summary_large_image',
       title: listing.title,
       description,
+      images: firstPhoto ? [firstPhoto] : undefined,
     },
   };
 }
@@ -162,14 +174,26 @@ export default async function ListingDetailPage({
     }
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
-  const listingUrl = `${baseUrl}/listings/${listing.id}`;
+  const pageBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+  const listingUrl = `${pageBaseUrl}/listings/${listing.id}`;
+
+  let photos: string[] = [];
+  if (typeof listing.photos === 'string') {
+    try {
+      const parsed = JSON.parse(listing.photos);
+      photos = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      photos = [];
+    }
+  } else if (Array.isArray(listing.photos)) {
+    photos = listing.photos;
+  }
 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'RealEstateListing',
     name: listing.title,
-    description: listing.description,
+    description: listing.description ?? undefined,
     url: listingUrl,
     address: {
       '@type': 'PostalAddress',
@@ -190,6 +214,7 @@ export default async function ListingDetailPage({
     numberOfBedrooms: listing.bedrooms,
     numberOfBathroomsTotal: listing.bathrooms ?? undefined,
     floorSize: listing.areaSqft ? { '@type': 'QuantitativeValue', value: listing.areaSqft, unitCode: 'FTK' } : undefined,
+    ...(photos.length > 0 ? { image: photos } : {}),
   };
 
   return (

@@ -7,6 +7,14 @@ import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
 import { SiteFooter } from '@/components/site-footer';
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+
+export const metadata = {
+  alternates: {
+    canonical: baseUrl,
+  },
+};
+
 export default async function HomePage() {
   return (
     <>

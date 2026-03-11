@@ -1,8 +1,13 @@
 import Link from 'next/link';
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+
 export const metadata = {
-  title: 'Privacy Policy | Stay Rental',
+  title: 'Privacy Policy',
   description: 'Privacy Policy for Stay Rental - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
+  alternates: {
+    canonical: `${baseUrl}/privacy-policy`,
+  },
 };
 
 export default function PrivacyPolicyPage() {
