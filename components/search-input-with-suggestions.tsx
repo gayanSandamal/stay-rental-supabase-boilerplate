@@ -16,15 +16,17 @@ export interface SearchInputWithSuggestionsProps {
   variant?: 'hero' | 'listings';
 }
 
-function SuggestionIcon({ item }: { item: SuggestionItem }) {
-  if (item.kind === 'listing') return <Building2 className="h-4 w-4 text-slate-400" />;
-  return <MapPin className="h-4 w-4 text-slate-400" />;
+function SuggestionIcon({ item, isHero }: { item: SuggestionItem; isHero: boolean }) {
+  const cn = isHero ? 'h-4 w-4 text-slate-300' : 'h-4 w-4 text-slate-400';
+  if (item.kind === 'listing') return <Building2 className={cn} />;
+  return <MapPin className={cn} />;
 }
 
-function SuggestionLabel({ item }: { item: SuggestionItem }) {
-  if (item.kind === 'city') return <span className="text-xs text-slate-500">City</span>;
-  if (item.kind === 'district') return <span className="text-xs text-slate-500">District</span>;
-  return <span className="text-xs text-slate-500">Listing</span>;
+function SuggestionLabel({ item, isHero }: { item: SuggestionItem; isHero: boolean }) {
+  const cn = isHero ? 'text-xs text-slate-400' : 'text-xs text-slate-500';
+  if (item.kind === 'city') return <span className={cn}>City</span>;
+  if (item.kind === 'district') return <span className={cn}>District</span>;
+  return <span className={cn}>Listing</span>;
 }
 
 export function SearchInputWithSuggestions({
@@ -128,14 +130,14 @@ export function SearchInputWithSuggestions({
           id="search-suggestions-list"
           ref={listRef}
           role="listbox"
-          className={`absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-xl border shadow-lg ${
+          className={`absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-auto rounded-xl border shadow-xl ${
             isHero
               ? 'border-white/20 bg-slate-900/95 backdrop-blur-md'
               : 'border-slate-200 bg-white'
           }`}
         >
           {loading ? (
-            <li className="flex items-center gap-3 px-4 py-3 text-slate-500">
+            <li className={`flex items-center gap-3 px-4 py-3 ${isHero ? 'text-slate-300' : 'text-slate-500'}`}>
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Searching…</span>
             </li>
@@ -159,13 +161,13 @@ export function SearchInputWithSuggestions({
                   handleSelect(item);
                 }}
               >
-                <SuggestionIcon item={item} />
+                <SuggestionIcon item={item} isHero={isHero} />
                 <div className="flex-1 min-w-0">
-                  <div className="truncate font-medium">{item.value}</div>
-                  <SuggestionLabel item={item} />
+                  <div className={`truncate font-medium ${isHero ? 'text-white' : 'text-slate-900'}`}>{item.value}</div>
+                  <SuggestionLabel item={item} isHero={isHero} />
                 </div>
                 {'listingCount' in item && (
-                  <span className="text-xs text-slate-400">{item.listingCount} listings</span>
+                  <span className={isHero ? 'text-xs text-slate-400' : 'text-xs text-slate-400'}>{item.listingCount} listings</span>
                 )}
               </li>
             ))

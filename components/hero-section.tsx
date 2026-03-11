@@ -115,7 +115,7 @@ export function HeroSection() {
         </p>
 
         {/* 4 · Search bar with breathing glow */}
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto mb-8">
+        <form onSubmit={handleSubmit} className="relative z-20 max-w-2xl mx-auto mb-8">
           <div className="glass rounded-2xl p-1.5 animate-search-glow [animation-delay:1.5s]">
             <div className="flex flex-col sm:flex-row gap-1.5">
               <div className="flex-1 flex items-center gap-3 bg-white/15 rounded-xl px-4 py-3">
