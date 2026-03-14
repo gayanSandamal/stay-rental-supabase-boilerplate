@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     default: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
     template: '%s | Stay Rental',
   },
-  description: 'Find verified mid-to-long-term rentals (1-12+ months) in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.',
+  description: 'Find verified mid-to-long-term rentals (1-12+ months) in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
   keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals'],
   openGraph: {
     type: 'website',
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     url: baseUrl,
     siteName: 'Stay Rental',
     title: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
-    description: 'Find verified mid-to-long-term rentals in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.',
+    description: 'Find verified mid-to-long-term rentals in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
   },
   twitter: {
     card: 'summary_large_image',

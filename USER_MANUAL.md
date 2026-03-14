@@ -161,7 +161,7 @@ Currently, property submission is **assisted by the operations team**. Here's th
    - Ownership documents (deed/lease agreement)
    - Your NIC (National Identity Card)
 4. **Verification Process**:
-   - Ops team verifies your KYC documents
+   - Ops team verifies your ownership documents
    - Property visit is scheduled
    - Listing is published once verified
 
@@ -201,7 +201,7 @@ Once logged in as a landlord:
    - Click **"New Listing"** to create a listing
 
 4. **Verification Process**:
-   - Verify ownership documents (KYC)
+   - Verify ownership documents
    - Schedule and complete property visit
    - Mark listing as verified
    - Set visited date
@@ -285,7 +285,7 @@ When browsing listings, you can filter by:
 
 ### Verification System
 
-- **KYC Verification**: Landlord identity and ownership verified
+- **Landlord Verification**: Landlord identity and ownership verified
 - **Property Visit**: Physical visit by ops team
 - **Verification Badge**: Green badge on verified listings
 - **Visit Date**: Shows when property was last visited
@@ -393,7 +393,7 @@ When browsing listings, you can filter by:
 
 ### For Ops Team
 
-1. **Verify Thoroughly**: Always complete KYC and property visits
+1. **Verify Thoroughly**: Always complete verification and property visits
 2. **Respond Quickly**: Fast lead response improves conversion
 3. **Track Everything**: Update lead and viewing statuses promptly
 4. **Follow Up**: Don't let leads go cold

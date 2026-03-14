@@ -91,7 +91,12 @@ const colorMap: Record<AuditAction, string> = {
   data_exported: 'bg-amber-100 text-amber-600',
 };
 
+const actionLabels: Partial<Record<AuditAction, string>> = {
+  kyc_verified: 'Landlord verified',
+};
+
 function formatAction(action: AuditAction): string {
+  if (actionLabels[action]) return actionLabels[action];
   return action
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))

@@ -7,7 +7,7 @@ const TESTIMONIALS = [
     role: 'Software Developer',
     location: 'Colombo 05',
     rating: 5,
-    text: 'Found my perfect apartment in just 2 weeks. The KYC verification gave me real confidence, and I contacted the landlord directly — moved in within a month.',
+    text: 'Found my perfect apartment in just 2 weeks. The verification process gave me real confidence, and I contacted the landlord directly — moved in within a month.',
     initials: 'SM',
     gradient: 'from-teal-600 to-teal-800',
   },

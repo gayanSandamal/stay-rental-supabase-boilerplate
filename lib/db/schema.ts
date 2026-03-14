@@ -60,7 +60,7 @@ export const users = pgTable('users', {
   deletedAt: timestamp('deleted_at'),
 });
 
-// Landlords table (extends users with KYC info)
+// Landlords table (extends users with verification info)
 export const landlords = pgTable('landlords', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')

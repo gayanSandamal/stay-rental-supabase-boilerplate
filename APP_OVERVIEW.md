@@ -8,7 +8,7 @@ It combines:
 - **Landlord dashboard**: manage your own listings, leads, and viewings.
 - **Internal back‑office**: ops/admin tools to manage business accounts, team members, and platform‑wide listings.
 
-Data is stored in Postgres using **Drizzle ORM**, with strong modeling around landlords, listings, leads, viewings, and business accounts, plus KYC/verification flags and Sri‑Lanka‑specific resilience fields (power backup, water source, etc.).
+Data is stored in Postgres using **Drizzle ORM**, with strong modeling around landlords, listings, leads, viewings, and business accounts, plus verification flags and Sri‑Lanka‑specific resilience fields (power backup, water source, etc.).
 
 ---
 
@@ -518,7 +518,7 @@ These flows assume access to an **ops** or **admin** user on the hosted environm
   - Tailwind CSS + custom components + lucide icons
 
 - **Design intentions**
-  - Strong focus on **trust and verification** (KYC for landlords, verified/visited listing flags).
+  - Strong focus on **trust and verification** (Verification for landlords, verified/visited listing flags).
   - Separation of concerns:
     - Public marketplace
     - Landlord self‑service dashboard

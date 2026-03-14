@@ -45,7 +45,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### For Landlords
 - Submit properties for listing (assisted by ops team)
-- KYC verification process
+- Verification process
 - Property visit coordination
 - Lead notifications
 
@@ -54,7 +54,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - Listing management (create, edit, verify)
 - Lead management and tracking
 - Viewing scheduling and coordination
-- Verification workflow (KYC + property visits)
+- Verification workflow
 
 ## Key Pages
 
@@ -88,7 +88,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Core Tables
 - `users`: User accounts with roles (tenant, landlord, ops, admin)
-- `landlords`: Landlord profiles with KYC information
+- `landlords`: Landlord profiles with verified information
 - `listings`: Property listings with Sri Lanka-specific features
 - `leads`: Viewing requests from tenants
 - `viewings`: Scheduled property viewings
@@ -110,7 +110,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Landlord Journey
 1. Provide property data to ops
-2. Submit ownership docs (KYC)
+2. Submit ownership docs for verification
 3. Ops verifies + visits property
 4. Listing published (active status)
 5. Receive lead notifications
@@ -118,7 +118,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Ops Workflow
 1. Listing intake: collect data, photos, docs
-2. Verification: KYC check, ownership proof, property visit
+2. Verification: ownership proof, property visit
 3. Publish: set status to active
 4. Lead management: triage, contact tenant, confirm with landlord
 5. Viewing scheduling: coordinate between tenant and landlord

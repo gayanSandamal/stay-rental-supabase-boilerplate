@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate-all": "npx tsx lib/db/run-all-migrations.ts",
+    "db:reset": "npx tsx lib/db/reset.ts",
     "db:refresh-suggestions": "npx tsx scripts/refresh-search-suggestions.ts",
     "db:set-admin": "npx tsx scripts/set-admin.ts",
     "db:studio": "drizzle-kit studio",

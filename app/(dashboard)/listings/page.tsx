@@ -44,8 +44,8 @@ export async function generateMetadata({
     ? `${parts.join(' ')} | Stay Rental`
     : 'Browse Rentals in Sri Lanka';
   const description = parts.length > 0
-    ? `Find verified mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. KYC-verified landlords, property visits, and fast viewing coordination.`
-    : 'Find verified mid-to-long-term rentals in Sri Lanka. Browse apartments, houses, and rooms. KYC-verified landlords, property visits, and fast viewing coordination.';
+    ? `Find verified mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.`
+    : 'Find verified mid-to-long-term rentals in Sri Lanka. Browse apartments, houses, and rooms. Verified landlords, property visits, and fast viewing coordination.';
 
   const canonicalParams = new URLSearchParams();
   if (city) canonicalParams.set('city', city);

@@ -57,7 +57,7 @@ export default async function Image() {
           Verified Mid-to-Long-Term Rentals in Sri Lanka
         </p>
         <p style={{ fontSize: 20, color: 'rgba(255,255,255,0.6)', marginTop: 12 }}>
-          KYC-verified landlords · Property visits · Fast viewing coordination
+          Verified landlords · Property visits · Fast viewing coordination
         </p>
       </div>
     ),
