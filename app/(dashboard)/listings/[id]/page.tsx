@@ -217,13 +217,15 @@ export default async function ListingDetailPage({
     ...(photos.length > 0 ? { image: photos } : {}),
   };
 
+  const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml }}
       />
-
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="mb-5">
         <ol className="flex items-center gap-1 text-sm text-slate-500">
@@ -328,11 +330,13 @@ export default async function ListingDetailPage({
                 </div>
                 <div className="flex items-center text-gray-500">
                   <Calendar className="h-4 w-4 mr-1" />
-                  <span>{new Date(listing.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}</span>
+                  <span suppressHydrationWarning>
+                    {new Date(listing.createdAt).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -471,13 +475,13 @@ export default async function ListingDetailPage({
                   </span>
                 </div>
                 {listing.verifiedAt && (
-                  <p className="text-sm text-green-700 mt-1">
+                  <p className="text-sm text-green-700 mt-1" suppressHydrationWarning>
                     Verified on{' '}
                     {new Date(listing.verifiedAt).toLocaleDateString()}
                   </p>
                 )}
                 {listing.visited && listing.visitedAt && (
-                  <p className="text-sm text-green-700">
+                  <p className="text-sm text-green-700" suppressHydrationWarning>
                     Property visited on{' '}
                     {new Date(listing.visitedAt).toLocaleDateString()}
                   </p>
@@ -670,7 +674,8 @@ export default async function ListingDetailPage({
           rentPerMonth={Number(listing.rentPerMonth)}
         />
       )}
-    </main>
+      </main>
+    </>
   );
 }
 

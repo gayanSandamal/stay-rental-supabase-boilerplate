@@ -47,7 +47,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 <div className="absolute top-3 left-3 flex flex-col gap-1">
                   {listing.verified && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow">
-                      <ShieldCheck className="h-2.5 w-2.5" /> KYC Verified
+                      <ShieldCheck className="h-2.5 w-2.5" /> Verified
                     </span>
                   )}
                   {listing.visited && (
@@ -153,7 +153,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             <div className="absolute top-3 left-3 flex flex-col gap-1">
               {listing.verified && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
-                  <ShieldCheck className="h-2.5 w-2.5" /> KYC Verified
+                  <ShieldCheck className="h-2.5 w-2.5" /> Verified
                 </span>
               )}
               {listing.visited && (

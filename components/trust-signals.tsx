@@ -6,7 +6,7 @@ const STATS = [
   {
     icon: ShieldCheck,
     value: '100%',
-    label: 'KYC Verified',
+    label: 'Verified',
     sub: 'All landlords verified',
     color: 'text-emerald-600',
     bg: 'bg-emerald-50',

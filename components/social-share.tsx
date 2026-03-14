@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Share2, Copy, Check, MessageCircle } from 'lucide-react';
 
@@ -11,6 +11,11 @@ interface SocialShareProps {
 
 export function SocialShare({ url, title }: SocialShareProps) {
   const [copied, setCopied] = useState(false);
+  const [canShareNative, setCanShareNative] = useState(false);
+
+  useEffect(() => {
+    setCanShareNative(typeof navigator !== 'undefined' && 'share' in navigator);
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -80,7 +85,7 @@ export function SocialShare({ url, title }: SocialShareProps) {
         {copied ? <Check className="h-4 w-4 mr-1 text-green-600" /> : <Copy className="h-4 w-4 mr-1" />}
         {copied ? 'Copied!' : 'Copy Link'}
       </Button>
-      {typeof navigator !== 'undefined' && 'share' in navigator && (
+      {canShareNative && (
         <Button
           variant="outline"
           size="sm"

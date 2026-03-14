@@ -103,7 +103,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 mb-2">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>100% KYC Verified Landlords</span>
+              <span>Verified Landlords & Listings</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Mail className="h-3.5 w-3.5" />

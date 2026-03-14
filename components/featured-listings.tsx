@@ -28,7 +28,7 @@ export async function FeaturedListings() {
               </h2>
               <p className="text-slate-500 mt-1.5">
                 {isVerified
-                  ? 'KYC verified and site-visited by our team'
+                  ? 'Verified and site-visited by our team'
                   : 'Explore available rentals across Sri Lanka'}
               </p>
             </div>

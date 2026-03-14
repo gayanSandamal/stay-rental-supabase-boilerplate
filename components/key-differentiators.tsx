@@ -4,7 +4,7 @@ import { ScrollReveal } from './scroll-reveal';
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'KYC Verified Listings',
+    title: 'Verified Listings',
     description:
       'Every landlord provides ownership documents and a government-issued ID. Our ops team cross-checks before publishing.',
     tag: 'Zero Scams',

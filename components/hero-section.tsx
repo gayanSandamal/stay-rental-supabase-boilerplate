@@ -70,8 +70,8 @@ export function HeroSection() {
       {/* ── Floating glass feature cards (desktop only) ── */}
       <FloatingCard
         icon={ShieldCheck}
-        label="All landlords"
-        value="KYC Verified"
+        label="Verified Listings"
+        value="Platform Verified"
         className="top-[22%] left-[6%] animate-float-slow"
         />
       <FloatingCard
@@ -111,7 +111,7 @@ export function HeroSection() {
         <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
           Affordable, verified rentals for{' '}
           <span className="text-amber-300 font-semibold">office-goers</span>, couples, students, and families.
-          Short- or long-term — <span className="text-teal-300 font-semibold">KYC-verified</span> landlords, no scams.
+          Short- or long-term — <span className="text-teal-300 font-semibold">verified</span> landlords, no scams.
         </p>
 
         {/* 4 · Search bar with breathing glow */}

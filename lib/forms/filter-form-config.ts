@@ -162,6 +162,7 @@ export const filterFormConfig: FormConfig = {
       name: 'powerBackup',
       label: 'Power Backup',
       type: 'select',
+      helpText: 'Essential in Sri Lanka — filter by generator, solar, or UPS for properties that stay powered during outages.',
       options: [
         { label: 'Any', value: '' },
         { label: 'Generator', value: 'generator' },
@@ -204,6 +205,7 @@ export const filterFormConfig: FormConfig = {
       label: 'Fiber Internet Available',
       type: 'checkbox',
       defaultValue: false,
+      helpText: 'Filter by fiber availability — important for remote work and stable connectivity.',
     },
     {
       name: 'fiberISP',
@@ -338,7 +340,7 @@ export const filterFormConfig: FormConfig = {
       label: 'Verified Listings Only',
       type: 'checkbox',
       defaultValue: false,
-      helpText: 'Show only KYC and property-verified listings',
+      helpText: 'Show only verified listings',
     },
     {
       name: 'visitedOnly',

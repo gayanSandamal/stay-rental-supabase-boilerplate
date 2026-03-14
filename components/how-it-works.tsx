@@ -11,7 +11,7 @@ const STEPS = [
     num: '01',
     title: 'Browse Verified Listings',
     description:
-      'Use Sri Lanka-specific filters — power backup, water source, fiber internet — to narrow down the properties you\'ll love.',
+      'Filter by power backup (for outages), water source, and fiber internet (for remote work) — Sri Lanka-specific features that matter when choosing a home.',
     gradient: 'from-teal-700 to-teal-900',
     ringColor: 'ring-teal-400/40',
     accentBg: 'bg-teal-500',
@@ -116,7 +116,7 @@ function SceneContact({ active }: { active: boolean }) {
             <div className="text-[10px] font-bold text-slate-800">Amal Jayasinghe</div>
             <div className="flex items-center gap-1">
               <ShieldCheck className="h-2 w-2 text-emerald-500" />
-              <span className="text-[7px] font-medium text-emerald-600">KYC Verified Owner</span>
+              <span className="text-[7px] font-medium text-emerald-600">Verified Owner</span>
             </div>
           </div>
         </div>
