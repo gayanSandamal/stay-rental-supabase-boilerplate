@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getActiveListings } from '@/lib/db/queries';
+import { getActiveListings, getUser } from '@/lib/db/queries';
+import { isUserPremium } from '@/lib/subscription';
 import { db } from '@/lib/db/drizzle';
 import { businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -61,6 +62,11 @@ export async function GET(request: NextRequest) {
 
     const petsAllowed = searchParams.get('petsAllowed');
     if (petsAllowed === 'true') filters.petsAllowed = true;
+
+    const user = await getUser();
+    const isPremium = isUserPremium(user);
+    filters.excludeExclusive = !isPremium;
+    filters.sortExclusiveFirst = isPremium;
 
     // Fetch listings
     const listings = await getActiveListings(filters);

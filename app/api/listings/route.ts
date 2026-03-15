@@ -8,6 +8,7 @@ import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { isUserPremium } from '@/lib/subscription';
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       contactNumbers, // Array of contact number IDs
       businessAccountId, // New field
       createdBy,
+      exclusive,
     } = body;
 
     // Validate required fields
@@ -160,6 +162,7 @@ export async function POST(request: NextRequest) {
           ? JSON.stringify(photos) 
           : null,
         status: status || 'pending',
+        exclusive: (user.role === 'admin' || user.role === 'ops' || isUserPremium(user)) && Boolean(exclusive),
     };
 
     // Only add new fields if columns exist (after migration)

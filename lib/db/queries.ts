@@ -112,6 +112,10 @@ export async function getActiveListings(filters?: {
   // Verification
   verifiedOnly?: boolean;
   visitedOnly?: boolean;
+
+  // Exclusive (premium-only listings)
+  excludeExclusive?: boolean; // When true, hide exclusive listings (for free users)
+  sortExclusiveFirst?: boolean; // When true, show exclusive listings first (for premium users)
   
   // Sorting
   sortBy?: string;
@@ -119,6 +123,9 @@ export async function getActiveListings(filters?: {
   // Pagination
   limit?: number;
   offset?: number;
+
+  // For saved search alerts: only listings created after this date
+  createdAtSince?: Date;
 }) {
   const conditions = [
     eq(listings.status, 'active'),
@@ -213,6 +220,12 @@ export async function getActiveListings(filters?: {
     // Verification
     filters?.verifiedOnly ? eq(listings.verified, true) : undefined,
     filters?.visitedOnly ? eq(listings.visited, true) : undefined,
+
+    // Exclusive: free users cannot see exclusive listings
+    filters?.excludeExclusive ? eq(listings.exclusive, false) : undefined,
+
+    // Created since (for saved search alerts)
+    filters?.createdAtSince ? gte(listings.createdAt, filters.createdAtSince) : undefined,
     
     // Location radius (requires lat/lng)
     filters?.locationRadius && filters?.latitude && filters?.longitude
@@ -264,11 +277,15 @@ export async function getActiveListings(filters?: {
   }
 
   // Build query with all clauses at once
+  const orderByArgs = filters?.sortExclusiveFirst
+    ? [desc(listings.exclusive), orderByClause]
+    : [orderByClause];
+
   let query = db
     .select()
     .from(listings)
     .where(and(...conditions))
-    .orderBy(orderByClause);
+    .orderBy(...orderByArgs);
 
   if (filters?.limit) {
     query = query.limit(filters.limit) as any;
@@ -489,7 +506,7 @@ export async function getLeadsForOps(filters?: {
     .select()
     .from(leads)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(leads.createdAt));
+    .orderBy(desc(leads.isPremium), desc(leads.createdAt));
 
   if (filters?.limit) {
     query = query.limit(filters.limit) as typeof query;
@@ -559,6 +576,14 @@ export async function getSavedSearchesForUser(userId: number) {
     .from(savedSearches)
     .where(eq(savedSearches.userId, userId))
     .orderBy(desc(savedSearches.createdAt));
+}
+
+export async function getSavedSearchCount(userId: number): Promise<number> {
+  const rows = await db
+    .select()
+    .from(savedSearches)
+    .where(eq(savedSearches.userId, userId));
+  return rows.length;
 }
 
 // Dashboard stats for ops

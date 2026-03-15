@@ -371,6 +371,21 @@ export const listingFormConfig: FormConfig = {
       defaultValue: [],
     },
 
+    // Visibility Section
+    {
+      name: 'visibilitySection',
+      label: 'Listing Visibility',
+      type: 'section',
+      helpText: 'Premium options for listing visibility',
+    },
+    {
+      name: 'exclusive',
+      label: 'Exclusive Listing (Premium renters only)',
+      type: 'checkbox',
+      defaultValue: false,
+      helpText: 'Only visible to Premium subscribers. Requires ops approval or Premium landlord plan.',
+    },
+
     // Contact Information Section
     {
       name: 'contactSection',

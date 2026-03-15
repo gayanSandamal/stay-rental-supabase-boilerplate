@@ -1,5 +1,6 @@
 import { ShieldCheck, CheckCircle2, Eye, Building2 } from 'lucide-react';
-import { getActiveListings } from '@/lib/db/queries';
+import { getActiveListings, getUser } from '@/lib/db/queries';
+import { isUserPremium } from '@/lib/subscription';
 import { AnimatedCounter } from './animated-counter';
 
 const STATS = [
@@ -46,7 +47,12 @@ const STATS = [
 ];
 
 export async function TrustSignals() {
-  const listings = await getActiveListings({ limit: 1000 });
+  const user = await getUser();
+  const isPremium = isUserPremium(user);
+  const listings = await getActiveListings({
+    limit: 1000,
+    excludeExclusive: !isPremium,
+  });
   const counts = {
     verified: listings.filter((l) => l.verified).length,
     visited: listings.filter((l) => l.visited).length,

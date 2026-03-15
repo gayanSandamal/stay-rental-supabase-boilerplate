@@ -77,6 +77,7 @@ export function EditListingForm({ listing }: EditListingFormProps) {
     noticePeriodDays: listing.noticePeriodDays || 30,
     photos: photos || [],
     contactNumbers: contactNumberIds,
+    exclusive: listing.exclusive || false,
   };
 
   const handleSubmit = async (data: Record<string, any>) => {

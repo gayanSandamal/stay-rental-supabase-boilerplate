@@ -55,6 +55,8 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   role: userRoleEnum('role').notNull().default('tenant'),
   phone: varchar('phone', { length: 20 }),
+  subscriptionTier: varchar('subscription_tier', { length: 20 }).default('free'),
+  subscriptionExpiresAt: timestamp('subscription_expires_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),
@@ -144,6 +146,9 @@ export const listings = pgTable('listings', {
   
   // Photos
   photos: text('photos'), // JSON array of photo URLs
+
+  // Premium / exclusive
+  exclusive: boolean('exclusive').notNull().default(false), // Premium renters only
   
   // Metadata
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -169,6 +174,8 @@ export const leads = pgTable('leads', {
   notes: text('notes'),
   status: leadStatusEnum('status').notNull().default('new'),
   assignedTo: integer('assigned_to').references(() => users.id), // Ops user
+  userId: integer('user_id').references(() => users.id), // Logged-in user who submitted
+  isPremium: boolean('is_premium').notNull().default(false), // Priority contact
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -201,6 +208,7 @@ export const savedSearches = pgTable('saved_searches', {
   searchParams: text('search_params').notNull(), // JSON object
   emailAlerts: boolean('email_alerts').default(true),
   whatsappAlerts: boolean('whatsapp_alerts').default(false),
+  lastAlertAt: timestamp('last_alert_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -327,6 +335,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   assignedLeads: many(leads, {
     relationName: 'assignedOps',
   }),
+  notifications: many(notifications),
 }));
 
 export const landlordsRelations = relations(landlords, ({ one, many }) => ({
@@ -455,6 +464,27 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
   }),
 }));
 
+// Notifications table (in-app notification center)
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 50 }).notNull(), // new_lead, saved_search_alert, etc.
+  title: varchar('title', { length: 200 }).notNull(),
+  body: text('body'),
+  link: varchar('link', { length: 500 }), // URL to navigate when clicked
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+}));
+
 export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
   user: one(users, {
     fields: [auditLogs.userId],
@@ -483,3 +513,5 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

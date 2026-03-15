@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Grid, List, Map, Loader2 } from 'lucide-react';
+import { SaveSearchButton } from '@/components/save-search-button';
 import { useRouter } from 'next/navigation';
 
 type ViewMode = 'grid' | 'list' | 'map';
@@ -203,10 +204,11 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
     <div>
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <p className="text-sm text-gray-600">
             Showing <span className="font-semibold text-gray-900">{filteredListings.length}</span> {filteredListings.length === 1 ? 'listing' : 'listings'}
           </p>
+          <SaveSearchButton />
         </div>
 
         {/* View Toggle */}

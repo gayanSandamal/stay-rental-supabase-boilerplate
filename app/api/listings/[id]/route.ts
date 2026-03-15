@@ -4,6 +4,7 @@ import { listings, listingContactNumbers, userContactNumbers, businessAccountMem
 import { getUser } from '@/lib/db/queries';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
+import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
 
 export async function PATCH(
@@ -298,6 +299,10 @@ export async function PUT(
         : null,
       updatedAt: new Date(),
     };
+
+    if (body.exclusive !== undefined && (isAdminOrOps || isUserPremium(user))) {
+      updates.exclusive = Boolean(body.exclusive);
+    }
 
     // If editing an active listing, change status to pending for review
     // But preserve publishedAt and expiresAt (don't include them in updates)

@@ -100,11 +100,12 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 const signUpSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(['tenant', 'landlord']).optional()
+  role: z.enum(['tenant', 'landlord']).optional(),
+  plan: z.string().optional(),
 });
 
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
-  const { email, password, role = 'tenant' } = data;
+  const { email, password, role = 'tenant', plan } = data;
 
   const existingUser = await db
     .select()
@@ -125,7 +126,8 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const newUser: NewUser = {
     email,
     passwordHash,
-    role: role as 'tenant' | 'landlord'
+    role: role as 'tenant' | 'landlord',
+    subscriptionTier: plan === 'premium' ? 'premium' : 'free',
   };
 
   const [createdUser] = await db.insert(users).values(newUser).returning();

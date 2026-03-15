@@ -5,6 +5,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Home, List, PlusCircle, Menu, X } from 'lucide-react';
 import { UserMenu } from '@/components/user-menu';
+import { NotificationCenter } from '@/components/notification-center';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home', icon: Home },
@@ -77,6 +78,9 @@ function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
+            <Suspense fallback={<div className="h-9 w-24 bg-slate-200 rounded-lg animate-pulse" />}>
+              <NotificationCenter />
+            </Suspense>
             <Suspense fallback={<div className="h-9 w-24 bg-slate-200 rounded-lg animate-pulse" />}>
               <UserMenu />
             </Suspense>

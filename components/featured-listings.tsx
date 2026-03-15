@@ -1,11 +1,18 @@
-import { getActiveListings } from '@/lib/db/queries';
+import { getActiveListings, getUser } from '@/lib/db/queries';
+import { isUserPremium } from '@/lib/subscription';
 import { ListingCard } from './listing-card';
 import { ScrollReveal } from './scroll-reveal';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 export async function FeaturedListings() {
-  const allListings = await getActiveListings({ limit: 1000 });
+  const user = await getUser();
+  const isPremium = isUserPremium(user);
+  const allListings = await getActiveListings({
+    limit: 1000,
+    excludeExclusive: !isPremium,
+    sortExclusiveFirst: isPremium,
+  });
 
   const featured = allListings.filter((l) => l.verified || l.visited).slice(0, 6);
   const display = featured.length > 0 ? featured : allListings.slice(0, 6);

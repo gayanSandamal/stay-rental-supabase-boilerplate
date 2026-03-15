@@ -177,6 +177,40 @@ export async function sendListingRejectedToLandlord(
   });
 }
 
+export async function sendSavedSearchAlert(
+  userEmail: string,
+  userName: string | undefined,
+  searchName: string,
+  matchingListings: Array<{ id: number; title: string }>,
+  listingsUrl: string
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+
+  const listingsHtml = matchingListings
+    .slice(0, 5)
+    .map(
+      (l) =>
+        `<li><a href="${baseUrl}/listings/${l.id}">${l.title}</a></li>`
+    )
+    .join('');
+  const moreCount = matchingListings.length > 5 ? matchingListings.length - 5 : 0;
+
+  return sendEmail({
+    to: userEmail,
+    subject: `New listings match your search: ${searchName}`,
+    html: `
+      <h2>Hi ${userName || 'there'},</h2>
+      <p><strong>${matchingListings.length}</strong> new listing${matchingListings.length === 1 ? '' : 's'} match your saved search &quot;${searchName}&quot;.</p>
+      <ul>${listingsHtml}</ul>
+      ${moreCount > 0 ? `<p>...and ${moreCount} more.</p>` : ''}
+      <p><a href="${listingsUrl}">View all matching listings</a></p>
+      <hr />
+      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+    `,
+    text: `Hi ${userName || 'there'}, ${matchingListings.length} new listing(s) match "${searchName}". View them: ${listingsUrl}`,
+  });
+}
+
 export async function sendListingExpiringReminder(
   landlordEmail: string,
   landlordName: string,

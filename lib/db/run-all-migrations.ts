@@ -12,6 +12,10 @@ const MIGRATIONS = [
   '0007_audit_log.sql',
   '0008_password_reset_tokens.sql',
   '0009_search_fts.sql',
+  '0010_notifications.sql',
+  '0011_user_subscription.sql',
+  '0012_leads_premium_listings_exclusive.sql',
+  '0013_saved_searches_last_alert.sql',
 ];
 
 function splitStatements(sql: string): string[] {

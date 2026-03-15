@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { leads } from '@/lib/db/schema';
-import { getListingById } from '@/lib/db/queries';
+import { getListingById, getUser } from '@/lib/db/queries';
+import { isUserPremium } from '@/lib/subscription';
 import { logLeadAction } from '@/lib/db/audit-logger';
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rate-limit';
 import { sendLeadConfirmationToTenant, sendLeadNotificationToOps } from '@/lib/email';
+import { createNotification, createNotificationsForOpsAndAdmin } from '@/lib/notifications';
+
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,6 +44,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const user = await getUser();
+    const isPremium = user ? isUserPremium(user) : false;
+
     // Create lead
     const [newLead] = await db
       .insert(leads)
@@ -52,6 +59,8 @@ export async function POST(request: NextRequest) {
         preferredTime: preferredTime || null,
         notes: notes || null,
         status: 'new',
+        userId: user?.id ?? null,
+        isPremium,
       })
       .returning();
 
@@ -78,6 +87,26 @@ export async function POST(request: NextRequest) {
       preferredDate ? new Date(preferredDate).toLocaleDateString() : undefined,
       preferredTime
     ).catch(() => {});
+
+    // In-app notifications for ops and admin
+    createNotificationsForOpsAndAdmin({
+      type: 'new_lead',
+      title: `New lead: ${tenantName} for "${listing.title}"`,
+      body: `${tenantEmail} · ${tenantPhone}`,
+      link: `${baseUrl}/dashboard/leads/${newLead.id}`,
+    }).catch(() => {});
+
+    // Notify landlord (if listing has landlord with user)
+    const landlordUserId = (listing as { landlord?: { user?: { id: number } } })?.landlord?.user?.id;
+    if (landlordUserId) {
+      createNotification({
+        userId: landlordUserId,
+        type: 'new_lead',
+        title: `New viewing request for "${listing.title}"`,
+        body: `${tenantName} · ${tenantPhone}`,
+        link: `${baseUrl}/dashboard/leads/${newLead.id}`,
+      }).catch(() => {});
+    }
 
     return NextResponse.json(
       { success: true, lead: newLead },

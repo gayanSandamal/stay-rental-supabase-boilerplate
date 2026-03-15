@@ -52,25 +52,32 @@ export default async function LeadsPage({
                     </div>
                   </div>
                 </div>
-                <span
-                  className={`px-3 py-1 rounded text-xs font-medium ${
-                    lead.status === 'new'
-                      ? 'bg-teal-100 text-teal-900'
-                      : lead.status === 'contacted'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : lead.status === 'view_scheduled'
-                      ? 'bg-purple-100 text-purple-800'
-                      : lead.status === 'interested'
-                      ? 'bg-green-100 text-green-800'
-                      : lead.status === 'closed_won'
-                      ? 'bg-green-200 text-green-900'
-                      : lead.status === 'closed_lost'
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {lead.status.replace('_', ' ')}
-                </span>
+                <div className="flex items-center gap-2">
+                  {lead.isPremium && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                      Premium
+                    </span>
+                  )}
+                  <span
+                    className={`px-3 py-1 rounded text-xs font-medium ${
+                      lead.status === 'new'
+                        ? 'bg-teal-100 text-teal-900'
+                        : lead.status === 'contacted'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : lead.status === 'view_scheduled'
+                        ? 'bg-purple-100 text-purple-800'
+                        : lead.status === 'interested'
+                        ? 'bg-green-100 text-green-800'
+                        : lead.status === 'closed_won'
+                        ? 'bg-green-200 text-green-900'
+                        : lead.status === 'closed_lost'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {lead.status.replace('_', ' ')}
+                  </span>
+                </div>
               </div>
 
               <div className="mb-4">

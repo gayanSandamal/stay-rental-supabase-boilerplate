@@ -1,4 +1,5 @@
-import { getActiveListings } from '@/lib/db/queries';
+import { getActiveListings, getUser } from '@/lib/db/queries';
+import { isUserPremium } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
 import { Suspense } from 'react';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
@@ -96,6 +97,11 @@ export default async function ListingsPage({
   if (searchParams.visitedOnly === 'true') filters.visitedOnly = true;
   if (searchParams.parking === 'true') filters.parking = true;
   if (searchParams.petsAllowed === 'true') filters.petsAllowed = true;
+
+  const user = await getUser();
+  const isPremium = isUserPremium(user);
+  filters.excludeExclusive = !isPremium;
+  filters.sortExclusiveFirst = isPremium;
 
   const listings = await getActiveListings(filters);
 
