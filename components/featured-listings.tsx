@@ -12,6 +12,7 @@ export async function FeaturedListings() {
     limit: 1000,
     excludeExclusive: !isPremium,
     sortExclusiveFirst: isPremium,
+    hideNewListingsHours: isPremium ? undefined : 24,
   });
 
   const featured = allListings.filter((l) => l.verified || l.visited).slice(0, 6);

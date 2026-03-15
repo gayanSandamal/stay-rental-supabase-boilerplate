@@ -28,7 +28,7 @@ const RENTER_PLANS = [
     description: 'For serious renters who want an edge',
     features: [
       'Everything in Free',
-      'Priority contact with landlords',
+      'Early access to new listings (24h head start)',
       'Unlimited saved alerts',
       'Exclusive listings first',
     ],

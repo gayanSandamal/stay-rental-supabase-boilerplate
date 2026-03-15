@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getActiveListings } from '@/lib/db/queries';
 import { sendSavedSearchAlert } from '@/lib/email';
 import { createNotification } from '@/lib/notifications';
+import { isUserPremium } from '@/lib/subscription';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
 
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
         lastAlertAt: savedSearches.lastAlertAt,
         userEmail: users.email,
         userName: users.name,
+        subscriptionTier: users.subscriptionTier,
+        subscriptionExpiresAt: users.subscriptionExpiresAt,
       })
       .from(savedSearches)
       .innerJoin(users, eq(savedSearches.userId, users.id))
@@ -67,6 +70,13 @@ export async function GET(request: NextRequest) {
         // Invalid JSON - skip
         continue;
       }
+
+      // Early access: free users only get alerted about listings they can see (>= 24h old)
+      const isPremium = isUserPremium({
+        subscriptionTier: search.subscriptionTier,
+        subscriptionExpiresAt: search.subscriptionExpiresAt,
+      });
+      if (!isPremium) filters.hideNewListingsHours = 24;
 
       const listings = await getActiveListings(filters as any);
 

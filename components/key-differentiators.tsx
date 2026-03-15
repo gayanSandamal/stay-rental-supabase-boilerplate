@@ -60,7 +60,7 @@ const FEATURES = [
     icon: Wallet,
     title: 'Affordable Plans',
     description:
-      'Free to browse, view, and contact. Premium from LKR 300/month for priority contact, unlimited alerts, and exclusive listings.',
+      'Free to browse, view, and contact. Premium from LKR 300/month for early access to new listings, unlimited alerts, and exclusive listings.',
     tag: 'Budget Friendly',
     gradient: 'from-emerald-500 to-teal-600',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',

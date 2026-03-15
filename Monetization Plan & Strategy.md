@@ -42,8 +42,7 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
 * **Cost:** LKR 300–500/month
 * **Features:**
 
-  * Priority contact with landlords (responses within 24 hours)
-  * Priority booking and viewing coordination
+  * Early access to new listings (see new properties 24 hours before free users)
   * Unlimited saved search alerts for new listings
   * Access to exclusive listings
 

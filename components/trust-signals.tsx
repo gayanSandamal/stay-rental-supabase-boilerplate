@@ -52,6 +52,7 @@ export async function TrustSignals() {
   const listings = await getActiveListings({
     limit: 1000,
     excludeExclusive: !isPremium,
+    hideNewListingsHours: isPremium ? undefined : 24,
   });
   const counts = {
     verified: listings.filter((l) => l.verified).length,

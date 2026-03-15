@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
     const isPremium = isUserPremium(user);
     filters.excludeExclusive = !isPremium;
     filters.sortExclusiveFirst = isPremium;
+    filters.hideNewListingsHours = isPremium ? undefined : 24;
 
     // Fetch listings
     const listings = await getActiveListings(filters);

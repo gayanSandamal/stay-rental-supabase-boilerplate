@@ -124,6 +124,9 @@ export async function getActiveListings(filters?: {
 
   // For saved search alerts: only listings created after this date
   createdAtSince?: Date;
+
+  // Early access: free users don't see listings newer than X hours (Premium sees all)
+  hideNewListingsHours?: number;
 }) {
   const conditions = [
     eq(listings.status, 'active'),
@@ -224,6 +227,14 @@ export async function getActiveListings(filters?: {
 
     // Created since (for saved search alerts)
     filters?.createdAtSince ? gte(listings.createdAt, filters.createdAtSince) : undefined,
+
+    // Early access: free users don't see listings newer than X hours
+    filters?.hideNewListingsHours
+      ? lte(
+          listings.createdAt,
+          new Date(Date.now() - filters.hideNewListingsHours * 60 * 60 * 1000)
+        )
+      : undefined,
     
     // Location radius (requires lat/lng)
     filters?.locationRadius && filters?.latitude && filters?.longitude
