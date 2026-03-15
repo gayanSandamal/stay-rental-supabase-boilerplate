@@ -88,10 +88,6 @@ Top‑level route group: `app/(dashboard)/dashboard/**` → URLs under `/dashboa
 - **`/dashboard/listings/[id]/edit`**  
   Edit existing listing.
 
-- **`/dashboard/analytics`**  
-  Analytics for **admin/ops** only:
-  - Route is protected: non‑admin/non‑ops users are redirected to `/dashboard`.
-
 - **`/dashboard/activity`**  
   Platform/user activity feed (plus `loading` state route).
 
@@ -186,7 +182,6 @@ All under `/api/**`, used by the UI and not typically called directly by end‑u
       - `/dashboard/listings/new`
       - `/dashboard/listings/[id]`
         - `/dashboard/listings/[id]/edit`
-    - `/dashboard/analytics`
     - `/dashboard/activity`
     - `/dashboard/general`
     - `/dashboard/security`
@@ -232,7 +227,6 @@ All under `/api/**`, used by the UI and not typically called directly by end‑u
 - **`admin`**
   - Top‑level platform administrator.
   - Same as `ops` plus full admin capabilities:
-    - Access `/dashboard/analytics`
     - Export routes (`/api/export/**`)
     - Manage any listing, landlord, or business account.
   - Redirected to **`/dashboard`** on login.
@@ -270,7 +264,6 @@ These are **scoped to a specific business account** and are **in addition to** t
 
 - **Ops/Admin**
   - All landlord dashboard pages above **plus**:
-    - `/dashboard/analytics` – metrics and insights.
     - `/back-office/**` – business accounts, team members, internal listings, back‑office settings.
     - Admin/ops‑only actions on listings, exports, and user management.
 
@@ -324,7 +317,7 @@ Use it as a **scenario guide**: each flow describes user goal, starting URL, ste
 - **Steps**:
   1. Choose role **landlord** (if exposed) and submit valid credentials.
   2. Confirm redirect to `/dashboard`.
-  3. Verify sidebar navigation items for landlords (Overview, Listings, Saved Alerts, Analytics, Settings, Security).
+  3. Verify sidebar navigation items for landlords (Overview, Listings, Saved Alerts, Settings, Security).
 - **Key assertions**:
   - Landlord accounts land in **dashboard**, not listings.
   - Dashboard layout and navigation are visible and usable.

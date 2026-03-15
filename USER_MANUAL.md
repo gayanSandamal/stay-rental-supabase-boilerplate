@@ -306,7 +306,6 @@ When browsing listings, you can filter by:
 - **Overview**: Dashboard home with statistics
 - **Listings**: Manage all property listings
 - **Saved Alerts**: Manage saved search alerts
-- **Analytics**: View platform analytics (ops/admin)
 - **Settings**: Account and system settings
 
 ### Quick Actions
