@@ -295,9 +295,27 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
       ) : (
         <Card className="p-12 text-center">
           <div className="max-w-md mx-auto">
-            <p className="text-lg font-semibold text-gray-900 mb-2">No listings found</p>
+            <p className="text-lg font-semibold text-gray-900 mb-2">
+              {searchParams.get('search') ? (
+                <>
+                  No listings found for &quot;
+                  <button
+                    type="button"
+                    onClick={() => router.push('/listings')}
+                    className="font-semibold text-teal-600 hover:text-teal-700 hover:underline focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 rounded"
+                  >
+                    {searchParams.get('search')}
+                  </button>
+                  &quot;
+                </>
+              ) : (
+                'No listings found'
+              )}
+            </p>
             <p className="text-gray-600 mb-6">
-              Try adjusting your filters or search terms to find more properties.
+              {searchParams.get('search')
+                ? 'Try a different search term or click the keyword above to browse all listings.'
+                : 'Try adjusting your filters to find more properties.'}
             </p>
             <Button
               variant="outline"

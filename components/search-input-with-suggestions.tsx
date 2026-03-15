@@ -44,7 +44,9 @@ export function SearchInputWithSuggestions({
   const listRef = useRef<HTMLUListElement>(null);
 
   const { suggestions, loading } = useSearchSuggestions(value);
-  const showDropdown = focused && value.trim().length >= 2 && (suggestions.length > 0 || loading);
+  const hasQuery = value.trim().length >= 2;
+  const noResults = hasQuery && !loading && suggestions.length === 0;
+  const showDropdown = focused && hasQuery && (suggestions.length > 0 || loading || noResults);
 
   const handleSelect = (item: SuggestionItem) => {
     const q = item.value;
@@ -68,7 +70,11 @@ export function SearchInputWithSuggestions({
         break;
       case 'Enter':
         e.preventDefault();
-        if (highlightIndex >= 0 && suggestions[highlightIndex]) {
+        if (noResults) {
+          onChange('');
+          onSubmit('', undefined);
+          setFocused(false);
+        } else if (highlightIndex >= 0 && suggestions[highlightIndex]) {
           handleSelect(suggestions[highlightIndex]);
         } else {
           onSubmit(value, undefined);
@@ -140,6 +146,26 @@ export function SearchInputWithSuggestions({
             <li className={`flex items-center gap-3 px-4 py-3 ${isHero ? 'text-slate-300' : 'text-slate-500'}`}>
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Searching…</span>
+            </li>
+          ) : noResults ? (
+            <li
+              role="option"
+              className={`flex cursor-pointer flex-col gap-2 px-4 py-3 transition-colors ${
+                isHero ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-slate-50 text-slate-600'
+              }`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange('');
+                onSubmit('', undefined);
+                setFocused(false);
+              }}
+            >
+              <span className="text-sm">
+                No results for &quot;<span className="font-medium">{value.trim()}</span>&quot;
+              </span>
+              <span className={`text-xs font-medium ${isHero ? 'text-teal-400' : 'text-teal-600'}`}>
+                Click to show all listings
+              </span>
             </li>
           ) : (
             suggestions.map((item, i) => (
