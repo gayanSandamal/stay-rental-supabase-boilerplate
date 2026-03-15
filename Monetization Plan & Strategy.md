@@ -61,23 +61,26 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
 
 #### **Premium Listing Plan**
 
-* **Cost:** LKR 1000–1500/month per listing
+* **Cost:** LKR 1,250/month
 * **Features:**
 
-  * Priority visibility on the platform (featured listing)
-  * Unlimited properties listed (for real estate agents or large landlords)
-  * Priority customer support
-  * Analytics and insights on property performance
+  * Up to 10 active listings
+  * Featured placement
+  * Rent comparison & market insights
+  * Listing performance insights
+  * Faster approval
 
-#### **Landlord Subscription Plan**
+#### **Agency Plan**
 
-* **Cost:** LKR 2000/month
+* **Cost:** LKR 3,500/month
 * **Features:**
 
   * Unlimited listings
-  * Featured listing across all properties
-  * Enhanced customer support
-  * Analytics for rent trends, property views, and market insights
+  * Featured placement
+  * Portfolio dashboard
+  * Bulk renewals
+  * Priority support
+  * Agency badge
 
 ---
 

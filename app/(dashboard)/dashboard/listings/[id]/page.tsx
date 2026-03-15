@@ -4,6 +4,8 @@ import { ListingApprovalForm } from './listing-approval-form';
 import { RequestReReviewButton } from './request-rereview-button';
 import { ArchiveListingButton } from './archive-listing-button';
 import { DeleteListingButton } from './delete-listing-button';
+import { BoostListingButton } from '@/components/boost-listing-button';
+import { LandlordPlanForm } from '@/components/landlord-plan-form';
 import { PropertyImagesGallery } from '@/components/property-images-gallery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -339,6 +341,29 @@ export default async function ListingEditPage({
         </div>
 
         <div className="lg:col-span-1 space-y-4">
+          {/* Boost: landlords see CTA, admin/ops can activate */}
+          {(listing.status === 'active' || isAdminOrOps) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Boost Listing</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BoostListingButton
+                  listingId={listing.id}
+                  boostedUntil={listing.boostedUntil}
+                  isAdminOrOps={isAdminOrOps}
+                />
+              </CardContent>
+            </Card>
+          )}
+          {isAdminOrOps && listing.landlord && (
+            <LandlordPlanForm
+              landlordId={listing.landlord.id}
+              landlordName={listing.landlord.user?.name || listing.landlord.user?.email || 'Landlord'}
+              currentTier={listing.landlord.landlordPlanTier}
+              currentExpiresAt={listing.landlord.landlordPlanExpiresAt}
+            />
+          )}
           {isAdminOrOps && (
             <ListingApprovalForm listing={listing} />
           )}

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
-import { Shield, Users, ArrowRight, Building2 } from 'lucide-react';
+import { Shield, Users, ArrowRight } from 'lucide-react';
 
 export function ForLandlordsSection() {
   return (
@@ -18,14 +18,13 @@ export function ForLandlordsSection() {
               <span className="gradient-text">Stay Rental</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Reach verified tenants with plans from LKR 500/listing. Featured placement,
-              analytics, and unlimited listings for growing portfolios.
+              List your first 3 properties free. Need more visibility? Boost from LKR 250.
             </p>
           </div>
         </ScrollReveal>
 
         <ScrollReveal stagger>
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
               <Shield className="h-10 w-10 text-teal-600 mb-4" />
               <h3 className="text-lg font-bold text-slate-900 mb-2">
@@ -44,16 +43,6 @@ export function ForLandlordsSection() {
               <p className="text-slate-600 text-sm">
                 Our team verifies your listing and optionally visits the property.
                 You handle tenant contact directly.
-              </p>
-            </div>
-            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-              <Building2 className="h-10 w-10 text-teal-600 mb-4" />
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Business Accounts
-              </h3>
-              <p className="text-slate-600 text-sm">
-                Manage multiple properties under one account. Ideal for agencies and
-                portfolio landlords.
               </p>
             </div>
           </div>

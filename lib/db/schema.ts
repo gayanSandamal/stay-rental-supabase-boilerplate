@@ -9,6 +9,7 @@ import {
   decimal,
   pgEnum,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 
 // User roles enum
@@ -63,6 +64,13 @@ export const landlords = pgTable('landlords', {
   kycVerified: boolean('kyc_verified').notNull().default(false),
   kycVerifiedAt: timestamp('kyc_verified_at'),
   kycVerifiedBy: integer('kyc_verified_by').references(() => users.id),
+  landlordPlanTier: varchar('landlord_plan_tier', { length: 20 }).default('free'),
+  landlordPlanExpiresAt: timestamp('landlord_plan_expires_at'),
+  profileSlug: varchar('profile_slug', { length: 50 }), // Custom URL (Premium+); one-time set
+  publicId: varchar('public_id', { length: 36 })
+    .notNull()
+    .default(sql`gen_random_uuid()::text`)
+    .unique(), // UUID for free profile URLs
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -138,6 +146,11 @@ export const listings = pgTable('listings', {
 
   // Premium / exclusive
   exclusive: boolean('exclusive').notNull().default(false), // Premium renters only
+
+  // Boost (LKR 250/7 days) and featured (Premium/Agency)
+  boostedUntil: timestamp('boosted_until'),
+  featured: boolean('featured').notNull().default(false),
+  featuredAt: timestamp('featured_at'),
   
   // Metadata
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -147,6 +160,15 @@ export const listings = pgTable('listings', {
   businessAccountId: integer('business_account_id').references(() => businessAccounts.id), // Business account (if created by team member)
   publishedAt: timestamp('published_at'), // When listing was first published/approved
   expiresAt: timestamp('expires_at'), // When listing expires (publishedAt + 30 days)
+});
+
+// Listing views (for Premium/Agency performance insights)
+export const listingViews = pgTable('listing_views', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  viewedAt: timestamp('viewed_at').notNull().defaultNow(),
 });
 
 // Saved searches table (for tenants)

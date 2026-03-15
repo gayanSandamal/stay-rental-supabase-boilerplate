@@ -41,27 +41,41 @@ const RENTER_PLANS = [
 
 const LANDLORD_PLANS = [
   {
+    name: 'Free',
+    price: 'LKR 0',
+    period: 'forever',
+    features: ['Up to 3 active listings', 'Direct contact', 'Phone & WhatsApp on listing', 'List on Stay Rental'],
+    icon: Building2,
+  },
+  {
     name: 'Basic',
     price: 'LKR 500',
-    period: '/listing/month',
-    features: ['List on Stay Rental', 'Direct contact', 'Phone & WhatsApp on listing'],
+    period: '/month',
+    features: ['Up to 5 active listings', 'Higher ranking than Free', 'Direct contact', 'Phone & WhatsApp'],
     icon: Building2,
   },
   {
     name: 'Premium',
-    price: 'LKR 1,000',
-    period: '–1,500/month',
-    features: ['Everything in Basic', 'Featured placement', 'Analytics dashboard'],
+    price: 'LKR 1,250',
+    period: '/month',
+    features: ['Up to 10 active listings', 'Featured placement', 'Rent comparison & market insights', 'Listing performance', 'Faster approval', 'Custom profile URL (e.g. stayrental.lk/prime-lands)'],
     icon: Zap,
   },
   {
-    name: 'Subscription',
-    price: 'LKR 2,000',
+    name: 'Agency',
+    price: 'LKR 3,500',
     period: '/month',
-    features: ['Unlimited listings', 'All Premium benefits', 'Priority support'],
+    features: ['Unlimited active listings', 'Featured placement', 'Portfolio dashboard', 'Bulk renewals', 'Priority support', 'Agency badge'],
     icon: Building2,
+    hidden: true,
   },
 ];
+
+const BOOST_ADDON = {
+  price: 'LKR 250',
+  period: 'per 7 days',
+  description: 'Get more views for 7 days. Boost any listing.',
+};
 
 export function PricingSection() {
   return (
@@ -79,7 +93,7 @@ export function PricingSection() {
               <span className="gradient-text">Your Budget</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Free to start. Upgrade when you need more. No hidden fees.
+              Start free. Upgrade only when you need more listings or better exposure.
             </p>
           </div>
         </ScrollReveal>
@@ -148,8 +162,8 @@ export function PricingSection() {
             </h3>
           </div>
         </ScrollReveal>
-        <ScrollReveal stagger className="grid md:grid-cols-3 gap-6 mb-8">
-          {LANDLORD_PLANS.map((plan) => {
+        <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          {LANDLORD_PLANS.filter((p: { hidden?: boolean }) => !p.hidden).map((plan) => {
             const Icon = plan.icon;
             return (
               <div
@@ -177,6 +191,13 @@ export function PricingSection() {
               </div>
             );
           })}
+        </ScrollReveal>
+        <ScrollReveal className="mb-8">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
+            <p className="text-sm font-medium text-amber-900">
+              <strong>Boost:</strong> {BOOST_ADDON.price} {BOOST_ADDON.period} — {BOOST_ADDON.description}
+            </p>
+          </div>
         </ScrollReveal>
         <ScrollReveal>
           <div className="text-center">

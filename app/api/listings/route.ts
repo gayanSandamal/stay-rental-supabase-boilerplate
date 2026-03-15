@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingContactNumbers, userContactNumbers, users } from '@/lib/db/schema';
-import { getUser } from '@/lib/db/queries';
+import { getUser, getActiveListingCountForLandlord } from '@/lib/db/queries';
 import { landlords } from '@/lib/db/schema';
+import { getLandlordPlanTier, getListingLimit } from '@/lib/landlord-plans';
 import { eq, and, inArray, or, sql } from 'drizzle-orm';
 import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
@@ -108,6 +109,22 @@ export async function POST(request: NextRequest) {
         .update(users)
         .set({ role: 'landlord', updatedAt: new Date() })
         .where(eq(users.id, user.id));
+    }
+
+    // Enforce landlord plan listing limits (skip for admin/ops creating on behalf)
+    if (user.role !== 'admin' && user.role !== 'ops') {
+      const tier = getLandlordPlanTier(landlord);
+      const limit = getListingLimit(tier);
+      const currentCount = await getActiveListingCountForLandlord(landlord.id);
+      if (currentCount >= limit) {
+        return NextResponse.json(
+          {
+            error: `You've reached your limit of ${limit} active listings. Upgrade to Basic for LKR 500/month to publish up to 5 listings.`,
+            code: 'LISTING_LIMIT_REACHED',
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Helper function to convert empty strings to null for numeric fields

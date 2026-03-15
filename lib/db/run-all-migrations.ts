@@ -17,6 +17,10 @@ const MIGRATIONS = [
   '0012_leads_premium_listings_exclusive.sql',
   '0013_saved_searches_last_alert.sql',
   '0014_drop_leads_viewings.sql',
+  '0015_landlord_plan_tier.sql',
+  '0016_listing_boost_featured.sql',
+  '0017_listing_views.sql',
+  '0018_landlord_profile_slug.sql',
 ];
 
 function splitStatements(sql: string): string[] {

@@ -20,6 +20,7 @@ import {
 import { PropertyImagesGallery } from '@/components/property-images-gallery';
 import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
+import { ListingViewTracker } from '@/components/listing-view-tracker';
 import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -218,6 +219,7 @@ export default async function ListingDetailPage({
 
   return (
     <>
+      {listing.status === 'active' && <ListingViewTracker listingId={listing.id} />}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdHtml }}

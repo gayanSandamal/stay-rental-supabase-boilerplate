@@ -32,6 +32,8 @@ const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
   'default': { maxRequests: 60, windowMs: 60_000 },
 };
 
+const VIEW_LIMIT: RateLimitConfig = { maxRequests: 30, windowMs: 60_000 }; // 30 views/min per IP
+
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
@@ -51,8 +53,13 @@ export function checkRateLimit(
 
   cleanup();
 
-  const routeKey = `${method}:${pathname}`;
-  const config = ROUTE_LIMITS[routeKey] ?? ROUTE_LIMITS['default'];
+  let routeKey = `${method}:${pathname}`;
+  let config = ROUTE_LIMITS[routeKey];
+  if (!config && method === 'POST' && /\/api\/listings\/\d+\/view$/.test(pathname)) {
+    config = VIEW_LIMIT;
+    routeKey = 'POST:/api/listings/:id/view'; // Normalize so all view requests share limit
+  }
+  config = config ?? ROUTE_LIMITS['default'];
   const key = `${ip}:${routeKey}`;
   const now = Date.now();
   const entry = store.get(key);

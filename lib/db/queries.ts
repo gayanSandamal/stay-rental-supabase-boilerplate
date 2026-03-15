@@ -1,4 +1,4 @@
-import { desc, and, eq, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount } from 'drizzle-orm';
+import { desc, and, eq, ne, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
   users,
@@ -7,6 +7,7 @@ import {
   savedSearches,
   businessAccounts,
   auditLogs,
+  listingViews,
 } from './schema';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
@@ -251,8 +252,11 @@ export async function getActiveListings(filters?: {
   ].filter(Boolean);
 
   // Determine sort order
-  let orderByClause;
+  // Default: monetization ranking (boosted > plan tier > verified > completeness > newest)
+  // Explicit sortBy: user's choice
+  let orderByArgs: any[];
   if (filters?.sortBy) {
+    let orderByClause;
     switch (filters.sortBy) {
       case 'newest':
         orderByClause = desc(listings.createdAt);
@@ -281,14 +285,22 @@ export async function getActiveListings(filters?: {
       default:
         orderByClause = desc(listings.createdAt);
     }
+    orderByArgs = filters?.sortExclusiveFirst
+      ? [desc(listings.exclusive), orderByClause]
+      : [orderByClause];
   } else {
-    orderByClause = desc(listings.createdAt);
+    // Default ranking: boosted > plan tier > verified > completeness > newest
+    orderByArgs = [
+      sql`(CASE WHEN ${listings.boostedUntil} IS NOT NULL AND ${listings.boostedUntil} > NOW() THEN 1 ELSE 0 END) DESC`,
+      sql`(SELECT CASE COALESCE(l.landlord_plan_tier, 'free') WHEN 'agency' THEN 3 WHEN 'premium' THEN 2 WHEN 'basic' THEN 1 ELSE 0 END FROM landlords l WHERE l.id = ${listings.landlordId}) DESC`,
+      desc(listings.verified),
+      sql`(CASE WHEN ${listings.photos} IS NOT NULL AND ${listings.photos} != '[]' THEN 1 ELSE 0 END) + (CASE WHEN ${listings.description} IS NOT NULL AND LENGTH(${listings.description}) > 50 THEN 1 ELSE 0 END) DESC`,
+      desc(listings.createdAt),
+    ];
+    if (filters?.sortExclusiveFirst) {
+      orderByArgs = [desc(listings.exclusive), ...orderByArgs];
+    }
   }
-
-  // Build query with all clauses at once
-  const orderByArgs = filters?.sortExclusiveFirst
-    ? [desc(listings.exclusive), orderByClause]
-    : [orderByClause];
 
   let query = db
     .select()
@@ -329,6 +341,20 @@ export async function getListingById(id: number) {
   });
 
   return result;
+}
+
+/** Count listings toward plan limit: active + pending (excludes rented, archived, rejected, expired). */
+export async function getActiveListingCountForLandlord(landlordId: number): Promise<number> {
+  const result = await db
+    .select({ count: drizzleCount() })
+    .from(listings)
+    .where(
+      and(
+        eq(listings.landlordId, landlordId),
+        inArray(listings.status, ['active', 'pending'])
+      )
+    );
+  return Number(result[0]?.count ?? 0);
 }
 
 export async function getListingsForOps(filters?: {
@@ -672,6 +698,165 @@ export async function getAnalyticsDashboardData() {
     verifiedListingsCount: Number(verifiedCount[0]?.count || 0),
     activeListingsCount: Number(activeCount[0]?.count || 0),
   };
+}
+
+/** Rent comparison for a listing: similar listings (city + bedrooms) market stats. */
+export async function getRentComparisonForListing(listingId: number) {
+  const listing = await db.query.listings.findFirst({
+    where: eq(listings.id, listingId),
+    columns: { city: true, bedrooms: true, rentPerMonth: true },
+  });
+  if (!listing) return null;
+
+  const similar = await db
+    .select({ rentPerMonth: listings.rentPerMonth })
+    .from(listings)
+    .where(
+      and(
+        eq(listings.status, 'active'),
+        eq(listings.city, listing.city),
+        eq(listings.bedrooms, listing.bedrooms),
+        ne(listings.id, listingId),
+        or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date()))
+      )
+    );
+
+  const rents = similar.map((r) => Number(r.rentPerMonth));
+  const yourRent = Number(listing.rentPerMonth);
+  if (rents.length === 0) {
+    return { yourRent, avgRent: yourRent, minRent: yourRent, maxRent: yourRent, similarCount: 0, position: 'at' as const };
+  }
+  const avgRent = Math.round(rents.reduce((a, b) => a + b, 0) / rents.length);
+  const minRent = Math.min(...rents);
+  const maxRent = Math.max(...rents);
+  const pct = yourRent < avgRent ? (1 - yourRent / avgRent) * 100 : yourRent > avgRent ? ((yourRent / avgRent) - 1) * 100 : 0;
+  const position = yourRent < avgRent ? 'below' as const : yourRent > avgRent ? 'above' as const : 'at' as const;
+  return { yourRent, avgRent, minRent, maxRent, similarCount: rents.length, position, pctBelowAbove: Math.round(pct) };
+}
+
+/** Listing performance: views total, views last 7d, percentile vs similar. */
+export async function getListingPerformanceData(listingId: number) {
+  const listing = await db.query.listings.findFirst({
+    where: eq(listings.id, listingId),
+    columns: { city: true, bedrooms: true },
+  });
+  if (!listing) return null;
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [totalViews, viewsLast7d] = await Promise.all([
+    db.select({ count: drizzleCount() }).from(listingViews).where(eq(listingViews.listingId, listingId)),
+    db
+      .select({ count: drizzleCount() })
+      .from(listingViews)
+      .where(and(eq(listingViews.listingId, listingId), gte(listingViews.viewedAt, sevenDaysAgo))),
+  ]);
+
+  const total = Number(totalViews[0]?.count ?? 0);
+  const last7 = Number(viewsLast7d[0]?.count ?? 0);
+
+  // Benchmark: avg views per similar listing (city + bedrooms)
+  const similarListingIds = await db
+    .select({ id: listings.id })
+    .from(listings)
+    .where(
+      and(
+        eq(listings.status, 'active'),
+        eq(listings.city, listing.city),
+        eq(listings.bedrooms, listing.bedrooms),
+        or(isNull(listings.expiresAt), gte(listings.expiresAt, now))
+      )
+    );
+
+  const ids = similarListingIds.map((r) => r.id);
+  if (ids.length === 0) return { totalViews: total, viewsLast7d: last7, percentile: 100 };
+
+  const viewCounts = await db
+    .select({
+      listingId: listingViews.listingId,
+      count: drizzleCount(),
+    })
+    .from(listingViews)
+    .where(inArray(listingViews.listingId, ids))
+    .groupBy(listingViews.listingId);
+
+  const counts = ids.map((id) => {
+    const row = viewCounts.find((v) => v.listingId === id);
+    return row ? Number(row.count) : 0;
+  });
+  counts.sort((a, b) => a - b);
+  const rank = counts.filter((c) => c < total).length;
+  const percentile = counts.length > 0 ? Math.round((rank / counts.length) * 100) : 100;
+
+  return { totalViews: total, viewsLast7d: last7, percentile };
+}
+
+/** Portfolio data for a landlord: listings with rent comparison and performance. */
+export async function getLandlordPortfolioData(landlordId: number) {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const expiringSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const landlordListings = await db
+    .select()
+    .from(listings)
+    .where(eq(listings.landlordId, landlordId))
+    .orderBy(desc(listings.createdAt));
+
+  const [byStatus, expiringListings] = await Promise.all([
+    db
+      .select({ status: listings.status, count: drizzleCount() })
+      .from(listings)
+      .where(eq(listings.landlordId, landlordId))
+      .groupBy(listings.status),
+    db
+      .select({ id: listings.id })
+      .from(listings)
+      .where(
+        and(
+          eq(listings.landlordId, landlordId),
+          eq(listings.status, 'active'),
+          lte(listings.expiresAt, expiringSoon),
+          gte(listings.expiresAt, now)
+        )
+      ),
+  ]);
+
+  const statusCounts = byStatus.reduce((acc, r) => {
+    acc[r.status] = Number(r.count);
+    return acc;
+  }, {} as Record<string, number>);
+
+  return {
+    listings: landlordListings,
+    total: landlordListings.length,
+    active: statusCounts['active'] ?? 0,
+    pending: statusCounts['pending'] ?? 0,
+    expiringSoon: expiringListings.length,
+    expiringListingIds: expiringListings.map((r) => r.id),
+  };
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolve landlord by profile slug (custom URL) or publicId (UUID). Returns landlord with user and active listings. */
+export async function getLandlordByProfileSlugOrPublicId(slug: string) {
+  const isUuid = UUID_REGEX.test(slug);
+  const landlord = await db.query.landlords.findFirst({
+    where: isUuid ? eq(landlords.publicId, slug) : eq(landlords.profileSlug, slug),
+    with: {
+      user: true,
+      listings: {
+        where: and(
+          eq(listings.status, 'active'),
+          or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date()))
+        ),
+        orderBy: desc(listings.createdAt),
+      },
+    },
+  });
+  return landlord;
 }
 
 export async function getRecentAuditLogs(limit: number = 20) {
