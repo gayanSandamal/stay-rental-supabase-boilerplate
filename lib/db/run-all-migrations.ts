@@ -16,6 +16,7 @@ const MIGRATIONS = [
   '0011_user_subscription.sql',
   '0012_leads_premium_listings_exclusive.sql',
   '0013_saved_searches_last_alert.sql',
+  '0014_drop_leads_viewings.sql',
 ];
 
 function splitStatements(sql: string): string[] {

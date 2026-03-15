@@ -26,7 +26,6 @@ interface RateLimitConfig {
 }
 
 const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
-  'POST:/api/leads': { maxRequests: 5, windowMs: 60_000 },
   'POST:/api/listings': { maxRequests: 10, windowMs: 60_000 },
   'POST:/api/contact-numbers': { maxRequests: 10, windowMs: 60_000 },
   'POST:/api/business-accounts': { maxRequests: 5, windowMs: 60_000 },

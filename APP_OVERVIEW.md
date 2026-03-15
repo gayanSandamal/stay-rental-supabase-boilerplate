@@ -4,11 +4,11 @@ Stay Rental is a **Next.js (App Router) boilerplate** for a mid‑to‑long‑te
 
 It combines:
 
-- **Public/tenant experience**: browse verified listings with rich filters, property details, and viewing requests.
-- **Landlord dashboard**: manage your own listings, leads, and viewings.
+- **Public/tenant experience**: browse verified listings with rich filters, property details, and direct contact (phone/WhatsApp).
+- **Landlord dashboard**: manage your own listings.
 - **Internal back‑office**: ops/admin tools to manage business accounts, team members, and platform‑wide listings.
 
-Data is stored in Postgres using **Drizzle ORM**, with strong modeling around landlords, listings, leads, viewings, and business accounts, plus verification flags and Sri‑Lanka‑specific resilience fields (power backup, water source, etc.).
+Data is stored in Postgres using **Drizzle ORM**, with strong modeling around landlords, listings, and business accounts, plus verification flags and Sri‑Lanka‑specific resilience fields (power backup, water source, etc.).
 
 ---
 
@@ -67,7 +67,7 @@ Top‑level route group: `app/(dashboard)/dashboard/**` → URLs under `/dashboa
 
 - **`/dashboard`**  
   Dashboard overview for landlords/ops/admin:
-  - High‑level stats: active listings, verified listings, new leads, scheduled viewings.
+  - High‑level stats: active listings, verified listings.
   - Quick actions guidance (“Use the navigation menu…”).
 
 - **`/dashboard/listings`**  
@@ -87,12 +87,6 @@ Top‑level route group: `app/(dashboard)/dashboard/**` → URLs under `/dashboa
 
 - **`/dashboard/listings/[id]/edit`**  
   Edit existing listing.
-
-- **`/dashboard/leads`**  
-  Leads management: track and update lead status along the funnel.
-
-- **`/dashboard/viewings`**  
-  Viewings management: scheduled property viewings and follow‑up.
 
 - **`/dashboard/analytics`**  
   Analytics for **admin/ops** only:
@@ -148,12 +142,11 @@ Access is restricted by `requireBackOfficeAccess` to **`admin`** and **`ops`** o
 
 All under `/api/**`, used by the UI and not typically called directly by end‑users:
 
-- **Listings & Leads**
+- **Listings**
   - `/api/listings` (GET/POST for listings; POST auto‑upgrades tenant → landlord on first creation).
   - `/api/listings/paginated`
   - `/api/listings/[id]`
-  - `/api/leads`
-  - `/api/export/listings`, `/api/export/leads` (CSV/Excel export for admin/ops).
+  - `/api/export/listings` (CSV/Excel export for admin/ops).
 
 - **Contact Numbers**
   - `/api/contact-numbers`
@@ -180,7 +173,7 @@ All under `/api/**`, used by the UI and not typically called directly by end‑u
   - Home (marketing + CTAs)
 - `/listings`  
   - `/listings/[id]`
-    - Viewing request form component (`viewing-request-form`) lives under this route
+    - Contact owner (phone/WhatsApp) visible to all visitors
 - `/list-your-property`
 - Auth group `(login)` (URL paths as shown above)
   - `/sign-in`
@@ -193,8 +186,6 @@ All under `/api/**`, used by the UI and not typically called directly by end‑u
       - `/dashboard/listings/new`
       - `/dashboard/listings/[id]`
         - `/dashboard/listings/[id]/edit`
-    - `/dashboard/leads`
-    - `/dashboard/viewings`
     - `/dashboard/analytics`
     - `/dashboard/activity`
     - `/dashboard/general`
@@ -221,7 +212,7 @@ All under `/api/**`, used by the UI and not typically called directly by end‑u
 
 - **`tenant`**
   - Default role for regular renters.
-  - Can browse and filter listings, view listing details, and submit viewing/lead requests.
+  - Can browse and filter listings, view listing details, and contact landlords directly via phone/WhatsApp.
   - Redirected to **`/listings`** after sign‑in/sign‑up.
 
 - **`landlord`**
@@ -255,7 +246,7 @@ Inside a **business account**, members have a separate role field (string, defau
 - **`admin`**  
   Manages team members and listings within that business account.
 - **`member`**  
-  Regular team member; can work with assigned listings and leads.
+  Regular team member; can work with assigned listings.
 
 These are **scoped to a specific business account** and are **in addition to** the global `user_role` (`tenant/landlord/ops/admin`).
 
@@ -274,14 +265,14 @@ These are **scoped to a specific business account** and are **in addition to** t
 
 - **Landlords**
   - `/list-your-property` – entry point.
-  - `/dashboard`, `/dashboard/listings`, `/dashboard/leads`, `/dashboard/viewings`, `/dashboard/general`, `/dashboard/security` – daily management.
+  - `/dashboard`, `/dashboard/listings`, `/dashboard/general`, `/dashboard/security` – daily management.
   - `/dashboard/listings/new` and `/dashboard/listings/[id]/edit` – create and manage listings.
 
 - **Ops/Admin**
   - All landlord dashboard pages above **plus**:
     - `/dashboard/analytics` – metrics and insights.
     - `/back-office/**` – business accounts, team members, internal listings, back‑office settings.
-    - Admin/ops‑only actions on listings, leads, exports, and user management.
+    - Admin/ops‑only actions on listings, exports, and user management.
 
 ---
 
@@ -333,7 +324,7 @@ Use it as a **scenario guide**: each flow describes user goal, starting URL, ste
 - **Steps**:
   1. Choose role **landlord** (if exposed) and submit valid credentials.
   2. Confirm redirect to `/dashboard`.
-  3. Verify sidebar navigation items for landlords (Overview, Listings, Leads, Viewings, Settings, Security).
+  3. Verify sidebar navigation items for landlords (Overview, Listings, Saved Alerts, Analytics, Settings, Security).
 - **Key assertions**:
   - Landlord accounts land in **dashboard**, not listings.
   - Dashboard layout and navigation are visible and usable.
@@ -381,7 +372,7 @@ Use it as a **scenario guide**: each flow describes user goal, starting URL, ste
   3. Navigate back to `/` via logo; ensure top‑level navigation still reflects logged‑in state.
 - **Key assertions**:
   - Tenant has **no access** to `/dashboard` (unless promoted to landlord).
-  - Any tenant‑initiated actions (viewing requests / leads) show clear confirmation or error states.
+  - Contact details (phone/WhatsApp) are visible to visitors on listing pages.
 
 ### 4. Landlord Flows (Own Listings)
 
@@ -415,18 +406,6 @@ Assume testing with a **landlord** user on the hosted environment.
 - **Key assertions**:
   - Changes made in dashboard are reflected on the public listing view.
   - Unauthorized admin‑only actions (approve/reject) are **not** visible to a plain landlord.
-
-#### 4.3 Leads & Viewings (Landlord Side)
-
-- **Goal**: Landlord sees tenant interest and scheduled viewings.
-- **Start**: `/dashboard/leads` and `/dashboard/viewings`.
-- **Steps**:
-  1. From the public side, submit a viewing/lead for one of this landlord’s listings.
-  2. As landlord, open `/dashboard/leads` and verify the new lead appears with correct listing reference.
-  3. If viewing scheduling is available, create/update a viewing and verify it appears in `/dashboard/viewings`.
-- **Key assertions**:
-  - Basic status fields (new/contacted/view_scheduled…) are visible and updatable.
-  - Date/time formatting and timezone behaviour make sense for Sri Lanka users.
 
 ### 5. Ops/Admin Flows (Back‑Office)
 
@@ -468,7 +447,7 @@ These flows assume access to an **ops** or **admin** user on the hosted environm
 - **Start**: `/back-office/listings`.
 - **Steps**:
   1. Verify that listings from multiple landlords/business accounts appear (if data exists).
-  2. From dashboard or back‑office (wherever exports are exposed), trigger **Export Listings** and **Export Leads**.
+  2. From dashboard or back‑office (wherever exports are exposed), trigger **Export Listings**.
   3. Confirm browser downloads a file or shows a URL that returns structured data.
 - **Key assertions**:
   - Exports are restricted to ops/admin.

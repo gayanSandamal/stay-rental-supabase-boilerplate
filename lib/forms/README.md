@@ -53,8 +53,8 @@ import { FormBuilder } from '@/components/form-builder';
 // Use listing form
 <FormBuilder config={formConfigs.listing} />
 
-// Use viewing request form
-<FormBuilder config={formConfigs.viewingRequest} />
+// Use filter form
+<FormBuilder config={formConfigs.filter} />
 
 // Use filter form
 <FormBuilder config={formConfigs.filter} />
@@ -213,6 +213,5 @@ validation: {
 See the example files:
 - `app/(dashboard)/dashboard/listings/new/form-example.tsx` - Listing form example
 - `lib/forms/listing-form-config.ts` - Full listing form config
-- `lib/forms/viewing-request-form-config.ts` - Viewing request form config
 - `lib/forms/filter-form-config.ts` - Filter form config
 

@@ -47,17 +47,3 @@ export async function logListingAction(
   });
 }
 
-export async function logLeadAction(
-  action: AuditAction,
-  leadId: number,
-  userId?: number,
-  metadata?: Record<string, unknown>
-) {
-  return logAudit({
-    action,
-    entityType: 'lead',
-    entityId: leadId,
-    userId,
-    metadata,
-  });
-}

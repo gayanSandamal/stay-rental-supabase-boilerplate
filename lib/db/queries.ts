@@ -3,8 +3,6 @@ import { db } from './drizzle';
 import {
   users,
   listings,
-  leads,
-  viewings,
   landlords,
   savedSearches,
   businessAccounts,
@@ -490,85 +488,6 @@ export async function getStaleListings(daysSinceUpdate: number = 60) {
     );
 }
 
-// Leads queries
-export async function getLeadsForOps(filters?: {
-  status?: 'new' | 'contacted' | 'view_scheduled' | 'no_show' | 'interested' | 'closed_won' | 'closed_lost';
-  assignedTo?: number;
-  limit?: number;
-  offset?: number;
-}) {
-  const conditions = [
-    filters?.status ? eq(leads.status, filters.status) : undefined,
-    filters?.assignedTo ? eq(leads.assignedTo, filters.assignedTo) : undefined,
-  ].filter(Boolean);
-
-  let query = db
-    .select()
-    .from(leads)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(leads.isPremium), desc(leads.createdAt));
-
-  if (filters?.limit) {
-    query = query.limit(filters.limit) as typeof query;
-  }
-  if (filters?.offset) {
-    query = query.offset(filters.offset) as typeof query;
-  }
-
-  return await query;
-}
-
-export async function getLeadById(id: number) {
-  const result = await db.query.leads.findFirst({
-    where: eq(leads.id, id),
-    with: {
-      listing: true,
-      viewings: true,
-      assignedOps: true,
-    },
-  });
-
-  return result;
-}
-
-export async function getLeadsByListingId(listingId: number) {
-  return await db
-    .select()
-    .from(leads)
-    .where(eq(leads.listingId, listingId))
-    .orderBy(desc(leads.createdAt));
-}
-
-// Viewings queries
-export async function getUpcomingViewings(limit: number = 10) {
-  return await db
-    .select()
-    .from(viewings)
-    .where(gte(viewings.scheduledAt, new Date()))
-    .orderBy(viewings.scheduledAt)
-    .limit(limit);
-}
-
-export async function getViewingById(id: number) {
-  const result = await db.query.viewings.findFirst({
-    where: eq(viewings.id, id),
-    with: {
-      lead: true,
-      listing: {
-        with: {
-          landlord: {
-            with: {
-              user: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  return result;
-}
-
 // Saved searches
 export async function getSavedSearchesForUser(userId: number) {
   return await db
@@ -598,27 +517,9 @@ export async function getOpsDashboardStats() {
     .from(listings)
     .where(and(eq(listings.status, 'active'), eq(listings.verified, true)));
 
-  const newLeads = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(leads)
-    .where(eq(leads.status, 'new'));
-
-  const scheduledViewings = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(viewings)
-    .where(
-      and(
-        gte(viewings.scheduledAt, new Date()),
-        eq(viewings.confirmedByLandlord, true),
-        eq(viewings.confirmedByTenant, true)
-      )
-    );
-
   return {
     activeListings: Number(activeListings[0]?.count || 0),
     verifiedListings: Number(verifiedListings[0]?.count || 0),
-    newLeads: Number(newLeads[0]?.count || 0),
-    scheduledViewings: Number(scheduledViewings[0]?.count || 0),
   };
 }
 
@@ -670,7 +571,6 @@ export async function getSimilarListings(
 export async function getAnalyticsDashboardData() {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   // Listing counts by status
   const listingsByStatus = await db
@@ -680,27 +580,6 @@ export async function getAnalyticsDashboardData() {
     })
     .from(listings)
     .groupBy(listings.status);
-
-  // Leads by status
-  const leadsByStatus = await db
-    .select({
-      status: leads.status,
-      count: sql<number>`count(*)`,
-    })
-    .from(leads)
-    .groupBy(leads.status);
-
-  // New leads in last 7 days
-  const recentLeads = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(leads)
-    .where(gte(leads.createdAt, sevenDaysAgo));
-
-  // New leads in last 30 days
-  const monthlyLeads = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(leads)
-    .where(gte(leads.createdAt, thirtyDaysAgo));
 
   // Listings created in last 30 days
   const monthlyListings = await db
@@ -719,15 +598,6 @@ export async function getAnalyticsDashboardData() {
     .groupBy(listings.city)
     .orderBy(sql`count(*) DESC`)
     .limit(10);
-
-  // Conversion funnel: leads -> contacted -> view_scheduled -> closed_won
-  const funnelData = leadsByStatus.reduce(
-    (acc, item) => {
-      acc[item.status] = Number(item.count);
-      return acc;
-    },
-    {} as Record<string, number>
-  );
 
   // Average rent by city
   const avgRentByCity = await db
@@ -779,9 +649,6 @@ export async function getAnalyticsDashboardData() {
       },
       {} as Record<string, number>
     ),
-    leadsByStatus: funnelData,
-    recentLeadsCount: Number(recentLeads[0]?.count || 0),
-    monthlyLeadsCount: Number(monthlyLeads[0]?.count || 0),
     monthlyListingsCount: Number(monthlyListings[0]?.count || 0),
     topCities: topCities.map((c) => ({ city: c.city, count: Number(c.count) })),
     avgRentByCity: avgRentByCity.map((c) => ({

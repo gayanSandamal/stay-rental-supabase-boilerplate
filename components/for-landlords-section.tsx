@@ -29,21 +29,21 @@ export function ForLandlordsSection() {
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
               <Shield className="h-10 w-10 text-teal-600 mb-4" />
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Verified Tenant Leads
+                Direct Tenant Contact
               </h3>
               <p className="text-slate-600 text-sm">
-                Every viewing request includes contact details. We screen and coordinate
-                so you only meet serious tenants.
+                Your contact numbers are shown on listings. Tenants call or WhatsApp you
+                directly—no middleman.
               </p>
             </div>
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
               <Users className="h-10 w-10 text-teal-600 mb-4" />
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Dedicated Ops Support
+                Ops Verification
               </h3>
               <p className="text-slate-600 text-sm">
-                Our team manages inquiries, schedules viewings, and keeps you updated.
-                No daily re-posting needed.
+                Our team verifies your listing and optionally visits the property.
+                You handle tenant contact directly.
               </p>
             </div>
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">

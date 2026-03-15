@@ -41,7 +41,6 @@ A complete form component that:
 
 Ready-to-use form configurations:
 - **Listing Form** - Complete property listing form
-- **Viewing Request Form** - Property viewing request form
 - **Filter Form** - Listing filters form
 
 ## 🚀 Quick Start
@@ -364,22 +363,7 @@ validation: {
 ### Example 1: Listing Form
 See `app/(dashboard)/dashboard/listings/new/form-example.tsx`
 
-### Example 2: Viewing Request Form
-```tsx
-import { FormLoader } from '@/lib/forms/form-loader';
-
-<FormLoader
-  configName="viewingRequest"
-  onSubmit={async (data) => {
-    await fetch('/api/leads', {
-      method: 'POST',
-      body: JSON.stringify({ ...data, listingId: 123 }),
-    });
-  }}
-/>
-```
-
-### Example 3: Filter Form
+### Example 2: Filter Form
 ```tsx
 import { FormBuilder } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
@@ -457,7 +441,6 @@ import { formConfigs } from '@/lib/forms';
 
 // Available configs:
 formConfigs.listing          // Complete listing form
-formConfigs.viewingRequest   // Viewing request form
 formConfigs.filter          // Filter form
 ```
 

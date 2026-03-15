@@ -27,10 +27,10 @@ export const metadata: Metadata = {
 const benefits = [
   {
     icon: Shield,
-    title: 'Verified Tenant Leads',
+    title: 'Direct Tenant Contact',
     description:
-      'Every viewing request includes tenant contact details. Our ops team screens and coordinates viewings so you only meet serious tenants.',
-    tag: 'Quality Leads',
+      'Your contact numbers are shown on your listing. Tenants call or WhatsApp you directly—no middleman, no delays.',
+    tag: 'Direct Contact',
     gradient: 'from-emerald-600 to-teal-700',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
@@ -47,8 +47,8 @@ const benefits = [
     icon: Users,
     title: 'Dedicated Ops Support',
     description:
-      'A dedicated operations team manages your listing, handles inquiries, schedules viewings, and keeps you updated.',
-    tag: 'Full Support',
+      'Our ops team verifies your listing, optionally visits the property, and publishes it. You handle tenant contact directly.',
+    tag: 'Verification',
     gradient: 'from-amber-500 to-amber-700',
     tagColor: 'bg-amber-50 text-amber-700 border-amber-200',
   },
@@ -101,9 +101,9 @@ const steps = [
   },
   {
     number: '4',
-    title: 'Receive Qualified Leads',
+    title: 'Tenants Contact You Directly',
     description:
-      'Get viewing requests from verified tenants. We coordinate schedules for you.',
+      'Visitors see your phone and WhatsApp on the listing. They contact you directly to arrange viewings.',
   },
 ];
 

@@ -44,7 +44,7 @@ const LANDLORD_PLANS = [
     name: 'Basic',
     price: 'LKR 500',
     period: '/listing/month',
-    features: ['List on Stay Rental', 'Verified tenant leads', 'Direct contact'],
+    features: ['List on Stay Rental', 'Direct contact', 'Phone & WhatsApp on listing'],
     icon: Building2,
   },
   {

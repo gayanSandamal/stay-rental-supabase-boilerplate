@@ -29,17 +29,6 @@ export const listingStatusEnum = pgEnum('listing_status', [
   'expired',
 ]);
 
-// Lead status enum
-export const leadStatusEnum = pgEnum('lead_status', [
-  'new',
-  'contacted',
-  'view_scheduled',
-  'no_show',
-  'interested',
-  'closed_won',
-  'closed_lost',
-]);
-
 // Business Account Status enum
 export const businessAccountStatusEnum = pgEnum('business_account_status', [
   'active',
@@ -158,44 +147,6 @@ export const listings = pgTable('listings', {
   businessAccountId: integer('business_account_id').references(() => businessAccounts.id), // Business account (if created by team member)
   publishedAt: timestamp('published_at'), // When listing was first published/approved
   expiresAt: timestamp('expires_at'), // When listing expires (publishedAt + 30 days)
-});
-
-// Leads table (viewing requests from tenants)
-export const leads = pgTable('leads', {
-  id: serial('id').primaryKey(),
-  listingId: integer('listing_id')
-    .notNull()
-    .references(() => listings.id),
-  tenantName: varchar('tenant_name', { length: 100 }).notNull(),
-  tenantEmail: varchar('tenant_email', { length: 255 }).notNull(),
-  tenantPhone: varchar('tenant_phone', { length: 20 }).notNull(),
-  preferredDate: timestamp('preferred_date'),
-  preferredTime: varchar('preferred_time', { length: 50 }),
-  notes: text('notes'),
-  status: leadStatusEnum('status').notNull().default('new'),
-  assignedTo: integer('assigned_to').references(() => users.id), // Ops user
-  userId: integer('user_id').references(() => users.id), // Logged-in user who submitted
-  isPremium: boolean('is_premium').notNull().default(false), // Priority contact
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
-// Viewings table (scheduled viewings)
-export const viewings = pgTable('viewings', {
-  id: serial('id').primaryKey(),
-  leadId: integer('lead_id')
-    .notNull()
-    .references(() => leads.id),
-  listingId: integer('listing_id')
-    .notNull()
-    .references(() => listings.id),
-  scheduledAt: timestamp('scheduled_at').notNull(),
-  confirmedByLandlord: boolean('confirmed_by_landlord').default(false),
-  confirmedByTenant: boolean('confirmed_by_tenant').default(false),
-  notes: text('notes'),
-  outcome: varchar('outcome', { length: 50 }), // interested, passed, no_show
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // Saved searches table (for tenants)
@@ -332,9 +283,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [landlords.userId],
   }),
   savedSearches: many(savedSearches),
-  assignedLeads: many(leads, {
-    relationName: 'assignedOps',
-  }),
   notifications: many(notifications),
 }));
 
@@ -356,8 +304,6 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
     fields: [listings.landlordId],
     references: [landlords.id],
   }),
-  leads: many(leads),
-  viewings: many(viewings),
   verifier: one(users, {
     fields: [listings.verifiedBy],
     references: [users.id],
@@ -379,30 +325,6 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
     references: [businessAccounts.id],
   }),
   contactNumbers: many(listingContactNumbers),
-}));
-
-export const leadsRelations = relations(leads, ({ one, many }) => ({
-  listing: one(listings, {
-    fields: [leads.listingId],
-    references: [listings.id],
-  }),
-  viewings: many(viewings),
-  assignedOps: one(users, {
-    fields: [leads.assignedTo],
-    references: [users.id],
-    relationName: 'assignedOps',
-  }),
-}));
-
-export const viewingsRelations = relations(viewings, ({ one }) => ({
-  lead: one(leads, {
-    fields: [viewings.leadId],
-    references: [leads.id],
-  }),
-  listing: one(listings, {
-    fields: [viewings.listingId],
-    references: [listings.id],
-  }),
 }));
 
 export const savedSearchesRelations = relations(savedSearches, ({ one }) => ({
@@ -499,10 +421,6 @@ export type Landlord = typeof landlords.$inferSelect;
 export type NewLandlord = typeof landlords.$inferInsert;
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
-export type Lead = typeof leads.$inferSelect;
-export type NewLead = typeof leads.$inferInsert;
-export type Viewing = typeof viewings.$inferSelect;
-export type NewViewing = typeof viewings.$inferInsert;
 export type SavedSearch = typeof savedSearches.$inferSelect;
 export type NewSavedSearch = typeof savedSearches.$inferInsert;
 export type UserContactNumber = typeof userContactNumbers.$inferSelect;

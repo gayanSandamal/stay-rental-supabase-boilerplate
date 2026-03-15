@@ -75,61 +75,6 @@ export async function sendPasswordResetEmail(
   });
 }
 
-export async function sendLeadConfirmationToTenant(
-  tenantName: string,
-  tenantEmail: string,
-  listingTitle: string,
-  listingId: number
-) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
-
-  return sendEmail({
-    to: tenantEmail,
-    subject: `Viewing Request Received - ${listingTitle}`,
-    html: `
-      <h2>Hi ${tenantName},</h2>
-      <p>Thank you for your interest in <strong>${listingTitle}</strong>.</p>
-      <p>Our operations team has received your viewing request and will contact you shortly to arrange a convenient time.</p>
-      <p><a href="${baseUrl}/listings/${listingId}">View Listing</a></p>
-      <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
-    `,
-    text: `Hi ${tenantName}, your viewing request for "${listingTitle}" has been received. Our team will contact you shortly.`,
-  });
-}
-
-export async function sendLeadNotificationToOps(
-  tenantName: string,
-  tenantEmail: string,
-  tenantPhone: string,
-  listingTitle: string,
-  listingId: number,
-  preferredDate?: string,
-  preferredTime?: string
-) {
-  const opsEmail = process.env.OPS_EMAIL || 'ops@stayrental.lk';
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
-
-  return sendEmail({
-    to: opsEmail,
-    subject: `New Lead: ${tenantName} for "${listingTitle}"`,
-    html: `
-      <h2>New Viewing Request</h2>
-      <table>
-        <tr><td><strong>Tenant:</strong></td><td>${tenantName}</td></tr>
-        <tr><td><strong>Email:</strong></td><td>${tenantEmail}</td></tr>
-        <tr><td><strong>Phone:</strong></td><td>${tenantPhone}</td></tr>
-        <tr><td><strong>Listing:</strong></td><td><a href="${baseUrl}/dashboard/listings/${listingId}">${listingTitle}</a></td></tr>
-        ${preferredDate ? `<tr><td><strong>Preferred Date:</strong></td><td>${preferredDate}</td></tr>` : ''}
-        ${preferredTime ? `<tr><td><strong>Preferred Time:</strong></td><td>${preferredTime}</td></tr>` : ''}
-      </table>
-      <br />
-      <a href="${baseUrl}/dashboard/leads">View All Leads</a>
-    `,
-    text: `New lead: ${tenantName} (${tenantPhone}) wants to view "${listingTitle}".`,
-  });
-}
-
 export async function sendListingApprovedToLandlord(
   landlordEmail: string,
   landlordName: string,
@@ -145,7 +90,6 @@ export async function sendListingApprovedToLandlord(
       <h2>Hi ${landlordName},</h2>
       <p>Great news! Your listing <strong>${listingTitle}</strong> has been approved and is now live on Stay Rental.</p>
       <p><a href="${baseUrl}/listings/${listingId}">View Your Listing</a></p>
-      <p>You'll receive notifications when tenants request viewings.</p>
       <hr />
       <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
     `,

@@ -13,13 +13,13 @@
 
 ## Overview
 
-Stay Rental is a mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and fast viewing coordination.
+Stay Rental is a mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and direct contact between tenants and landlords.
 
 ### User Roles
 
-- **Tenant**: Browse listings, request viewings, search for properties
+- **Tenant**: Browse listings, contact landlords directly, search for properties
 - **Landlord**: Submit properties for listing (assisted by ops team)
-- **Ops**: Manage listings, leads, viewings, and verifications
+- **Ops**: Manage listings and verifications
 - **Admin**: Full system access and user management
 
 ---
@@ -118,29 +118,12 @@ The detail page provides comprehensive information:
 - Verified badge (green) if property is verified
 - Visit date if property has been visited by ops team
 
-### Requesting a Viewing
+### Contacting Landlords
 
-1. Scroll to the **"Request Viewing"** form on the listing detail page (right sidebar)
-2. Fill in the required information:
-   - **Name**: Your full name
-   - **Email**: Your email address
-   - **Phone**: Your contact number (format: +94 XX XXX XXXX)
-3. Optionally provide:
-   - **Preferred Date**: When you'd like to view the property
-   - **Preferred Time**: Morning, Afternoon, Evening, etc.
-   - **Additional Notes**: Any special requests or questions
-4. Click **"Request Viewing"**
-5. You'll see a success message confirming your request
-6. The operations team will contact you via email/WhatsApp to coordinate the viewing
-
-### What Happens After Requesting a Viewing
-
-1. Your request is submitted as a "lead" in the system
-2. The ops team receives a notification
-3. Ops will contact you to confirm details
-4. They'll coordinate with the landlord
-5. You'll receive confirmation of the scheduled viewing
-6. After the viewing, the ops team will follow up on your interest
+1. On the listing detail page, find the **"Contact Owner"** or **"Contact Publisher"** section in the right sidebar
+2. You'll see the landlord's phone number(s) and WhatsApp links
+3. **Call** or **WhatsApp** the landlord directly to arrange a viewing
+4. No sign-in is required—contact details are visible to all visitors
 
 ---
 
@@ -169,8 +152,7 @@ Currently, property submission is **assisted by the operations team**. Here's th
 
 Once logged in as a landlord:
 - Access the dashboard to view your listings
-- See lead notifications
-- Confirm viewing slots when coordinated by ops team
+- Tenants contact you directly via phone/WhatsApp (shown on your listing)
 
 ---
 
@@ -183,8 +165,6 @@ Once logged in as a landlord:
 3. The dashboard shows:
    - **Active Listings**: Total number of active listings
    - **Verified Listings**: Number of verified properties
-   - **New Leads**: Leads requiring attention
-   - **Scheduled Viewings**: Upcoming viewings
 
 ### Managing Listings
 
@@ -206,41 +186,6 @@ Once logged in as a landlord:
    - Mark listing as verified
    - Set visited date
    - Publish listing (change status to "active")
-
-### Managing Leads
-
-1. Click **"Leads"** in the sidebar
-2. View all viewing requests with their status:
-   - **New**: Just submitted, needs attention
-   - **Contacted**: Ops has reached out
-   - **View Scheduled**: Confirmed with both parties
-   - **No Show**: Tenant didn't attend
-   - **Interested**: Viewing done, follow-up needed
-   - **Closed Won**: Tenant signed lease
-   - **Closed Lost**: Tenant passed or landlord declined
-
-3. **Lead Actions**:
-   - Click **"View Details"** to see full lead information
-   - Click **"Schedule Viewing"** to coordinate a viewing
-   - Update lead status as you progress through the workflow
-
-4. **Lead Information**:
-   - Tenant contact details (name, email, phone)
-   - Preferred viewing date and time
-   - Notes from tenant
-   - Associated listing
-   - Creation timestamp
-
-### Managing Viewings
-
-1. Click **"Viewings"** in the sidebar
-2. View all scheduled viewings
-3. Track viewing outcomes:
-   - **Interested**: Tenant wants to proceed
-   - **Passed**: Tenant declined
-   - **No Show**: Tenant didn't attend
-
-4. Update viewing status and outcomes after each viewing
 
 ### Creating a New Listing
 
@@ -290,12 +235,11 @@ When browsing listings, you can filter by:
 - **Verification Badge**: Green badge on verified listings
 - **Visit Date**: Shows when property was last visited
 
-### Lead Management
+### Direct Contact
 
-- **Automatic Lead Creation**: When tenants request viewings
-- **Status Tracking**: Track leads through the entire funnel
-- **Viewing Coordination**: Schedule and manage viewings
-- **Outcome Tracking**: Record final outcomes (won/lost)
+- **Phone & WhatsApp**: Landlord contact numbers are shown on each listing
+- **No Sign-In Required**: Visitors can contact landlords without creating an account
+- **Verified Contacts**: Platform-verified phone numbers reduce spam
 
 ### Search and Discovery
 
@@ -325,13 +269,12 @@ When browsing listings, you can filter by:
   - Verify the listing is verified
   - Check if listing is archived or rented
 
-### Can't Request Viewing
+### Can't See Contact Details
 
-- **Issue**: Viewing request form not working
+- **Issue**: Phone/WhatsApp not visible on listing
 - **Solution**:
-  - Make sure all required fields are filled
-  - Check your internet connection
-  - Try refreshing the page
+  - Ensure the listing has contact numbers linked
+  - Check that the listing status is "active"
   - Contact support if issue persists
 
 ### Error Messages
@@ -362,16 +305,15 @@ When browsing listings, you can filter by:
 
 - **Overview**: Dashboard home with statistics
 - **Listings**: Manage all property listings
-- **Leads**: View and manage viewing requests
-- **Viewings**: Schedule and track property viewings
+- **Saved Alerts**: Manage saved search alerts
+- **Analytics**: View platform analytics (ops/admin)
 - **Settings**: Account and system settings
 
 ### Quick Actions
 
 - **Browse Listings**: From homepage or navigation
-- **Request Viewing**: From any listing detail page
+- **Contact Landlord**: Call or WhatsApp from any listing detail page
 - **Create Listing**: From dashboard listings page (ops/admin only)
-- **View Lead Details**: From dashboard leads page
 
 ---
 
@@ -380,7 +322,7 @@ When browsing listings, you can filter by:
 ### For Tenants
 
 1. **Complete Your Profile**: Add phone number for faster communication
-2. **Be Specific**: Provide preferred dates and times when requesting viewings
+2. **Be Specific**: When contacting landlords, mention preferred dates and times
 3. **Follow Up**: Respond promptly to ops team communications
 4. **Ask Questions**: Use the notes field to ask specific questions
 
@@ -394,10 +336,7 @@ When browsing listings, you can filter by:
 ### For Ops Team
 
 1. **Verify Thoroughly**: Always complete verification and property visits
-2. **Respond Quickly**: Fast lead response improves conversion
-3. **Track Everything**: Update lead and viewing statuses promptly
-4. **Follow Up**: Don't let leads go cold
-5. **Manage Staleness**: Regularly ping landlords to keep listings fresh
+2. **Manage Staleness**: Regularly ping landlords to keep listings fresh
 
 ---
 

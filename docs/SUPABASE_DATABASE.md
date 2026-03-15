@@ -90,8 +90,8 @@ npm run db:seed-listings   # if you have listing seed data
 2. Open the site and check:
    - Listings load.
    - You can sign in / sign up (if auth uses this DB).
-   - Dashboard and viewings work.
-3. In Supabase: **Table Editor** — you should see tables such as `users`, `listings`, `leads`, `viewings`, etc.
+   - Dashboard works.
+3. In Supabase: **Table Editor** — you should see tables such as `users`, `listings`, `saved_searches`, etc.
 
 ---
 

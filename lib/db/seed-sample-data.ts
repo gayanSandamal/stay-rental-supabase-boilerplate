@@ -3,8 +3,6 @@ import {
   users,
   landlords,
   listings,
-  leads,
-  viewings,
   savedSearches,
   businessAccounts,
   businessAccountMembers,
@@ -140,7 +138,6 @@ const waterSourceOptions = ['mains', 'tank', 'borehole', 'mains_tank', 'mains_bo
 const ventilationOptions = ['excellent', 'good', 'fair', 'poor'] as const;
 const fiberISPOptions = ['SLT', 'Dialog', 'Mobitel', 'SLT, Dialog', 'Dialog, Mobitel', 'SLT, Dialog, Mobitel'] as const;
 const contactLabels = ['Primary', 'Office', 'Mobile', 'Home', 'WhatsApp'] as const;
-const viewingOutcomes = ['interested', 'passed', 'no_show', 'follow_up', 'rented'] as const;
 
 const propertyPhotos = [
   'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800',
@@ -181,34 +178,6 @@ const rejectionReasons = [
   'Property does not meet minimum quality standards.',
   'Listing contains misleading information.',
   'Required documents not provided.',
-];
-
-const leadNotes = [
-  'Looking for a property near schools.',
-  'Interested in long-term rental (2+ years).',
-  'Relocating from overseas, need furnished.',
-  'Budget flexible for the right property.',
-  'Needs parking for 2 vehicles.',
-  'Wants pet-friendly accommodation.',
-  'Prefers quiet neighbourhood.',
-  'Moving in within the next 2 weeks.',
-  'Looking for fiber internet connectivity.',
-  'Would like to schedule a visit this weekend.',
-  'Needs generator backup — works from home.',
-  'Family of 4, looking for 3BR minimum.',
-  '',
-];
-
-const viewingNotes = [
-  'Tenant was impressed with the kitchen.',
-  'Asked about water pressure and backup.',
-  'Concerned about traffic noise from the main road.',
-  'Will confirm after discussing with family.',
-  'Very interested, asked about move-in date.',
-  'Requested a second viewing with spouse.',
-  'Checked all rooms, seems satisfied.',
-  'Asked about rent negotiation.',
-  '',
 ];
 
 const savedSearchNames = [
@@ -577,81 +546,7 @@ async function seedSampleData() {
   }
   console.log(`  ✓ ${linkCount} listing-contact links`);
 
-  // ── Step 9: Create leads (300) ───────────────────────────────────────────
-
-  console.log('Creating leads...');
-  const activeListingIds = insertedListingIds.slice(0, Math.floor(insertedListingIds.length * 0.6));
-  const insertedLeadIds: number[] = [];
-  const leadsToInsert: any[] = [];
-
-  const leadStatuses: Array<'new' | 'contacted' | 'view_scheduled' | 'no_show' | 'interested' | 'closed_won' | 'closed_lost'> = [
-    'new', 'new', 'new', 'contacted', 'contacted', 'view_scheduled', 'view_scheduled',
-    'interested', 'interested', 'no_show', 'closed_won', 'closed_lost',
-  ];
-
-  for (let i = 0; i < 300; i++) {
-    const first = pick(firstNames);
-    const last = pick(lastNames);
-    const created = daysAgo(randInt(0, 90));
-    const prefDate = futureDate(created, 14);
-
-    leadsToInsert.push({
-      listingId: pick(activeListingIds),
-      tenantName: `${first} ${last}`,
-      tenantEmail: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s/g, '')}${randInt(1, 999)}@gmail.com`,
-      tenantPhone: sriLankanPhone(),
-      preferredDate: prefDate,
-      preferredTime: pick(['9:00 AM', '10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', 'Weekend morning', 'Weekend afternoon']),
-      notes: pick(leadNotes) || null,
-      status: pick(leadStatuses),
-      assignedTo: Math.random() > 0.4 ? pick(allStaffIds) : null,
-      createdAt: created,
-    });
-  }
-
-  for (let i = 0; i < leadsToInsert.length; i += batchSize) {
-    const batch = leadsToInsert.slice(i, i + batchSize);
-    const rows = await db.insert(leads).values(batch).returning();
-    insertedLeadIds.push(...rows.map((r) => r.id));
-  }
-  console.log(`  ✓ ${insertedLeadIds.length} leads`);
-
-  // ── Step 10: Create viewings (150) ───────────────────────────────────────
-
-  console.log('Creating viewings...');
-  const viewScheduledLeadIds = insertedLeadIds.filter((_, i) =>
-    ['view_scheduled', 'interested', 'closed_won', 'no_show'].includes(leadsToInsert[i]?.status)
-  );
-  let viewingCount = 0;
-  const viewingsToInsert: any[] = [];
-
-  for (let i = 0; i < 150; i++) {
-    const leadIdx = i < viewScheduledLeadIds.length ? viewScheduledLeadIds[i] : pick(insertedLeadIds);
-    const origLead = leadsToInsert[insertedLeadIds.indexOf(leadIdx)] || leadsToInsert[0];
-    const listingId = origLead.listingId;
-    const scheduled = futureDate(origLead.createdAt || daysAgo(30), 14);
-    const isPast = scheduled < new Date();
-
-    viewingsToInsert.push({
-      leadId: leadIdx,
-      listingId,
-      scheduledAt: scheduled,
-      confirmedByLandlord: Math.random() > 0.3,
-      confirmedByTenant: Math.random() > 0.2,
-      notes: pick(viewingNotes) || null,
-      outcome: isPast ? pick(viewingOutcomes) : null,
-      createdAt: new Date(scheduled.getTime() - randInt(1, 5) * 86_400_000),
-    });
-  }
-
-  for (let i = 0; i < viewingsToInsert.length; i += batchSize) {
-    const batch = viewingsToInsert.slice(i, i + batchSize);
-    await db.insert(viewings).values(batch);
-    viewingCount += batch.length;
-  }
-  console.log(`  ✓ ${viewingCount} viewings`);
-
-  // ── Step 11: Saved searches (50) ─────────────────────────────────────────
+  // ── Step 9: Saved searches (50) ─────────────────────────────────────────
 
   console.log('Creating saved searches...');
   const allTenantIds = [...tenantIds];
@@ -683,7 +578,7 @@ async function seedSampleData() {
   }
   console.log(`  ✓ ${savedSearchToInsert.length} saved searches`);
 
-  // ── Step 12: Audit logs (100) ────────────────────────────────────────────
+  // ── Step 10: Audit logs (100) ────────────────────────────────────────────
 
   console.log('Creating audit logs...');
   const auditActions = [
@@ -692,10 +587,6 @@ async function seedSampleData() {
     { action: 'listing_approved' as const, entityType: 'listing' },
     { action: 'listing_rejected' as const, entityType: 'listing' },
     { action: 'listing_archived' as const, entityType: 'listing' },
-    { action: 'lead_created' as const, entityType: 'lead' },
-    { action: 'lead_status_changed' as const, entityType: 'lead' },
-    { action: 'viewing_scheduled' as const, entityType: 'viewing' },
-    { action: 'viewing_outcome' as const, entityType: 'viewing' },
     { action: 'user_created' as const, entityType: 'user' },
     { action: 'business_account_created' as const, entityType: 'business_account' },
     { action: 'member_added' as const, entityType: 'business_account_member' },
@@ -710,7 +601,6 @@ async function seedSampleData() {
     const auditDef = pick(auditActions);
     let entityId: number | null = null;
     if (auditDef.entityType === 'listing') entityId = pick(insertedListingIds);
-    else if (auditDef.entityType === 'lead') entityId = pick(insertedLeadIds);
     else if (auditDef.entityType === 'user') entityId = pick(insertedUserIds);
 
     auditLogsToInsert.push({
@@ -740,8 +630,6 @@ async function seedSampleData() {
     contactNumberIds.length +
     insertedListingIds.length +
     linkCount +
-    insertedLeadIds.length +
-    viewingCount +
     savedSearchToInsert.length +
     auditLogsToInsert.length;
 
@@ -755,8 +643,6 @@ async function seedSampleData() {
   console.log(`  Contact Numbers:        ${contactNumberIds.length}`);
   console.log(`  Listings:               ${insertedListingIds.length}`);
   console.log(`  Listing-Contact Links:  ${linkCount}`);
-  console.log(`  Leads:                  ${insertedLeadIds.length}`);
-  console.log(`  Viewings:               ${viewingCount}`);
   console.log(`  Saved Searches:         ${savedSearchToInsert.length}`);
   console.log(`  Audit Logs:             ${auditLogsToInsert.length}`);
   console.log('────────────────────────────────────────────────');

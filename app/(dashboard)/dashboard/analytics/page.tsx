@@ -3,14 +3,11 @@ import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  BarChart3,
-  TrendingUp,
   Users,
   Home,
   AlertTriangle,
   Download,
   Shield,
-  ArrowRight,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -24,11 +21,6 @@ export default async function AnalyticsPage() {
   const data = await getAnalyticsDashboardData();
   const recentLogs = await getRecentAuditLogs(15);
 
-  const totalLeads =
-    Object.values(data.leadsByStatus).reduce((a, b) => a + b, 0);
-  const closedWon = data.leadsByStatus['closed_won'] ?? 0;
-  const conversionRate =
-    totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : '0';
   const verificationRate =
     data.activeListingsCount > 0
       ? ((data.verifiedListingsCount / data.activeListingsCount) * 100).toFixed(1)
@@ -40,24 +32,16 @@ export default async function AnalyticsPage() {
         <h1 className="text-lg lg:text-2xl font-medium">
           Analytics & Reporting
         </h1>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href="/api/export/listings" download>
-              <Download className="h-4 w-4 mr-1" />
-              Export Listings
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/api/export/leads" download>
-              <Download className="h-4 w-4 mr-1" />
-              Export Leads
-            </a>
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/api/export/listings" download>
+            <Download className="h-4 w-4 mr-1" />
+            Export Listings
+          </a>
+        </Button>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -78,38 +62,6 @@ export default async function AnalyticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Monthly Leads
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {data.monthlyLeadsCount}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {data.recentLeadsCount} in last 7 days
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Conversion Rate
-            </CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{conversionRate}%</div>
-            <p className="text-xs text-muted-foreground">
-              {closedWon} closed won / {totalLeads} total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
               Total Users
             </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -121,46 +73,24 @@ export default async function AnalyticsPage() {
             </p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Expiring Soon
+            </CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.expiringListingsCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Listings in next 7 days
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 mb-8">
-        {/* Lead Funnel */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Lead Conversion Funnel</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[
-                { label: 'New', key: 'new', color: 'bg-gray-200' },
-                { label: 'Contacted', key: 'contacted', color: 'bg-teal-200' },
-                { label: 'View Scheduled', key: 'view_scheduled', color: 'bg-yellow-200' },
-                { label: 'Interested', key: 'interested', color: 'bg-orange-200' },
-                { label: 'Closed Won', key: 'closed_won', color: 'bg-green-200' },
-                { label: 'Closed Lost', key: 'closed_lost', color: 'bg-red-200' },
-                { label: 'No Show', key: 'no_show', color: 'bg-gray-300' },
-              ].map((stage) => {
-                const count = data.leadsByStatus[stage.key] ?? 0;
-                const pct = totalLeads > 0 ? (count / totalLeads) * 100 : 0;
-                return (
-                  <div key={stage.key}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">{stage.label}</span>
-                      <span className="font-medium">{count}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div
-                        className={`${stage.color} h-2 rounded-full transition-all`}
-                        style={{ width: `${Math.max(pct, 1)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Listing Status Breakdown */}
         <Card>
           <CardHeader>

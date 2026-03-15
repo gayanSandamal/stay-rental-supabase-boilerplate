@@ -1,6 +1,6 @@
 # Stay Rental - Verified Rentals in Sri Lanka
 
-A mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and fast viewing coordination.
+A mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and direct contact between tenants and landlords.
 
 **📖 [Full User Manual](./USER_MANUAL.md)** - Complete guide for all users
 
@@ -40,32 +40,29 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - Browse verified property listings
 - Search and filter by location, price, features
 - Sri Lanka-specific filters (power backup, water source, fiber internet)
-- Request property viewings
+- Contact landlords directly (phone/WhatsApp)
 - View detailed property information
 
 ### For Landlords
 - Submit properties for listing (assisted by ops team)
 - Verification process
 - Property visit coordination
-- Lead notifications
+- Direct tenant contact
 
 ### For Operations Team
 - Dashboard with key metrics
 - Listing management (create, edit, verify)
-- Lead management and tracking
-- Viewing scheduling and coordination
 - Verification workflow
 
 ## Key Pages
 
 - **Homepage** (`/`): Landing page with featured listings
 - **Listings** (`/listings`): Browse all available properties
-- **Listing Detail** (`/listings/[id]`): View property details and request viewing
+- **Listing Detail** (`/listings/[id]`): View property details and contact landlord (phone/WhatsApp)
 - **Dashboard** (`/dashboard`): Operations dashboard (ops/admin only)
   - Overview: Statistics and quick actions
   - Listings: Manage all property listings
-  - Leads: View and manage viewing requests
-  - Viewings: Schedule and track property viewings
+  - Saved Alerts: Manage saved search alerts
 
 ## Sri Lanka-Specific Features
 
@@ -90,39 +87,30 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - `users`: User accounts with roles (tenant, landlord, ops, admin)
 - `landlords`: Landlord profiles with verified information
 - `listings`: Property listings with Sri Lanka-specific features
-- `leads`: Viewing requests from tenants
-- `viewings`: Scheduled property viewings
 - `saved_searches`: Saved search criteria for tenants
 
 ### Status Enums
 - **Listing Status**: `pending`, `active`, `rented`, `archived`
-- **Lead Status**: `new`, `contacted`, `view_scheduled`, `no_show`, `interested`, `closed_won`, `closed_lost`
-
 ## Business Workflows
 
 ### Tenant Journey
 1. Browse active listings
 2. View property details
-3. Request viewing (name, phone, email, preferred time)
-4. Receive confirmation via WhatsApp/email
-5. Attend viewing
-6. Outcome tracked by ops team
+3. See contact details (phone/WhatsApp) on listing
+4. Contact landlord directly to arrange viewing
 
 ### Landlord Journey
 1. Provide property data to ops
 2. Submit ownership docs for verification
 3. Ops verifies + visits property
 4. Listing published (active status)
-5. Receive lead notifications
-6. Confirm viewing slots via ops
+5. Receive direct calls/WhatsApp from tenants
 
 ### Ops Workflow
 1. Listing intake: collect data, photos, docs
 2. Verification: ownership proof, property visit
 3. Publish: set status to active
-4. Lead management: triage, contact tenant, confirm with landlord
-5. Viewing scheduling: coordinate between tenant and landlord
-6. Outcome tracking: record interested/passed/closed won/lost
+4. Verification and listing management
 
 ## Development
 
