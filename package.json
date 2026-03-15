@@ -8,6 +8,8 @@
     "db:seed": "npx tsx lib/db/seed.ts",
     "db:seed-listings": "npx tsx lib/db/seed-listings.ts",
     "db:seed-sample-data": "npx tsx lib/db/seed-sample-data.ts",
+    "db:seed-sample-data:local": "DATABASE_URL=postgresql://postgres:postgres@localhost:54323/postgres npx tsx lib/db/seed-sample-data.ts",
+    "db:seed-local": "DATABASE_URL=postgresql://postgres:postgres@localhost:54323/postgres npx tsx scripts/seed-local.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate-all": "npx tsx lib/db/run-all-migrations.ts",

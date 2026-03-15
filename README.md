@@ -140,6 +140,12 @@ pnpm db:seed
 
 # Open Drizzle Studio (database GUI)
 pnpm db:studio
+
+# Local Docker: full reset + seed + sample data (~1400 records)
+pnpm db:seed-local
+
+# Local Docker: sample data only (requires base seed first)
+pnpm db:seed-sample-data:local
 ```
 
 ### Project Structure
