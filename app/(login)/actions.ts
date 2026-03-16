@@ -144,7 +144,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
         email,
         password,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? baseUrl}/auth/callback?next=/listings`
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? baseUrl}/auth/callback?next=/sign-in`
         }
       }),
       AUTH_TIMEOUT_MS,
