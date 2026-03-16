@@ -39,15 +39,15 @@ function splitStatements(sql: string): string[] {
       continue;
     }
 
-    // Detect DO $$ blocks
-    if (/DO\s+\$\$/.test(trimmed)) {
+    // Detect DO $$ or AS $$ blocks (function/trigger bodies)
+    if (/DO\s+\$\$/.test(trimmed) || /AS\s+\$\$/.test(trimmed)) {
       inDollarBlock = true;
     }
 
     current += line + '\n';
 
-    // End of $$ block
-    if (inDollarBlock && /END\s+\$\$\s*;?\s*$/.test(trimmed)) {
+    // End of $$ block (line is just $$ or $$;)
+    if (inDollarBlock && /^\s*\$\$;?\s*$/.test(trimmed)) {
       inDollarBlock = false;
       results.push(current.trim());
       current = '';
