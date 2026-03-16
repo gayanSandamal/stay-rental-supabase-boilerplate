@@ -14,6 +14,16 @@ import {
 import { addContactToResend } from '@/lib/email';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
+const AUTH_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    ),
+  ]);
+}
 
 const signInSchema = z.object({
   email: z.string().email().min(3).max(255),
@@ -23,10 +33,38 @@ const signInSchema = z.object({
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
 
-  const supabase = await createClient();
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch (err) {
+    console.error('[signIn] createClient failed:', err);
+    return {
+      error: 'Authentication service is not configured. Please contact support.',
+      email,
+      password
+    };
+  }
 
-  const { data: authData, error: authError } =
-    await supabase.auth.signInWithPassword({ email, password });
+  let authData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data'];
+  let authError: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['error'];
+
+  try {
+    const result = await withTimeout(
+      supabase.auth.signInWithPassword({ email, password }),
+      AUTH_TIMEOUT_MS,
+      'Sign in is taking too long. Please check your connection and try again.'
+    );
+    authData = result.data;
+    authError = result.error;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[signIn] Supabase signInWithPassword failed:', err);
+    return {
+      error: msg.includes('too long') ? msg : 'Sign in failed. Please try again.',
+      email,
+      password
+    };
+  }
 
   if (authError) {
     return {
@@ -85,10 +123,42 @@ const signUpSchema = z.object({
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const { email, password, role = 'tenant', plan } = data;
 
-  const supabase = await createClient();
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch (err) {
+    console.error('[signUp] createClient failed:', err);
+    return {
+      error: 'Authentication service is not configured. Please contact support.',
+      email,
+      password
+    };
+  }
 
-  const { data: authData, error: authError } =
-    await supabase.auth.signUp({ email, password });
+  let authData: Awaited<ReturnType<typeof supabase.auth.signUp>>['data'];
+  let authError: Awaited<ReturnType<typeof supabase.auth.signUp>>['error'];
+
+  try {
+    const result = await withTimeout(
+      supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? baseUrl}/listings` }
+      }),
+      AUTH_TIMEOUT_MS,
+      'Sign up is taking too long. Please check your connection and try again.'
+    );
+    authData = result.data;
+    authError = result.error;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[signUp] Supabase signUp failed:', err);
+    return {
+      error: msg.includes('too long') ? msg : 'Sign up failed. Please try again.',
+      email,
+      password
+    };
+  }
 
   if (authError) {
     if (authError.message?.toLowerCase().includes('already registered')) {
