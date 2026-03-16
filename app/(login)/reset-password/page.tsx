@@ -1,7 +1,6 @@
 'use client';
 
-import { Suspense, useActionState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CircleIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,19 +8,35 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { resetPassword } from '../actions';
 import type { ActionState } from '@/lib/auth/middleware';
+import { createClient } from '@/lib/supabase/client';
 
 function ResetPasswordForm() {
-  const searchParams = useSearchParams();
-  const tokenFromUrl = searchParams.get('token') || '';
-
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     resetPassword,
     { error: '', success: '' }
   );
 
-  const effectiveToken = state.token || tokenFromUrl;
+  const [hasValidSession, setHasValidSession] = useState<boolean | null>(null);
 
-  if (!effectiveToken) {
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasValidSession(!!session);
+    });
+  }, []);
+
+  if (hasValidSession === null) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+          <Loader2 className="h-12 w-12 text-orange-500 mx-auto animate-spin" />
+          <p className="mt-4 text-sm text-gray-600">Verifying reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasValidSession) {
     return (
       <div className="min-h-[100dvh] flex flex-col justify-center items-center bg-gray-50 px-4">
         <div className="sm:max-w-md w-full text-center">
@@ -61,8 +76,6 @@ function ResetPasswordForm() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <form className="space-y-6" action={formAction}>
-          <input type="hidden" name="token" value={effectiveToken} />
-
           <div>
             <Label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
               New password

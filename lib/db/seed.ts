@@ -1,98 +1,97 @@
 import { db } from './drizzle';
 import { users, landlords, listings } from './schema';
-import { hashPassword } from '@/lib/auth/session';
+import { getSupabaseAdmin } from '@/lib/supabase';
+
+async function createUserIfNotExists(
+  supabase: Awaited<ReturnType<typeof getSupabaseAdmin>>,
+  email: string,
+  password: string,
+  role: 'admin' | 'ops' | 'tenant' | 'landlord',
+  name: string,
+  phone: string
+) {
+  let appUser = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.email, email),
+  });
+
+  if (!appUser) {
+    const { data: authData, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    let authUserId = authData?.user?.id;
+    if (!authUserId && error?.message?.toLowerCase().includes('already')) {
+      const { data: listData } = await supabase.auth.admin.listUsers();
+      authUserId = listData.users.find((u) => u.email === email)?.id;
+    }
+    if (!authUserId && !error) {
+      authUserId = authData?.user?.id;
+    }
+    if (!authUserId) {
+      throw new Error(`Failed to create or find auth user for ${email}: ${error?.message ?? 'unknown'}`);
+    }
+
+    [appUser] = await db
+      .insert(users)
+      .values({
+        email,
+        authUserId,
+        role,
+        name,
+        phone,
+      })
+      .returning();
+
+    console.log(`User created: ${email}`);
+  } else {
+    console.log(`User already exists: ${email}`);
+  }
+
+  return appUser!;
+}
 
 async function seed() {
   console.log('Starting Easy Rent seed...');
 
-  // Check if users exist, if not create them
-  let adminUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'admin@easyrent.com'),
-  });
+  const supabase = getSupabaseAdmin();
 
-  if (!adminUser) {
-    const adminPasswordHash = await hashPassword('admin123');
-    [adminUser] = await db
-      .insert(users)
-      .values({
-        email: 'admin@easyrent.com',
-        passwordHash: adminPasswordHash,
-        role: 'admin',
-        name: 'Admin User',
-        phone: '+94 77 123 4567',
-      })
-      .returning();
+  const adminUser = await createUserIfNotExists(
+    supabase,
+    'admin@easyrent.com',
+    'admin123',
+    'admin',
+    'Admin User',
+    '+94 77 123 4567'
+  );
 
-    console.log('Admin user created:', adminUser.email);
-  } else {
-    console.log('Admin user already exists:', adminUser.email);
-  }
+  const opsUser = await createUserIfNotExists(
+    supabase,
+    'ops@easyrent.com',
+    'ops123',
+    'ops',
+    'Ops User',
+    '+94 77 234 5678'
+  );
 
-  // Create ops user
-  let opsUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'ops@easyrent.com'),
-  });
+  const tenantUser = await createUserIfNotExists(
+    supabase,
+    'tenant@test.com',
+    'tenant123',
+    'tenant',
+    'Test Tenant',
+    '+94 77 345 6789'
+  );
 
-  if (!opsUser) {
-    const opsPasswordHash = await hashPassword('ops123');
-    [opsUser] = await db
-      .insert(users)
-      .values({
-        email: 'ops@easyrent.com',
-        passwordHash: opsPasswordHash,
-        role: 'ops',
-        name: 'Ops User',
-        phone: '+94 77 234 5678',
-      })
-      .returning();
-    console.log('Ops user created:', opsUser.email);
-  } else {
-    console.log('Ops user already exists:', opsUser.email);
-  }
-
-  // Create test tenant
-  let tenantUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'tenant@test.com'),
-  });
-
-  if (!tenantUser) {
-    const tenantPasswordHash = await hashPassword('tenant123');
-    [tenantUser] = await db
-      .insert(users)
-      .values({
-        email: 'tenant@test.com',
-        passwordHash: tenantPasswordHash,
-        role: 'tenant',
-        name: 'Test Tenant',
-        phone: '+94 77 345 6789',
-      })
-      .returning();
-    console.log('Tenant user created:', tenantUser.email);
-  } else {
-    console.log('Tenant user already exists:', tenantUser.email);
-  }
-
-  // Create landlord user
-  let landlordUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'landlord@test.com'),
-  });
-
-  if (!landlordUser) {
-    const landlordPasswordHash = await hashPassword('landlord123');
-    [landlordUser] = await db
-      .insert(users)
-      .values({
-        email: 'landlord@test.com',
-        passwordHash: landlordPasswordHash,
-        role: 'landlord',
-        name: 'Test Landlord',
-        phone: '+94 77 456 7890',
-      })
-      .returning();
-    console.log('Landlord user created:', landlordUser.email);
-  } else {
-    console.log('Landlord user already exists:', landlordUser.email);
-  }
+  const landlordUser = await createUserIfNotExists(
+    supabase,
+    'landlord@test.com',
+    'landlord123',
+    'landlord',
+    'Test Landlord',
+    '+94 77 456 7890'
+  );
 
   // Create landlord record
   let landlord = await db.query.landlords.findFirst({

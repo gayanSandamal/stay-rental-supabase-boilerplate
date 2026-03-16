@@ -9,40 +9,40 @@ import {
   auditLogs,
   listingViews,
 } from './schema';
-import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/auth/session';
+import { createClient } from '@/lib/supabase/server';
 import { businessAccountMembers } from './schema';
 
 export async function getUser() {
-  const sessionCookie = (await cookies()).get('session');
-  if (!sessionCookie || !sessionCookie.value) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
     return null;
   }
 
-  const sessionData = await verifyToken(sessionCookie.value);
-  if (
-    !sessionData ||
-    !sessionData.user ||
-    typeof sessionData.user.id !== 'number'
-  ) {
+  const supabase = await createClient();
+
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+
+  if (!authUser) {
     return null;
   }
 
-  if (new Date(sessionData.expires) < new Date()) {
-    return null;
-  }
-
-  const user = await db
+  const [user] = await db
     .select()
     .from(users)
-    .where(and(eq(users.id, sessionData.user.id), isNull(users.deletedAt)))
+    .where(
+      and(eq(users.authUserId, authUser.id), isNull(users.deletedAt))
+    )
     .limit(1);
 
-  if (user.length === 0) {
+  if (!user) {
     return null;
   }
 
-  return user[0];
+  return user;
 }
 
 export async function getUserWithLandlord(userId: number) {
@@ -55,8 +55,6 @@ export async function getUserWithLandlord(userId: number) {
 
   return result;
 }
-
-// Listings queries
 export async function getActiveListings(filters?: {
   // Search & Location
   search?: string;

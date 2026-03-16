@@ -8,6 +8,7 @@ import {
   boolean,
   decimal,
   pgEnum,
+  uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
@@ -38,11 +39,13 @@ export const businessAccountStatusEnum = pgEnum('business_account_status', [
 ]);
 
 // Users table (updated for Easy Rent)
+// auth_user_id links to Supabase auth.users; password_hash nullable for Supabase Auth users
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
+  authUserId: uuid('auth_user_id'),
   name: varchar('name', { length: 100 }),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
+  passwordHash: text('password_hash'),
   role: userRoleEnum('role').notNull().default('tenant'),
   phone: varchar('phone', { length: 20 }),
   subscriptionTier: varchar('subscription_tier', { length: 20 }).default('free'),

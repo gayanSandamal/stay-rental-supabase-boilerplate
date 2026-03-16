@@ -1,54 +1,19 @@
 'use server';
 
 import { z } from 'zod';
-import { and, eq, gte, sql, isNull } from 'drizzle-orm';
-import crypto from 'crypto';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import {
-  User,
-  users,
-  passwordResetTokens,
-  type NewUser,
-} from '@/lib/db/schema';
-import { comparePasswords, hashPassword, setSession } from '@/lib/auth/session';
+import { users, type NewUser } from '@/lib/db/schema';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/db/queries';
 import {
   validatedAction,
   validatedActionWithUser
 } from '@/lib/auth/middleware';
-import { sendPasswordResetEmail, addContactToResend } from '@/lib/email';
+import { addContactToResend } from '@/lib/email';
 
-async function ensurePasswordResetTable() {
-  try {
-    // Quick existence check
-    await db.execute(sql`SELECT 1 FROM "password_reset_tokens" LIMIT 1`);
-  } catch (error: any) {
-    const msg = error?.message || '';
-    // 42P01 = undefined_table
-    if (error?.code === '42P01' || msg.includes('password_reset_tokens')) {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
-          "id" SERIAL PRIMARY KEY,
-          "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-          "token_hash" TEXT NOT NULL UNIQUE,
-          "expires_at" TIMESTAMP NOT NULL,
-          "used_at" TIMESTAMP,
-          "created_at" TIMESTAMP DEFAULT NOW() NOT NULL
-        );
-      `);
-      await db.execute(
-        sql`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON "password_reset_tokens"("user_id");`
-      );
-      await db.execute(
-        sql`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON "password_reset_tokens"("expires_at");`
-      );
-    } else {
-      throw error;
-    }
-  }
-}
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 const signInSchema = z.object({
   email: z.string().email().min(3).max(255),
@@ -58,47 +23,52 @@ const signInSchema = z.object({
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
 
+  const supabase = await createClient();
+
+  const { data: authData, error: authError } =
+    await supabase.auth.signInWithPassword({ email, password });
+
+  if (authError) {
+    return {
+      error: 'Invalid email or password. Please try again.',
+      email,
+      password
+    };
+  }
+
+  const authUser = authData.user;
+  if (!authUser) {
+    return {
+      error: 'Invalid email or password. Please try again.',
+      email,
+      password
+    };
+  }
+
+  // Load app user for role-based redirect
   const [foundUser] = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(
+      and(eq(users.authUserId, authUser.id), isNull(users.deletedAt))
+    )
     .limit(1);
 
-  if (!foundUser) {
-    return {
-      error: 'Invalid email or password. Please try again.',
-      email,
-      password
-    };
+  if (foundUser) {
+    addContactToResend(
+      foundUser.email,
+      foundUser.name,
+      foundUser.role,
+      foundUser.subscriptionTier || 'free',
+    ).catch(() => {});
   }
-
-  const isPasswordValid = await comparePasswords(
-    password,
-    foundUser.passwordHash
-  );
-
-  if (!isPasswordValid) {
-    return {
-      error: 'Invalid email or password. Please try again.',
-      email,
-      password
-    };
-  }
-
-  await setSession(foundUser);
-
-  // Sync contact to Resend (fire-and-forget)
-  addContactToResend(
-    foundUser.email,
-    foundUser.name,
-    foundUser.role,
-    foundUser.subscriptionTier || 'free',
-  ).catch(() => {});
 
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo && redirectTo.startsWith('/')) {
     redirect(redirectTo);
-  } else if (foundUser.role === 'ops' || foundUser.role === 'admin') {
+  } else if (foundUser?.role === 'ops' || foundUser?.role === 'admin') {
+    redirect('/dashboard');
+  } else if (foundUser?.role === 'landlord') {
     redirect('/dashboard');
   } else {
     redirect('/listings');
@@ -115,31 +85,44 @@ const signUpSchema = z.object({
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const { email, password, role = 'tenant', plan } = data;
 
-  const existingUser = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const supabase = await createClient();
 
-  if (existingUser.length > 0) {
+  const { data: authData, error: authError } =
+    await supabase.auth.signUp({ email, password });
+
+  if (authError) {
+    if (authError.message?.toLowerCase().includes('already registered')) {
+      return {
+        error: 'User with this email already exists. Please sign in instead.',
+        email,
+        password
+      };
+    }
     return {
-      error: 'User with this email already exists. Please sign in instead.',
+      error: authError.message || 'Failed to create account. Please try again.',
       email,
       password
     };
   }
 
-  const passwordHash = await hashPassword(password);
+  const authUser = authData.user;
+  if (!authUser) {
+    return {
+      error: 'Failed to create user. Please try again.',
+      email,
+      password
+    };
+  }
 
   const newUser: NewUser = {
     email,
-    passwordHash,
+    authUserId: authUser.id,
     role: role as 'tenant' | 'landlord',
     subscriptionTier: plan === 'premium' ? 'premium' : 'free',
   };
 
   const [createdUser] = await db.insert(users).values(newUser).returning();
- 
+
   if (!createdUser) {
     return {
       error: 'Failed to create user. Please try again.',
@@ -148,9 +131,6 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     };
   }
 
-  await setSession(createdUser);
-
-  // Sync contact to Resend (fire-and-forget)
   addContactToResend(
     createdUser.email,
     createdUser.name,
@@ -177,19 +157,11 @@ export const requestPasswordReset = validatedAction(
   async (data) => {
     const { email } = data;
 
-    // Always return a generic message to avoid email enumeration
     const genericResponse = {
       success:
         'If an account exists for this email, we\'ve sent a password reset link.',
       email,
     };
-
-    // Best-effort: make sure table exists so we don't crash
-    try {
-      await ensurePasswordResetTable();
-    } catch {
-      return genericResponse;
-    }
 
     const [foundUser] = await db
       .select()
@@ -201,29 +173,15 @@ export const requestPasswordReset = validatedAction(
       return genericResponse;
     }
 
-    // Invalidate existing tokens for this user
-    await db
-      .delete(passwordResetTokens)
-      .where(eq(passwordResetTokens.userId, foundUser.id));
+    // Only users with auth_user_id (Supabase Auth) can use Supabase reset
+    if (!foundUser.authUserId) {
+      return genericResponse;
+    }
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const supabase = await createClient();
 
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
-
-    await db.insert(passwordResetTokens).values({
-      userId: foundUser.id,
-      tokenHash,
-      expiresAt,
-    });
-
-    // Await email so serverless doesn't terminate before Resend API completes
-    await sendPasswordResetEmail(
-      foundUser.email,
-      foundUser.name || foundUser.email,
-      token,
-    ).catch((err) => {
-      console.error('[requestPasswordReset] Email send failed:', err);
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${baseUrl}/reset-password`,
     });
 
     return genericResponse;
@@ -231,7 +189,6 @@ export const requestPasswordReset = validatedAction(
 );
 
 const resetPasswordSchema = z.object({
-  token: z.string().min(10),
   newPassword: z.string().min(8).max(100),
   confirmPassword: z.string().min(8).max(100),
 });
@@ -239,26 +196,21 @@ const resetPasswordSchema = z.object({
 export const resetPassword = validatedAction(
   resetPasswordSchema,
   async (data) => {
-    const { token, newPassword, confirmPassword } = data;
+    const { newPassword, confirmPassword } = data;
 
     if (newPassword !== confirmPassword) {
       return {
-        token,
         newPassword,
         confirmPassword,
         error: 'New password and confirmation do not match.',
       };
     }
 
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const supabase = await createClient();
 
-    const now = new Date();
-
-    try {
-      await ensurePasswordResetTable();
-    } catch {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
       return {
-        token: '',
         newPassword,
         confirmPassword,
         error:
@@ -266,53 +218,15 @@ export const resetPassword = validatedAction(
       };
     }
 
-    const [resetRecord] = await db
-      .select()
-      .from(passwordResetTokens)
-      .where(
-        and(
-          eq(passwordResetTokens.tokenHash, tokenHash),
-          isNull(passwordResetTokens.usedAt),
-          gte(passwordResetTokens.expiresAt, now),
-        )
-      )
-      .limit(1);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
 
-    if (!resetRecord) {
+    if (error) {
       return {
-        token: '',
         newPassword,
         confirmPassword,
-        error: 'This reset link is invalid or has expired. Please request a new one.',
+        error: error.message || 'Failed to update password. Please try again.',
       };
     }
-
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.id, resetRecord.userId), isNull(users.deletedAt)))
-      .limit(1);
-
-    if (!user) {
-      return {
-        token: '',
-        newPassword,
-        confirmPassword,
-        error: 'This reset link is invalid or has expired. Please request a new one.',
-      };
-    }
-
-    const newPasswordHash = await hashPassword(newPassword);
-
-    await db
-      .update(users)
-      .set({ passwordHash: newPasswordHash, updatedAt: new Date() })
-      .where(eq(users.id, user.id));
-
-    await db
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(passwordResetTokens.id, resetRecord.id));
 
     return {
       success: 'Your password has been reset. You can now sign in with your new password.',
@@ -321,7 +235,9 @@ export const resetPassword = validatedAction(
 );
 
 export async function signOut() {
-  (await cookies()).delete('session');
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect('/');
 }
 
 const updatePasswordSchema = z.object({
@@ -335,6 +251,68 @@ export const updatePassword = validatedActionWithUser(
   async (data, _, user) => {
     const { currentPassword, newPassword, confirmPassword } = data;
 
+    const supabase = await createClient();
+
+    if (user.authUserId) {
+      // Supabase Auth user: verify via sign-in, then update
+      const { error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        });
+
+      if (signInError) {
+        return {
+          currentPassword,
+          newPassword,
+          confirmPassword,
+          error: 'Current password is incorrect.'
+        };
+      }
+
+      if (currentPassword === newPassword) {
+        return {
+          currentPassword,
+          newPassword,
+          confirmPassword,
+          error: 'New password must be different from the current password.'
+        };
+      }
+
+      if (confirmPassword !== newPassword) {
+        return {
+          currentPassword,
+          newPassword,
+          confirmPassword,
+          error: 'New password and confirmation password do not match.'
+        };
+      }
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (error) {
+        return {
+          currentPassword,
+          newPassword,
+          confirmPassword,
+          error: error.message || 'Failed to update password.'
+        };
+      }
+
+      return { success: 'Password updated successfully.' };
+    }
+
+    // Legacy user with password_hash (no auth_user_id)
+    if (!user.passwordHash) {
+      return {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+        error: 'Please use the password reset flow to set a new password.'
+      };
+    }
+
+    const { comparePasswords, hashPassword } = await import('@/lib/auth/session');
     const isPasswordValid = await comparePasswords(
       currentPassword,
       user.passwordHash
@@ -371,12 +349,10 @@ export const updatePassword = validatedActionWithUser(
 
     await db
       .update(users)
-      .set({ passwordHash: newPasswordHash })
+      .set({ passwordHash: newPasswordHash, updatedAt: new Date() })
       .where(eq(users.id, user.id));
 
-    return {
-      success: 'Password updated successfully.'
-    };
+    return { success: 'Password updated successfully.' };
   }
 );
 
@@ -389,8 +365,30 @@ export const deleteAccount = validatedActionWithUser(
   async (data, _, user) => {
     const { password } = data;
 
-    const isPasswordValid = await comparePasswords(password, user.passwordHash);
-    if (!isPasswordValid) {
+    const supabase = await createClient();
+
+    if (user.authUserId) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+
+      if (error) {
+        return {
+          password,
+          error: 'Incorrect password. Please try again.'
+        };
+      }
+    } else if (user.passwordHash) {
+      const { comparePasswords } = await import('@/lib/auth/session');
+      const isPasswordValid = await comparePasswords(password, user.passwordHash);
+      if (!isPasswordValid) {
+        return {
+          password,
+          error: 'Incorrect password. Please try again.'
+        };
+      }
+    } else {
       return {
         password,
         error: 'Incorrect password. Please try again.'
@@ -398,19 +396,15 @@ export const deleteAccount = validatedActionWithUser(
     }
 
     try {
-      // Generate unique email suffix
       const timestamp = Date.now();
       let uniqueEmail = `${user.email}-${user.id}-deleted-${timestamp}`;
-      
-      // If email is too long, truncate it
+
       if (uniqueEmail.length > 255) {
-        const maxLength = 255;
         const suffix = `-${user.id}-deleted-${timestamp}`;
-        const emailPrefix = user.email.substring(0, maxLength - suffix.length);
+        const emailPrefix = user.email.substring(0, 255 - suffix.length);
         uniqueEmail = `${emailPrefix}${suffix}`;
       }
 
-      // Soft delete
       await db
         .update(users)
         .set({
@@ -419,27 +413,24 @@ export const deleteAccount = validatedActionWithUser(
         })
         .where(eq(users.id, user.id));
 
-      // Delete session cookie
-      (await cookies()).delete('session');
+      await supabase.auth.signOut();
     } catch (error: any) {
       console.error('Error deleting account:', error);
-      
-      // Check for specific database errors
+
       let errorMessage = 'Failed to delete account. Please try again or contact support.';
-      
-      if (error.code === '23505') { // Unique constraint violation
+
+      if (error.code === '23505') {
         errorMessage = 'An error occurred while updating your account. Please contact support.';
       } else if (error.message) {
         errorMessage = `Error: ${error.message}`;
       }
-      
+
       return {
         password: '',
         error: errorMessage
       };
     }
 
-    // Redirect after successful deletion (outside try-catch so redirect error is not caught)
     redirect('/sign-in?deleted=true');
   }
 );
@@ -454,9 +445,17 @@ export const updateAccount = validatedActionWithUser(
   async (data, _, user) => {
     const { name, email } = data;
 
-    await db.update(users).set({ name, email }).where(eq(users.id, user.id));
+    const supabase = await createClient();
+
+    if (user.authUserId) {
+      const { error } = await supabase.auth.updateUser({ email });
+      if (error) {
+        return { name, email: user.email, error: error.message };
+      }
+    }
+
+    await db.update(users).set({ name, email, updatedAt: new Date() }).where(eq(users.id, user.id));
 
     return { name, success: 'Account updated successfully.' };
   }
 );
-
