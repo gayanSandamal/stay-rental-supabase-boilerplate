@@ -163,9 +163,17 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   }
 
   if (authError) {
-    if (authError.message?.toLowerCase().includes('already registered')) {
+    const msg = authError.message?.toLowerCase() ?? '';
+    if (msg.includes('already registered')) {
       return {
         error: 'User with this email already exists. Please sign in instead.',
+        email,
+        password
+      };
+    }
+    if (msg.includes('rate limit') || msg.includes('rate_limit')) {
+      return {
+        error: 'Too many sign-up attempts. Please try again in about an hour.',
         email,
         password
       };
