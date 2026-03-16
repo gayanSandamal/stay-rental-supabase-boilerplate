@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SignedUpBanner } from '@/components/signed-up-banner';
 import { getOpsDashboardStats } from '@/lib/db/queries';
 import { Home, Shield } from 'lucide-react';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
   const stats = await getOpsDashboardStats();
+  const showSignedUpBanner = searchParams?.signed_up === '1';
 
   return (
     <section className="flex-1 p-4 lg:p-8">
+      <SignedUpBanner show={showSignedUpBanner} />
       <h1 className="text-lg lg:text-2xl font-medium mb-6">Dashboard Overview</h1>
       
       <div className="grid gap-4 md:grid-cols-2 mb-8">

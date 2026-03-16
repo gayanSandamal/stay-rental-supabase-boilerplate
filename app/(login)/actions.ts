@@ -296,13 +296,18 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   ).catch(() => {});
 
   const redirectTo = formData.get('redirect') as string | null;
-  if (redirectTo && redirectTo.startsWith('/')) {
-    redirect(redirectTo);
-  } else if (createdUser.role === 'landlord') {
-    redirect('/dashboard');
-  } else {
-    redirect('/listings');
-  }
+  const basePath =
+    redirectTo && redirectTo.startsWith('/')
+      ? redirectTo
+      : createdUser.role === 'landlord'
+        ? '/dashboard'
+        : '/listings';
+  const url = new URL(
+    basePath,
+    process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  );
+  url.searchParams.set('signed_up', '1');
+  redirect(url.pathname + url.search);
 });
 
 const requestPasswordResetSchema = z.object({

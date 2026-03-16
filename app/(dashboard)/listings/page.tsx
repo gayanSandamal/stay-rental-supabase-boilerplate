@@ -1,6 +1,7 @@
 import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
+import { SignedUpBanner } from '@/components/signed-up-banner';
 import { Suspense } from 'react';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
@@ -164,9 +165,12 @@ export default async function ListingsPage({
     })
   );
 
+  const showSignedUpBanner = searchParams.signed_up === '1';
+
   return (
     <main className="min-h-screen bg-[#F7F4ED]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <SignedUpBanner show={showSignedUpBanner} />
         {/* Page header + search/filter row */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">

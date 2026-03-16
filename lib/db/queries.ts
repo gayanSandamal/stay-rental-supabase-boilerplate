@@ -42,7 +42,7 @@ export async function getUser() {
     return null;
   }
 
-  return user;
+  return { ...user, emailVerified: !!authUser.email_confirmed_at };
 }
 
 export async function getUserWithLandlord(userId: number) {

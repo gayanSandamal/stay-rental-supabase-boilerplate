@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Home, List, PlusCircle, Menu, X } from 'lucide-react';
 import { UserMenu } from '@/components/user-menu';
 import { NotificationCenter } from '@/components/notification-center';
+import { EmailUnverifiedBanner } from '@/components/email-unverified-banner';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home', icon: Home },
@@ -127,6 +128,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <section className="flex flex-col min-h-screen">
       <Header />
+      <EmailUnverifiedBanner />
       {children}
     </section>
   );
