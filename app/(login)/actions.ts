@@ -195,49 +195,80 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
 
   let createdUser: User | undefined;
 
-  try {
-    const [inserted] = await db.insert(users).values(newUser).returning();
-    createdUser = inserted;
-  } catch (err: unknown) {
-    const code = (err as { code?: string })?.code;
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[signUp] db.insert failed:', { code, message }, process.env.NODE_ENV === 'development' ? err : undefined);
+  // Trigger (0020) may have already created the user; check first
+  const [existingByAuth] = await db
+    .select()
+    .from(users)
+    .where(eq(users.authUserId, authUser.id))
+    .limit(1);
 
-    if (code === '23505') {
-      // Unique constraint violation - user may exist from prior partial sign-up
-      const [existingByAuth] = await db
-        .select()
-        .from(users)
-        .where(eq(users.authUserId, authUser.id))
-        .limit(1);
-      const [existingByEmail] = await db
-        .select()
-        .from(users)
-        .where(and(eq(users.email, email), isNull(users.deletedAt)))
-        .limit(1);
+  if (existingByAuth) {
+    createdUser = existingByAuth;
+    // Update role/plan if user signed up as landlord or premium (trigger uses tenant/free)
+    const targetRole = role as 'tenant' | 'landlord';
+    const targetTier = plan === 'premium' ? 'premium' : 'free';
+    if (existingByAuth.role !== targetRole || (existingByAuth.subscriptionTier ?? 'free') !== targetTier) {
+      await db
+        .update(users)
+        .set({ role: targetRole, subscriptionTier: targetTier, updatedAt: new Date() })
+        .where(eq(users.id, existingByAuth.id));
+      createdUser = { ...existingByAuth, role: targetRole, subscriptionTier: targetTier };
+    }
+  }
 
-      if (existingByAuth) {
-        // Orphan auth user from prior failed sign-up - app user exists, treat as success
-        createdUser = existingByAuth;
-      } else if (existingByEmail) {
-        return {
-          error: 'User with this email already exists. Please sign in instead.',
-          email,
-          password
-        };
+  if (!createdUser) {
+    try {
+      const [inserted] = await db.insert(users).values(newUser).returning();
+      createdUser = inserted;
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      const message = err instanceof Error ? err.message : String(err);
+      const constraint = (err as { constraint?: string })?.constraint;
+      const detail = (err as { detail?: string })?.detail;
+      console.error('[signUp] db.insert failed:', {
+        code,
+        message,
+        constraint,
+        detail,
+        err: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+      });
+
+      if (code === '23505') {
+        // Unique constraint violation - user may exist from prior partial sign-up
+        const [existingByAuthId] = await db
+          .select()
+          .from(users)
+          .where(eq(users.authUserId, authUser.id))
+          .limit(1);
+        const [existingByEmail] = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.email, email), isNull(users.deletedAt)))
+          .limit(1);
+
+        if (existingByAuthId) {
+          // Orphan auth user from prior failed sign-up - app user exists, treat as success
+          createdUser = existingByAuthId;
+        } else if (existingByEmail) {
+          return {
+            error: 'User with this email already exists. Please sign in instead.',
+            email,
+            password
+          };
+        } else {
+          return {
+            error: 'An account with this email may already exist. Please sign in or use a different email.',
+            email,
+            password
+          };
+        }
       } else {
         return {
-          error: 'An account with this email may already exist. Please sign in or use a different email.',
+          error: 'We couldn\'t create your account. Please try again or contact support.',
           email,
           password
         };
       }
-    } else {
-      return {
-        error: 'We couldn\'t create your account. Please try again or contact support.',
-        email,
-        password
-      };
     }
   }
 

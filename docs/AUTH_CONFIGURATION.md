@@ -97,10 +97,25 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000   # or https://yourdomain.com
 
 ---
 
-## 5. Production Checklist
+## 5. Database Trigger for Sign-Up
+
+A trigger (`0020_auth_user_trigger.sql`) automatically creates a row in `public.users` when a new user signs up in Supabase Auth. This avoids connection/timeout issues during sign-up.
+
+**Run the migration on your Supabase database:**
+```bash
+# With DATABASE_URL set to your Supabase connection string (use pooler port 6543 for production)
+pnpm db:migrate-all
+```
+
+For production (Vercel), ensure `DATABASE_URL` uses the **Supabase transaction pooler** (port 6543), not the direct connection (port 5432).
+
+---
+
+## 6. Production Checklist
 
 - [ ] Set **Site URL** to production domain.
 - [ ] Add production redirect URLs to allow list.
 - [ ] Set `NEXT_PUBLIC_BASE_URL` in Vercel/hosting env.
 - [ ] Enable **Confirm email** if required.
 - [ ] (Optional) Configure custom SMTP for auth emails.
+- [ ] Run `pnpm db:migrate-all` to apply the auth trigger (0020_auth_user_trigger.sql).

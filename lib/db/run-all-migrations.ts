@@ -22,6 +22,7 @@ const MIGRATIONS = [
   '0017_listing_views.sql',
   '0018_landlord_profile_slug.sql',
   '0019_add_auth_user_id.sql',
+  '0020_auth_user_trigger.sql',
 ];
 
 function splitStatements(sql: string): string[] {
