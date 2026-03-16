@@ -9,11 +9,13 @@ DROP MATERIALIZED VIEW IF EXISTS "search_location_suggestions" CASCADE;
 -- Drop tables in reverse dependency order
 DROP TABLE IF EXISTS "listing_contact_numbers" CASCADE;
 DROP TABLE IF EXISTS "user_contact_numbers" CASCADE;
+DROP TABLE IF EXISTS "listing_views" CASCADE;
 DROP TABLE IF EXISTS "viewings" CASCADE;
 DROP TABLE IF EXISTS "leads" CASCADE;
 DROP TABLE IF EXISTS "saved_searches" CASCADE;
 DROP TABLE IF EXISTS "audit_logs" CASCADE;
 DROP TABLE IF EXISTS "password_reset_tokens" CASCADE;
+DROP TABLE IF EXISTS "notifications" CASCADE;
 DROP TABLE IF EXISTS "listings" CASCADE;
 DROP TABLE IF EXISTS "business_account_members" CASCADE;
 DROP TABLE IF EXISTS "landlords" CASCADE;
@@ -71,6 +73,15 @@ async function reset() {
     '0007_audit_log.sql',
     '0008_password_reset_tokens.sql',
     '0009_search_fts.sql',
+    '0010_notifications.sql',
+    '0011_user_subscription.sql',
+    '0012_leads_premium_listings_exclusive.sql',
+    '0013_saved_searches_last_alert.sql',
+    '0014_drop_leads_viewings.sql',
+    '0015_landlord_plan_tier.sql',
+    '0016_listing_boost_featured.sql',
+    '0017_listing_views.sql',
+    '0018_landlord_profile_slug.sql',
   ];
 
   function splitStatements(sql: string): string[] {
