@@ -139,7 +139,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   };
 
   const [createdUser] = await db.insert(users).values(newUser).returning();
-
+ 
   if (!createdUser) {
     return {
       error: 'Failed to create user. Please try again.',
@@ -217,12 +217,14 @@ export const requestPasswordReset = validatedAction(
       expiresAt,
     });
 
-    // Fire-and-forget email; errors are logged inside sendEmail
-    sendPasswordResetEmail(
+    // Await email so serverless doesn't terminate before Resend API completes
+    await sendPasswordResetEmail(
       foundUser.email,
       foundUser.name || foundUser.email,
       token,
-    ).catch(() => {});
+    ).catch((err) => {
+      console.error('[requestPasswordReset] Email send failed:', err);
+    });
 
     return genericResponse;
   }

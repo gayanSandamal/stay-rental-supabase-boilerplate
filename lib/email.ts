@@ -29,6 +29,10 @@ async function sendEmail(options: EmailOptions): Promise<boolean> {
           text: options.text,
         }),
       });
+      const body = await res.text();
+      if (!res.ok) {
+        console.error('[EMAIL] Resend API failed:', res.status, body);
+      }
       return res.ok;
     } catch (error) {
       console.error('Resend email failed:', error);
