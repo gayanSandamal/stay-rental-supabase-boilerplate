@@ -299,9 +299,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const basePath =
     redirectTo && redirectTo.startsWith('/')
       ? redirectTo
-      : createdUser.role === 'landlord'
-        ? '/dashboard'
-        : '/listings';
+      : '/sign-in';
   const url = new URL(
     basePath,
     process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'

@@ -11,7 +11,9 @@ interface FilterButtonProps {
 export function FilterButton({ onClick }: FilterButtonProps) {
   const searchParams = useSearchParams();
   const activeFilterCount = Array.from(searchParams.keys()).filter(
-    key => key !== 'sortBy' || searchParams.get(key) !== 'newest'
+    key =>
+      key !== 'signed_up' &&
+      (key !== 'sortBy' || searchParams.get(key) !== 'newest')
   ).length;
 
   return (

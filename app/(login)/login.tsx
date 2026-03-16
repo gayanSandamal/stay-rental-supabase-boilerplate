@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { CircleIcon, Loader2 } from 'lucide-react';
 import { signIn, signUp } from './actions';
 import { ActionState } from '@/lib/auth/middleware';
+import { SignedUpBanner } from '@/components/signed-up-banner';
 
 interface LoginProps {
   mode?: 'signin' | 'signup';
@@ -16,9 +17,10 @@ interface LoginProps {
   priceId?: string;
   inviteId?: string;
   plan?: string;
+  signedUp?: boolean;
 }
 
-function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = '', plan = '' }: LoginProps) {
+function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = '', plan = '', signedUp = false }: LoginProps) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     mode === 'signin' ? signIn : signUp,
     { error: '' }
@@ -26,6 +28,11 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      {signedUp && (
+        <div className="sm:mx-auto sm:w-full sm:max-w-md mb-4">
+          <SignedUpBanner show={true} />
+        </div>
+      )}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <CircleIcon className="h-12 w-12 text-teal-700" />
@@ -153,6 +160,7 @@ function LoginWithSearchParams({ mode = 'signin' }: { mode?: 'signin' | 'signup'
       priceId={searchParams.get('priceId') ?? ''}
       inviteId={searchParams.get('inviteId') ?? ''}
       plan={searchParams.get('plan') ?? ''}
+      signedUp={searchParams.get('signed_up') === '1'}
     />
   );
 }

@@ -98,6 +98,7 @@ export function ActiveFiltersChips() {
 
     // Iterate through all search params
     searchParams.forEach((value, key) => {
+      if (key === 'signed_up') return; // UI-only param for success banner
       if (value && value !== 'newest') { // Exclude default sort
         filters.push({
           key,
