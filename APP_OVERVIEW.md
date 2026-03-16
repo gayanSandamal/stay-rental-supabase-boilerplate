@@ -1,6 +1,6 @@
-## Stay Rental App Overview
+## Easy Rent App Overview
 
-Stay Rental is a **Next.js (App Router) boilerplate** for a mid‑to‑long‑term rental marketplace in Sri Lanka.
+Easy Rent is a **Next.js (App Router) boilerplate** for a mid‑to‑long‑term rental marketplace in Sri Lanka.
 
 It combines:
 

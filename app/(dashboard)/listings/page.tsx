@@ -9,7 +9,7 @@ import { businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { Metadata } from 'next';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   apartment: 'Apartments',
@@ -42,7 +42,7 @@ export async function generateMetadata({
   if (search) parts.push(`"${search}"`);
 
   const title = parts.length > 0
-    ? `${parts.join(' ')} | Stay Rental`
+    ? `${parts.join(' ')} | Easy Rent`
     : 'Browse Rentals in Sri Lanka';
   const description = parts.length > 0
     ? `Find verified mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.`

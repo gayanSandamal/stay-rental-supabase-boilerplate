@@ -37,7 +37,7 @@ export const businessAccountStatusEnum = pgEnum('business_account_status', [
   'inactive',
 ]);
 
-// Users table (updated for Stay Rental)
+// Users table (updated for Easy Rent)
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 100 }),

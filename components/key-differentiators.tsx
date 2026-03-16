@@ -76,7 +76,7 @@ export function KeyDifferentiators() {
         <ScrollReveal>
           <div className="text-center mb-14">
             <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
-              Why Stay Rental
+              Why Easy Rent
             </span>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
               We Solve What Others{' '}

@@ -44,7 +44,7 @@ const LANDLORD_PLANS = [
     name: 'Free',
     price: 'LKR 0',
     period: 'forever',
-    features: ['Up to 3 active listings', 'Direct contact', 'Phone & WhatsApp on listing', 'List on Stay Rental'],
+    features: ['Up to 3 active listings', 'Direct contact', 'Phone & WhatsApp on listing', 'List on Easy Rent'],
     icon: Building2,
   },
   {
@@ -58,7 +58,7 @@ const LANDLORD_PLANS = [
     name: 'Premium',
     price: 'LKR 1,250',
     period: '/month',
-    features: ['Up to 10 active listings', 'Featured placement', 'Rent comparison & market insights', 'Listing performance', 'Faster approval', 'Custom profile URL (e.g. stayrental.lk/prime-lands)'],
+    features: ['Up to 10 active listings', 'Featured placement', 'Rent comparison & market insights', 'Listing performance', 'Faster approval', 'Custom profile URL (e.g. easyrent.lk/prime-lands)'],
     icon: Zap,
   },
   {

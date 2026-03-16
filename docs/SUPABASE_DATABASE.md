@@ -1,6 +1,6 @@
 # Host the database on Supabase
 
-Follow these steps to run your Stay Rental app against a Supabase Postgres database.
+Follow these steps to run your Easy Rent app against a Supabase Postgres database.
 
 ---
 
@@ -8,7 +8,7 @@ Follow these steps to run your Stay Rental app against a Supabase Postgres datab
 
 1. Go to [supabase.com](https://supabase.com) and sign in (or create an account).
 2. Click **New project**.
-3. Choose your **organization**, set a **name** (e.g. `stay-rental`), set a **database password** (save it securely), and pick a **region** close to your users.
+3. Choose your **organization**, set a **name** (e.g. `easy-rent`), set a **database password** (save it securely), and pick a **region** close to your users.
 4. Click **Create new project** and wait until the project is ready.
 
 ---

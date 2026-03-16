@@ -4,7 +4,7 @@ import { eq, and, or, isNull, gte } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
   const activeListings = await db
     .select({ id: listings.id, updatedAt: listings.updatedAt })

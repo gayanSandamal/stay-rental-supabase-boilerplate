@@ -1,4 +1,4 @@
-# Stay Rental - Verified Rentals in Sri Lanka
+# Easy Rent - Verified Rentals in Sri Lanka
 
 A mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and direct contact between tenants and landlords.
 
@@ -29,8 +29,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Test Accounts
 
-- **Admin**: `admin@stayrental.com` / `admin123`
-- **Ops**: `ops@stayrental.com` / `ops123`
+- **Admin**: `admin@easyrent.com` / `admin123`
+- **Ops**: `ops@easyrent.com` / `ops123`
 - **Tenant**: `tenant@test.com` / `tenant123`
 - **Landlord**: `landlord@test.com` / `landlord123`
 

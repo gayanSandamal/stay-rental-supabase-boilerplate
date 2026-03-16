@@ -4,12 +4,12 @@ import { Manrope } from 'next/font/google';
 import { getUser } from '@/lib/db/queries';
 import { SWRConfig } from 'swr';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
-    template: '%s | Stay Rental',
+    default: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
+    template: '%s | Easy Rent',
   },
   description: 'Find verified mid-to-long-term rentals (1-12+ months) in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
   keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals'],
@@ -17,13 +17,13 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_LK',
     url: baseUrl,
-    siteName: 'Stay Rental',
-    title: 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka',
+    siteName: 'Easy Rent',
+    title: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
     description: 'Find verified mid-to-long-term rentals in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Stay Rental - Verified Rentals in Sri Lanka',
+    title: 'Easy Rent - Verified Rentals in Sri Lanka',
     description: 'Find verified mid-to-long-term rentals in Sri Lanka.',
   },
   metadataBase: new URL(baseUrl),
@@ -38,13 +38,13 @@ const manrope = Manrope({ subsets: ['latin'] });
 const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  name: 'Stay Rental',
-  legalName: 'Stay Rental (Pvt) Ltd',
+  name: 'Easy Rent',
+  legalName: 'Easy Rent (Pvt) Ltd',
   url: baseUrl,
   description: 'Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
   contactPoint: {
     '@type': 'ContactPoint',
-    email: 'hello@stayrental.lk',
+    email: 'hello@easyrent.lk',
     contactType: 'customer service',
     areaServed: 'LK',
   },
@@ -54,12 +54,12 @@ const organizationJsonLd = {
 const websiteJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  name: 'Stay Rental',
+  name: 'Easy Rent',
   url: baseUrl,
   description: 'Find verified mid-to-long-term rentals in Sri Lanka.',
   publisher: {
     '@type': 'Organization',
-    name: 'Stay Rental',
+    name: 'Easy Rent',
   },
   potentialAction: {
     '@type': 'SearchAction',

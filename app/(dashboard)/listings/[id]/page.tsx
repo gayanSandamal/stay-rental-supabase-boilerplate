@@ -27,7 +27,7 @@ import { eq, and } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { getFirstListingPhoto } from '@/lib/seo';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export async function generateMetadata({
   params,
@@ -56,7 +56,7 @@ export async function generateMetadata({
       description,
       type: 'website',
       url: listingUrl,
-      siteName: 'Stay Rental',
+      siteName: 'Easy Rent',
       images: firstPhoto
         ? [{ url: firstPhoto, width: 1200, height: 630, alt: listing.title }]
         : undefined,
@@ -172,7 +172,7 @@ export default async function ListingDetailPage({
     }
   }
 
-  const pageBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+  const pageBaseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
   const listingUrl = `${pageBaseUrl}/listings/${listing.id}`;
 
   let photos: string[] = [];

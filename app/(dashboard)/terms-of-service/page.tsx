@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata = {
   title: 'Terms of Service',
-  description: 'Terms of Service for Stay Rental - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
+  description: 'Terms of Service for Easy Rent - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
   alternates: {
     canonical: `${baseUrl}/terms-of-service`,
   },
@@ -32,7 +32,7 @@ export default function TermsOfServicePage() {
               1. Acceptance of Terms
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              By accessing or using Stay Rental (&quot;the Platform&quot;), you agree to be
+              By accessing or using Easy Rent (&quot;the Platform&quot;), you agree to be
               bound by these Terms of Service. If you do not agree, please do not use
               our services.
             </p>
@@ -43,7 +43,7 @@ export default function TermsOfServicePage() {
               2. Description of Service
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              Stay Rental (Pvt) Ltd operates a platform connecting tenants with verified
+              Easy Rent (Pvt) Ltd operates a platform connecting tenants with verified
               landlords for mid-to-long-term rentals in Sri Lanka. We facilitate
               listings, viewings, and lead management but are not a party to rental
               agreements between tenants and landlords.
@@ -81,7 +81,7 @@ export default function TermsOfServicePage() {
               5. Limitation of Liability
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              Stay Rental is not liable for any disputes, damages, or losses arising
+              Easy Rent is not liable for any disputes, damages, or losses arising
               from transactions between users. We provide the platform as-is and do not
               guarantee uninterrupted or error-free service.
             </p>
@@ -93,8 +93,8 @@ export default function TermsOfServicePage() {
             </h2>
             <p className="text-slate-600 leading-relaxed">
               For questions about these Terms, contact us at{' '}
-              <a href="mailto:hello@stayrental.lk" className="text-teal-600 hover:underline">
-                hello@stayrental.lk
+              <a href="mailto:hello@easyrent.lk" className="text-teal-600 hover:underline">
+                hello@easyrent.lk
               </a>
               .
             </p>

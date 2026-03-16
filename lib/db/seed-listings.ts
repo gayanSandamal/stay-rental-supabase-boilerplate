@@ -223,11 +223,11 @@ async function seedListings() {
 
   // Get admin and ops users for verification
   const adminUser = await db.query.users.findFirst({
-    where: eq(users.email, 'admin@stayrental.com'),
+    where: eq(users.email, 'admin@easyrent.com'),
   });
 
   const opsUser = await db.query.users.findFirst({
-    where: eq(users.email, 'ops@stayrental.com'),
+    where: eq(users.email, 'ops@easyrent.com'),
   });
 
   if (!adminUser || !opsUser) {

@@ -171,7 +171,7 @@ function ProfileUrlCard() {
           <div className="space-y-2">
             <Label htmlFor="profile-slug">Custom URL (one-time)</Label>
             <p className="text-xs text-gray-500 mb-2">
-              Claim a custom URL like stayrental.lk/prime-lands. Letters, numbers, and hyphens only. 3–30 characters.
+              Claim a custom URL like easyrent.lk/prime-lands. Letters, numbers, and hyphens only. 3–30 characters.
             </p>
             <div className="flex gap-2">
               <Input

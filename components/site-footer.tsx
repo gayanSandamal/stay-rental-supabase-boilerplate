@@ -58,8 +58,8 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               </h3>
               <p className="text-slate-400 mt-2 text-base max-w-md">
                 {isLandlord
-                  ? 'Join hundreds of landlords who trust Stay Rental to manage their listings and find qualified tenants.'
-                  : 'Join thousands of tenants who found verified, affordable rentals through Stay Rental.'}
+                  ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
+                  : 'Join thousands of tenants who found verified, affordable rentals through Easy Rent.'}
               </p>
               <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
                 <Gift className="h-4 w-4" />
@@ -96,7 +96,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                   <rect x="9" y="14" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
                 </svg>
               </div>
-              <span className="text-lg font-bold">Stay<span className="text-teal-400">Rental</span></span>
+              <span className="text-lg font-bold">Easy<span className="text-teal-400">Rent</span></span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-5 max-w-xs">
               Sri Lanka&apos;s trusted, affordable platform for verified rentals. No scams. No surprises.
@@ -107,7 +107,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Mail className="h-3.5 w-3.5" />
-              <span>hello@stayrental.lk</span>
+              <span>hello@easyrent.lk</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
               <Phone className="h-3.5 w-3.5" />
@@ -139,7 +139,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
       {/* Bottom bar */}
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-          <span>© {new Date().getFullYear()} Stay Rental (Pvt) Ltd. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} Easy Rent (Pvt) Ltd. All rights reserved.</span>
           <div className="flex gap-5">
             <Link href="/privacy-policy" className="hover:text-slate-300 transition-colors">
               Privacy Policy

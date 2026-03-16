@@ -13,12 +13,12 @@ import type { Metadata } from 'next';
 import { ScrollReveal } from '@/components/scroll-reveal';
 import { SiteFooter } from '@/components/site-footer';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata: Metadata = {
   title: 'List Your Property',
   description:
-    'List your rental property on Stay Rental. Reach verified tenants, get viewing coordination, and enjoy a hassle-free listing experience in Sri Lanka.',
+    'List your rental property on Easy Rent. Reach verified tenants, get viewing coordination, and enjoy a hassle-free listing experience in Sri Lanka.',
   alternates: {
     canonical: `${baseUrl}/list-your-property`,
   },
@@ -138,7 +138,7 @@ export default function ListYourPropertyPage() {
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-[1.08] tracking-tight mb-6">
               List Your Property on{' '}
-              <span className="gradient-text">Stay Rental</span>
+              <span className="gradient-text">Easy Rent</span>
             </h1>
             <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
               Reach thousands of verified tenants looking for mid-to-long-term
@@ -269,7 +269,7 @@ export default function ListYourPropertyPage() {
                 Ready to Find Your Next Tenant?
               </h2>
               <p className="text-slate-300 mb-8 text-lg max-w-xl mx-auto">
-                Join hundreds of landlords who trust Stay Rental to manage their
+                Join hundreds of landlords who trust Easy Rent to manage their
                 listings and find qualified tenants.
               </p>
               <Link

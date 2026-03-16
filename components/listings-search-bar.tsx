@@ -52,7 +52,7 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
         <Link href="/" className="flex items-center flex-shrink-0">
           <CircleIcon className="h-6 w-6 text-teal-700" />
           <div className="ml-2 hidden sm:block">
-            <span className="text-lg font-semibold text-gray-900">Stay Rental</span>
+            <span className="text-lg font-semibold text-gray-900">Easy Rent</span>
           </div>
         </Link>
 

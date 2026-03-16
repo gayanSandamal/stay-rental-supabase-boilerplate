@@ -1,6 +1,6 @@
 # Form Builder System - Complete Guide
 
-A comprehensive, reusable form builder system that supports all field types, layouts, and validation rules used throughout the Stay Rental application.
+A comprehensive, reusable form builder system that supports all field types, layouts, and validation rules used throughout the Easy Rent application.
 
 ## 🎯 Overview
 
@@ -465,5 +465,5 @@ See `lib/forms/README.md` for complete API documentation.
 
 ---
 
-**Created for Stay Rental Platform** - A flexible, maintainable form system for all your form needs!
+**Created for Easy Rent Platform** - A flexible, maintainable form system for all your form needs!
 

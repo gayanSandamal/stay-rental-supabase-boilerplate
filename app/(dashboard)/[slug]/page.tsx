@@ -5,7 +5,7 @@ import { Building2, Home, MapPin } from 'lucide-react';
 import { ListingCard } from '@/components/listing-card';
 import type { Metadata } from 'next';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 const RESERVED_SLUGS = new Set([
   'listings',
@@ -35,7 +35,7 @@ export async function generateMetadata({
 
   const name = landlord.user?.name || landlord.user?.email || 'Landlord';
   const listingCount = landlord.listings?.length ?? 0;
-  const description = `${name}'s portfolio on Stay Rental. ${listingCount} active rental${listingCount !== 1 ? 's' : ''} in Sri Lanka.`;
+  const description = `${name}'s portfolio on Easy Rent. ${listingCount} active rental${listingCount !== 1 ? 's' : ''} in Sri Lanka.`;
 
   const profileUrl = `${baseUrl}/${slug}`;
 
@@ -46,11 +46,11 @@ export async function generateMetadata({
       canonical: profileUrl,
     },
     openGraph: {
-      title: `${name} | Landlord Portfolio | Stay Rental`,
+      title: `${name} | Landlord Portfolio | Easy Rent`,
       description,
       type: 'profile',
       url: profileUrl,
-      siteName: 'Stay Rental',
+      siteName: 'Easy Rent',
     },
     twitter: {
       card: 'summary',
@@ -92,7 +92,7 @@ export default async function LandlordProfilePage({
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{name}</h1>
               <p className="text-slate-600 text-sm mt-0.5">
-                Landlord portfolio on Stay Rental
+                Landlord portfolio on Easy Rent
               </p>
             </div>
           </div>

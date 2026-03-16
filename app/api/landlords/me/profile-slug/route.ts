@@ -111,7 +111,7 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({
     profileSlug: updated.profileSlug,
     publicId: updated.publicId,
-    profileUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk'}/${updated.profileSlug}`,
+    profileUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk'}/${updated.profileSlug}`,
   });
 }
 
@@ -134,7 +134,7 @@ export async function GET() {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
   const slug = landlord.profileSlug ?? landlord.publicId;
   const profileUrl = `${baseUrl}/${slug}`;
 

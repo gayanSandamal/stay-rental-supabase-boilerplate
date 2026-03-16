@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Stay Rental - Verified Mid-to-Long-Term Rentals in Sri Lanka';
+export const alt = 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -50,7 +50,7 @@ export default async function Image() {
             </svg>
           </div>
           <span style={{ fontSize: 48, fontWeight: 800, color: 'white' }}>
-            Stay<span style={{ color: '#5EEAD4' }}>Rental</span>
+            Easy<span style={{ color: '#5EEAD4' }}>Rent</span>
           </span>
         </div>
         <p style={{ fontSize: 28, color: 'rgba(255,255,255,0.9)', margin: 0 }}>

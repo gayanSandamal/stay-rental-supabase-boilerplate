@@ -202,8 +202,8 @@ async function seedSampleData() {
 
   // ── Step 1: Fetch existing foundation users ──────────────────────────────
 
-  const adminUser = await db.query.users.findFirst({ where: eq(users.email, 'admin@stayrental.com') });
-  const opsUser = await db.query.users.findFirst({ where: eq(users.email, 'ops@stayrental.com') });
+  const adminUser = await db.query.users.findFirst({ where: eq(users.email, 'admin@easyrent.com') });
+  const opsUser = await db.query.users.findFirst({ where: eq(users.email, 'ops@easyrent.com') });
 
   if (!adminUser || !opsUser) {
     console.error('Admin or Ops user not found. Run `npm run db:seed` first.');

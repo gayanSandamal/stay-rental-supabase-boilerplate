@@ -7,7 +7,7 @@ import { sendSavedSearchAlert } from '@/lib/email';
 import { createNotification } from '@/lib/notifications';
 import { isUserPremium } from '@/lib/subscription';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
 /**
  * Vercel Cron: sends saved search alerts when new listings match.

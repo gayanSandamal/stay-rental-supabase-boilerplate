@@ -1,4 +1,4 @@
-# Stay Rental - User Manual
+# Easy Rent - User Manual
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -13,7 +13,7 @@
 
 ## Overview
 
-Stay Rental is a mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and direct contact between tenants and landlords.
+Easy Rent is a mid-to-long-term (1-12+ months) house rental platform specifically designed for Sri Lanka. The platform focuses on verified listings, clear terms, and direct contact between tenants and landlords.
 
 ### User Roles
 
@@ -29,7 +29,7 @@ Stay Rental is a mid-to-long-term (1-12+ months) house rental platform specifica
 ### Accessing the Application
 
 1. Open your web browser and navigate to: `http://localhost:3000`
-2. You'll see the Stay Rental homepage with featured listings
+2. You'll see the Easy Rent homepage with featured listings
 
 ### Creating an Account
 
@@ -54,8 +54,8 @@ Stay Rental is a mid-to-long-term (1-12+ months) house rental platform specifica
 
 For testing purposes, you can use these pre-configured accounts:
 
-- **Admin**: `admin@stayrental.com` / `admin123`
-- **Ops**: `ops@stayrental.com` / `ops123`
+- **Admin**: `admin@easyrent.com` / `admin123`
+- **Ops**: `ops@easyrent.com` / `ops123`
 - **Tenant**: `tenant@test.com` / `tenant123`
 - **Landlord**: `landlord@test.com` / `landlord123`
 
@@ -296,7 +296,7 @@ When browsing listings, you can filter by:
 
 ### Main Navigation
 
-- **Home**: Click "Stay Rental" logo to go to homepage
+- **Home**: Click "Easy Rent" logo to go to homepage
 - **Listings**: Browse all available properties
 - **Sign In/Sign Up**: Authentication links in top right
 - **Dashboard**: Accessible after signing in (for ops/admin/landlord)

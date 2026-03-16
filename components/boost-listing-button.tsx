@@ -70,7 +70,7 @@ export function BoostListingButton({
     <p className="text-sm text-slate-600">
       Need faster results? Boost this listing for 7 days for LKR 250.{' '}
       <a
-        href="mailto:support@stayrental.lk?subject=Boost%20Listing%20Request"
+        href="mailto:support@easyrent.lk?subject=Boost%20Listing%20Request"
         className="text-teal-600 font-medium hover:underline"
       >
         Contact support

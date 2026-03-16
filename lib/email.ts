@@ -22,7 +22,7 @@ async function sendEmail(options: EmailOptions): Promise<boolean> {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'Stay Rental <noreply@stayrental.lk>',
+          from: process.env.EMAIL_FROM || 'Easy Rent <noreply@easyrent.lk>',
           to: options.to,
           subject: options.subject,
           html: options.html,
@@ -50,15 +50,15 @@ export async function sendPasswordResetEmail(
   name: string,
   token: string,
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
   const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
   return sendEmail({
     to: email,
-    subject: 'Reset your Stay Rental password',
+    subject: 'Reset your Easy Rent password',
     html: `
       <h2>Hi ${name},</h2>
-      <p>We received a request to reset the password for your Stay Rental account.</p>
+      <p>We received a request to reset the password for your Easy Rent account.</p>
       <p>If you made this request, click the button below to set a new password:</p>
       <p>
         <a href="${resetUrl}" style="display:inline-block;padding:10px 16px;background-color:#ea580c;color:#ffffff;border-radius:9999px;text-decoration:none;">
@@ -69,9 +69,9 @@ export async function sendPasswordResetEmail(
       <p><a href="${resetUrl}">${resetUrl}</a></p>
       <p>This link will expire in 60 minutes. If you didn't request a password reset, you can safely ignore this email.</p>
       <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+      <p style="color: #666; font-size: 12px;">Easy Rent - Verified Rentals in Sri Lanka</p>
     `,
-    text: `Hi ${name},\n\nReset your Stay Rental password using this link (valid for 60 minutes): ${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+    text: `Hi ${name},\n\nReset your Easy Rent password using this link (valid for 60 minutes): ${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
   });
 }
 
@@ -81,19 +81,19 @@ export async function sendListingApprovedToLandlord(
   listingTitle: string,
   listingId: number
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
   return sendEmail({
     to: landlordEmail,
     subject: `Your Listing is Live! - ${listingTitle}`,
     html: `
       <h2>Hi ${landlordName},</h2>
-      <p>Great news! Your listing <strong>${listingTitle}</strong> has been approved and is now live on Stay Rental.</p>
+      <p>Great news! Your listing <strong>${listingTitle}</strong> has been approved and is now live on Easy Rent.</p>
       <p><a href="${baseUrl}/listings/${listingId}">View Your Listing</a></p>
       <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+      <p style="color: #666; font-size: 12px;">Easy Rent - Verified Rentals in Sri Lanka</p>
     `,
-    text: `Hi ${landlordName}, your listing "${listingTitle}" is now live on Stay Rental.`,
+    text: `Hi ${landlordName}, your listing "${listingTitle}" is now live on Easy Rent.`,
   });
 }
 
@@ -104,7 +104,7 @@ export async function sendListingRejectedToLandlord(
   listingId: number,
   rejectionReason: string
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
   return sendEmail({
     to: landlordEmail,
@@ -115,7 +115,7 @@ export async function sendListingRejectedToLandlord(
       <p><strong>Reason:</strong> ${rejectionReason}</p>
       <p><a href="${baseUrl}/dashboard/listings/${listingId}/edit">Update Your Listing</a></p>
       <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+      <p style="color: #666; font-size: 12px;">Easy Rent - Verified Rentals in Sri Lanka</p>
     `,
     text: `Hi ${landlordName}, your listing "${listingTitle}" needs updates: ${rejectionReason}`,
   });
@@ -128,7 +128,7 @@ export async function sendSavedSearchAlert(
   matchingListings: Array<{ id: number; title: string }>,
   listingsUrl: string
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
   const listingsHtml = matchingListings
     .slice(0, 5)
@@ -149,7 +149,7 @@ export async function sendSavedSearchAlert(
       ${moreCount > 0 ? `<p>...and ${moreCount} more.</p>` : ''}
       <p><a href="${listingsUrl}">View all matching listings</a></p>
       <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+      <p style="color: #666; font-size: 12px;">Easy Rent - Verified Rentals in Sri Lanka</p>
     `,
     text: `Hi ${userName || 'there'}, ${matchingListings.length} new listing(s) match "${searchName}". View them: ${listingsUrl}`,
   });
@@ -209,7 +209,7 @@ export async function sendListingExpiringReminder(
   listingId: number,
   daysRemaining: number
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://stayrental.lk';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
   return sendEmail({
     to: landlordEmail,
@@ -220,7 +220,7 @@ export async function sendListingExpiringReminder(
       <p>If your property is still available, please renew your listing to keep it visible to tenants.</p>
       <p><a href="${baseUrl}/dashboard/listings/${listingId}">Manage Listing</a></p>
       <hr />
-      <p style="color: #666; font-size: 12px;">Stay Rental - Verified Rentals in Sri Lanka</p>
+      <p style="color: #666; font-size: 12px;">Easy Rent - Verified Rentals in Sri Lanka</p>
     `,
     text: `Hi ${landlordName}, your listing "${listingTitle}" expires in ${daysRemaining} days.`,
   });

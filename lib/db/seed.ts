@@ -3,11 +3,11 @@ import { users, landlords, listings } from './schema';
 import { hashPassword } from '@/lib/auth/session';
 
 async function seed() {
-  console.log('Starting Stay Rental seed...');
+  console.log('Starting Easy Rent seed...');
 
   // Check if users exist, if not create them
   let adminUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'admin@stayrental.com'),
+    where: (users, { eq }) => eq(users.email, 'admin@easyrent.com'),
   });
 
   if (!adminUser) {
@@ -15,7 +15,7 @@ async function seed() {
     [adminUser] = await db
       .insert(users)
       .values({
-        email: 'admin@stayrental.com',
+        email: 'admin@easyrent.com',
         passwordHash: adminPasswordHash,
         role: 'admin',
         name: 'Admin User',
@@ -30,7 +30,7 @@ async function seed() {
 
   // Create ops user
   let opsUser = await db.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, 'ops@stayrental.com'),
+    where: (users, { eq }) => eq(users.email, 'ops@easyrent.com'),
   });
 
   if (!opsUser) {
@@ -38,7 +38,7 @@ async function seed() {
     [opsUser] = await db
       .insert(users)
       .values({
-        email: 'ops@stayrental.com',
+        email: 'ops@easyrent.com',
         passwordHash: opsPasswordHash,
         role: 'ops',
         name: 'Ops User',
@@ -297,10 +297,10 @@ async function seed() {
 
   console.log(`${sampleListings.length} sample listings created`);
 
-  console.log('✅ Stay Rental seed completed successfully!');
+  console.log('✅ Easy Rent seed completed successfully!');
   console.log('\nLogin credentials:');
-  console.log('Admin: admin@stayrental.com / admin123');
-  console.log('Ops: ops@stayrental.com / ops123');
+  console.log('Admin: admin@easyrent.com / admin123');
+  console.log('Ops: ops@easyrent.com / ops123');
   console.log('Tenant: tenant@test.com / tenant123');
   console.log('Landlord: landlord@test.com / landlord123');
 }

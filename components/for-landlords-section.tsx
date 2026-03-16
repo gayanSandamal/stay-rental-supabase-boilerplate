@@ -15,7 +15,7 @@ export function ForLandlordsSection() {
             </span>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
               List Your Property With{' '}
-              <span className="gradient-text">Stay Rental</span>
+              <span className="gradient-text">Easy Rent</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
               List your first 3 properties free. Need more visibility? Boost from LKR 250.

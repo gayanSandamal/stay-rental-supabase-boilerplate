@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata = {
   title: 'Privacy Policy',
-  description: 'Privacy Policy for Stay Rental - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
+  description: 'Privacy Policy for Easy Rent - Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
   alternates: {
     canonical: `${baseUrl}/privacy-policy`,
   },
@@ -32,8 +32,8 @@ export default function PrivacyPolicyPage() {
               1. Introduction
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              Stay Rental (Pvt) Ltd (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates
-              the Stay Rental platform for verified mid-to-long-term rentals in Sri Lanka.
+              Easy Rent (Pvt) Ltd (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates
+              the Easy Rent platform for verified mid-to-long-term rentals in Sri Lanka.
               This Privacy Policy explains how we collect, use, disclose, and safeguard
               your information when you use our services.
             </p>
@@ -93,8 +93,8 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="text-slate-600 leading-relaxed">
               For questions about this Privacy Policy, please contact us at{' '}
-              <a href="mailto:hello@stayrental.lk" className="text-teal-600 hover:underline">
-                hello@stayrental.lk
+              <a href="mailto:hello@easyrent.lk" className="text-teal-600 hover:underline">
+                hello@easyrent.lk
               </a>
               .
             </p>

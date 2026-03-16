@@ -8,7 +8,7 @@ import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
 import { SiteFooter } from '@/components/site-footer';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://stayrental.lk';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata = {
   alternates: {
