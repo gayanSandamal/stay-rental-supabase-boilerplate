@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { users, type NewUser } from '@/lib/db/schema';
+import { users, type NewUser, type User } from '@/lib/db/schema';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/db/queries';
@@ -193,7 +193,53 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     subscriptionTier: plan === 'premium' ? 'premium' : 'free',
   };
 
-  const [createdUser] = await db.insert(users).values(newUser).returning();
+  let createdUser: User | undefined;
+
+  try {
+    const [inserted] = await db.insert(users).values(newUser).returning();
+    createdUser = inserted;
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[signUp] db.insert failed:', { code, message }, process.env.NODE_ENV === 'development' ? err : undefined);
+
+    if (code === '23505') {
+      // Unique constraint violation - user may exist from prior partial sign-up
+      const [existingByAuth] = await db
+        .select()
+        .from(users)
+        .where(eq(users.authUserId, authUser.id))
+        .limit(1);
+      const [existingByEmail] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.email, email), isNull(users.deletedAt)))
+        .limit(1);
+
+      if (existingByAuth) {
+        // Orphan auth user from prior failed sign-up - app user exists, treat as success
+        createdUser = existingByAuth;
+      } else if (existingByEmail) {
+        return {
+          error: 'User with this email already exists. Please sign in instead.',
+          email,
+          password
+        };
+      } else {
+        return {
+          error: 'An account with this email may already exist. Please sign in or use a different email.',
+          email,
+          password
+        };
+      }
+    } else {
+      return {
+        error: 'We couldn\'t create your account. Please try again or contact support.',
+        email,
+        password
+      };
+    }
+  }
 
   if (!createdUser) {
     return {
