@@ -17,6 +17,7 @@
     "db:reset": "npx tsx lib/db/reset.ts",
     "db:refresh-suggestions": "npx tsx scripts/refresh-search-suggestions.ts",
     "db:set-admin": "npx tsx scripts/set-admin.ts",
+    "db:hard-delete-user": "npx tsx scripts/hard-delete-user.ts",
     "db:studio": "drizzle-kit studio",
     "storage:setup": "npx tsx lib/db/setup-storage.ts"
   },
