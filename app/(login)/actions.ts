@@ -18,7 +18,7 @@ import {
   validatedAction,
   validatedActionWithUser
 } from '@/lib/auth/middleware';
-import { sendPasswordResetEmail } from '@/lib/email';
+import { sendPasswordResetEmail, addContactToResend } from '@/lib/email';
 
 async function ensurePasswordResetTable() {
   try {
@@ -87,6 +87,14 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 
   await setSession(foundUser);
 
+  // Sync contact to Resend (fire-and-forget)
+  addContactToResend(
+    foundUser.email,
+    foundUser.name,
+    foundUser.role,
+    foundUser.subscriptionTier || 'free',
+  ).catch(() => {});
+
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo && redirectTo.startsWith('/')) {
     redirect(redirectTo);
@@ -141,6 +149,14 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   }
 
   await setSession(createdUser);
+
+  // Sync contact to Resend (fire-and-forget)
+  addContactToResend(
+    createdUser.email,
+    createdUser.name,
+    createdUser.role,
+    createdUser.subscriptionTier || 'free',
+  ).catch(() => {});
 
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo && redirectTo.startsWith('/')) {

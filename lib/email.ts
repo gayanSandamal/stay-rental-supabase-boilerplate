@@ -155,6 +155,53 @@ export async function sendSavedSearchAlert(
   });
 }
 
+/**
+ * Add or update a user as a contact in Resend (for Broadcasts/marketing).
+ * Fire-and-forget; errors are logged but do not block the caller.
+ */
+export async function addContactToResend(
+  email: string,
+  name: string | null,
+  role: string,
+  subscriptionTier: string
+) {
+  if (!isFeatureEnabled('enableLeadNurturing')) return;
+
+  const provider = process.env.EMAIL_PROVIDER;
+  if (provider !== 'resend' || !process.env.RESEND_API_KEY) return;
+
+  const [firstName, ...lastParts] = (name || email).trim().split(/\s+/);
+  const lastName = lastParts.join(' ') || undefined;
+
+  try {
+    const res = await fetch('https://api.resend.com/contacts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        email,
+        first_name: firstName || email.split('@')[0],
+        last_name: lastName || undefined,
+        unsubscribed: false,
+        properties: {
+          role,
+          subscription_tier: subscriptionTier || 'free',
+        },
+      }),
+    });
+
+    // 409 = contact already exists; Resend may use upsert semantics - treat as success
+    if (!res.ok && res.status !== 409) {
+      const err = await res.text();
+      console.error('Resend contact sync failed:', res.status, err);
+    }
+  } catch (error) {
+    console.error('Resend contact sync error:', error);
+  }
+}
+
 export async function sendListingExpiringReminder(
   landlordEmail: string,
   landlordName: string,
