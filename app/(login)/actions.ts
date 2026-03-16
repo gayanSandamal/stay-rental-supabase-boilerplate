@@ -143,7 +143,9 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
       supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? baseUrl}/listings` }
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? baseUrl}/auth/callback?next=/listings`
+        }
       }),
       AUTH_TIMEOUT_MS,
       'Sign up is taking too long. Please check your connection and try again.'
@@ -251,7 +253,7 @@ export const requestPasswordReset = validatedAction(
     const supabase = await createClient();
 
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${baseUrl}/reset-password`,
+      redirectTo: `${baseUrl}/auth/callback?next=/reset-password`,
     });
 
     return genericResponse;
