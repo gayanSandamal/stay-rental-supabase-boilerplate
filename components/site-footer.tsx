@@ -59,7 +59,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <p className="text-slate-400 mt-2 text-base max-w-md">
                 {isLandlord
                   ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
-                  : 'Join thousands of tenants who found verified, affordable rentals through Easy Rent.'}
+                  : 'Join thousands of renters who found verified, affordable rentals through Easy Rent.'}
               </p>
               <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
                 <Gift className="h-4 w-4" />

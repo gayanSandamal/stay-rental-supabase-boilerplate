@@ -56,7 +56,7 @@ const benefits = [
     icon: Clock,
     title: '30-Day Active Listings',
     description:
-      'Your listing stays active for 30 days with easy renewal. No daily re-posting needed.',
+      'Your listing remains active for 30 days with easy renewal. No daily re-posting needed.',
     tag: 'Set & Forget',
     gradient: 'from-sky-500 to-teal-600',
     tagColor: 'bg-sky-50 text-sky-700 border-sky-200',

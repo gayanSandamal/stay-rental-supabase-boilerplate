@@ -24,7 +24,7 @@ const FEATURES = [
     icon: Droplet,
     title: 'Water Source Info',
     description:
-      'Know the water source before you commit — mains, tank, borehole. Essential transparency for long-term stays.',
+      'Know the water source before you commit — mains, tank, borehole. Essential transparency for long-term rentals.',
     tag: 'Full Transparency',
     gradient: 'from-sky-500 to-teal-600',
     tagColor: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -33,7 +33,7 @@ const FEATURES = [
     icon: Wifi,
     title: 'Fiber Internet Ready',
     description:
-      'Filter by fiber availability and ISP options per property. Stay connected seamlessly — perfect for remote workers.',
+      'Filter by fiber availability and ISP options per property. Remain connected seamlessly — perfect for remote workers.',
     tag: 'Work From Home',
     gradient: 'from-teal-600 to-teal-800',
     tagColor: 'bg-teal-50 text-teal-800 border-teal-200',

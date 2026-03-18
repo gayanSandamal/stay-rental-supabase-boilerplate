@@ -48,7 +48,7 @@ export function Testimonials() {
               <span className="gradient-text">Perfect Home</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-              Thousands of Sri Lankan tenants have moved in stress-free. Here are a few of their stories.
+              Thousands of Sri Lankan renters have moved in stress-free. Here are a few of their stories.
             </p>
           </div>
         </ScrollReveal>

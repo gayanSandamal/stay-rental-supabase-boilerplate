@@ -47,7 +47,7 @@ function Header() {
             </div>
             <div>
               <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHome && !scrolled ? 'text-white' : 'text-slate-900'}`}>
-                Stay<span className="text-teal-700">Rental</span>
+                Easy<span className="text-teal-700">Rent</span>
               </span>
               <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHome && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
                 Verified Rentals · Sri Lanka

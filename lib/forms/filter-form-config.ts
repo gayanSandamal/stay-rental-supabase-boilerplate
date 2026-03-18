@@ -162,7 +162,7 @@ export const filterFormConfig: FormConfig = {
       name: 'powerBackup',
       label: 'Power Backup',
       type: 'select',
-      helpText: 'Essential in Sri Lanka — filter by generator, solar, or UPS for properties that stay powered during outages.',
+      helpText: 'Essential in Sri Lanka — filter by generator, solar, or UPS for properties that remain powered during outages.',
       options: [
         { label: 'Any', value: '' },
         { label: 'Generator', value: 'generator' },

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Home, Building2, Zap } from 'lucide-react';
+import { Check, Home, Building2, Zap, Star, Clock, Package } from 'lucide-react';
 import { ScrollReveal } from './scroll-reveal';
 import Link from 'next/link';
 
@@ -71,15 +71,15 @@ const LANDLORD_PLANS = [
 ];
 
 const VISIBILITY_ADDONS = [
-  { name: 'Boost', price: 'LKR 250', period: 'per 7 days', description: 'Improved ranking and exposure' },
-  { name: 'Featured', price: 'LKR 500', period: 'per 7 days', description: 'Top placement in search' },
-  { name: 'Urgent', price: 'LKR 150', period: 'per 7 days', description: 'Urgent badge for quick action' },
+  { name: 'Boost', price: 'LKR 250', period: 'per 7 days', description: 'Improved ranking and exposure', icon: Zap },
+  { name: 'Featured', price: 'LKR 500', period: 'per 7 days', description: 'Top placement in search', icon: Star },
+  { name: 'Urgent', price: 'LKR 150', period: 'per 7 days', description: 'Urgent badge for quick action', icon: Clock },
 ];
 
 const BUNDLES = [
-  { name: 'Quick Results Pack', price: 'LKR 350', description: 'Boost + Urgent (7 days each)' },
-  { name: 'Priority Exposure Pack', price: 'LKR 650', description: 'Featured + Urgent (7 days each)' },
-  { name: 'Landlord Starter Bundle', price: 'LKR 1,000', description: 'Starter 30 days + 1 Boost' },
+  { name: 'Quick Results Pack', price: 'LKR 350', description: 'Boost + Urgent (7 days each)', icon: Zap },
+  { name: 'Priority Exposure Pack', price: 'LKR 650', description: 'Featured + Urgent (7 days each)', icon: Star },
+  { name: 'Landlord Starter Bundle', price: 'LKR 1,000', description: 'Starter 30 days + 1 Boost', icon: Package },
 ];
 
 export function PricingSection() {
@@ -198,28 +198,56 @@ export function PricingSection() {
           })}
         </ScrollReveal>
         <ScrollReveal className="mb-8">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
-            <p className="text-sm font-bold text-amber-900 mb-3">Add-ons & Bundles</p>
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-amber-800 mb-2">Paid visibility add-ons</p>
-              <div className="flex flex-wrap gap-4 justify-center">
-                {VISIBILITY_ADDONS.map((addon) => (
-                  <div key={addon.name} className="text-center">
-                    <p className="font-semibold text-amber-900">{addon.name}: {addon.price} {addon.period}</p>
-                    <p className="text-xs text-amber-800">{addon.description}</p>
-                  </div>
-                ))}
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-6 sm:p-8">
+            <div className="flex items-center gap-2 mb-6">
+              <Package className="h-5 w-5 text-amber-600" />
+              <p className="text-lg font-bold text-amber-900">Add-ons & Bundles</p>
+            </div>
+            <div className="mb-6">
+              <p className="text-sm font-semibold text-amber-800 mb-4">Paid visibility add-ons</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {VISIBILITY_ADDONS.map((addon) => {
+                  const Icon = addon.icon;
+                  return (
+                    <div
+                      key={addon.name}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                          <Icon className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900">{addon.name}</h4>
+                      </div>
+                      <div className="text-2xl font-extrabold text-slate-900 mb-1">{addon.price}</div>
+                      <p className="text-xs text-slate-500 mb-1">{addon.period}</p>
+                      <p className="text-sm text-slate-600">{addon.description}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-amber-800 mb-2">Bundles</p>
-              <div className="flex flex-wrap gap-4 justify-center">
-                {BUNDLES.map((bundle) => (
-                  <div key={bundle.name} className="text-center">
-                    <p className="font-semibold text-amber-900">{bundle.name}: {bundle.price}</p>
-                    <p className="text-xs text-amber-800">{bundle.description}</p>
-                  </div>
-                ))}
+              <p className="text-sm font-semibold text-amber-800 mb-4">Bundles</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {BUNDLES.map((bundle) => {
+                  const Icon = bundle.icon;
+                  return (
+                    <div
+                      key={bundle.name}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                          <Icon className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900">{bundle.name}</h4>
+                      </div>
+                      <div className="text-2xl font-extrabold text-slate-900 mb-1">{bundle.price}</div>
+                      <p className="text-sm text-slate-600">{bundle.description}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

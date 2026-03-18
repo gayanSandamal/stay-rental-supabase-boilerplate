@@ -102,7 +102,7 @@ export function HeroSection() {
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white leading-[1.08] tracking-tight">
             Find Your Perfect
             <span className="block mt-2">
-              <span className="gradient-text">Stay in Sri Lanka</span>
+              <span className="gradient-text">Rental in Sri Lanka</span>
             </span>
           </h1>
         </div>
@@ -110,8 +110,8 @@ export function HeroSection() {
         {/* 3 · Subtitle */}
         <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
           Affordable, verified rentals for{' '}
-          <span className="text-amber-300 font-semibold">office-goers</span>, couples, students, and families.
-          Short- or long-term — <span className="text-teal-300 font-semibold">verified</span> landlords, no scams.
+          <span className="text-amber-300 font-semibold">renters</span>.
+          Mid- to long-term — <span className="text-teal-300 font-semibold">verified</span> landlords, no scams.
         </p>
 
         {/* 4 · Search bar with breathing glow */}
