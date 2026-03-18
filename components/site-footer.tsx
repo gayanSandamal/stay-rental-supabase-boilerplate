@@ -16,6 +16,7 @@ const FOOTER_LINKS = {
   ],
   Company: [
     { href: '/#how-it-works', label: 'How It Works' },
+    { href: '/how-to-use', label: 'How to Use' },
     { href: '/sign-in', label: 'Sign In' },
     { href: '/sign-up', label: 'Create Account' },
   ],

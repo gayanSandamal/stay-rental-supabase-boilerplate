@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { Home, List, PlusCircle, Menu, X } from 'lucide-react';
+import { Home, List, PlusCircle, BookOpen, Menu, X } from 'lucide-react';
 import { UserMenu } from '@/components/user-menu';
 import { NotificationCenter } from '@/components/notification-center';
 import { EmailUnverifiedBanner } from '@/components/email-unverified-banner';
@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/listings', label: 'Browse Listings', icon: List },
   { href: '/list-your-property', label: 'List Property', icon: PlusCircle },
+  { href: '/how-to-use', label: 'How to Use', icon: BookOpen },
 ];
 
 function Header() {
@@ -26,11 +27,12 @@ function Header() {
   }, []);
 
   const isHome = pathname === '/';
+  const isHeroPage = isHome || pathname === '/how-to-use' || pathname === '/list-your-property';
 
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
-        isHome && !scrolled
+        isHeroPage && !scrolled
           ? 'bg-transparent border-b border-white/5'
           : 'bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-sm'
       }`}
@@ -46,10 +48,10 @@ function Header() {
               </svg>
             </div>
             <div>
-              <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHome && !scrolled ? 'text-white' : 'text-slate-900'}`}>
+              <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white' : 'text-slate-900'}`}>
                 Easy<span className="text-teal-700">Rent</span>
               </span>
-              <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHome && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
+              <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
                 Verified Rentals · Sri Lanka
               </span>
             </div>
@@ -66,7 +68,7 @@ function Header() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     active
                       ? 'bg-teal-800 text-white shadow-md shadow-teal-800/30'
-                      : isHome && !scrolled
+                      : isHeroPage && !scrolled
                       ? 'text-white/80 hover:text-white hover:bg-white/10'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
@@ -87,7 +89,7 @@ function Header() {
             </Suspense>
             {/* Mobile menu toggle */}
             <button
-              className={`md:hidden p-2 rounded-lg transition-colors ${isHome && !scrolled ? 'text-white hover:bg-white/10' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`md:hidden p-2 rounded-lg transition-colors ${isHeroPage && !scrolled ? 'text-white hover:bg-white/10' : 'text-slate-600 hover:bg-slate-100'}`}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
             >

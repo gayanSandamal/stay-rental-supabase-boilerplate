@@ -13,6 +13,7 @@ const RESERVED_SLUGS = new Set([
   'sign-up',
   'dashboard',
   'list-your-property',
+  'how-to-use',
   'privacy-policy',
   'terms-of-service',
   'forgot-password',
