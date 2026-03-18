@@ -10,6 +10,9 @@ import { SiteFooter } from '@/components/site-footer';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
+// Homepage fetches listings; must be dynamic so build does not require DB schema to be migrated
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   alternates: {
     canonical: baseUrl,

@@ -1,4 +1,4 @@
-import { desc, and, eq, ne, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount } from 'drizzle-orm';
+import { desc, and, eq, ne, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
   users,
@@ -287,10 +287,12 @@ export async function getActiveListings(filters?: {
       ? [desc(listings.exclusive), orderByClause]
       : [orderByClause];
   } else {
-    // Default ranking: boosted > plan tier > verified > completeness > newest
+    // Default ranking: Featured > Boost > Plan tier > verified > completeness > newest (Reimagined model)
     orderByArgs = [
+      sql`(CASE WHEN ${listings.featuredUntil} IS NOT NULL AND ${listings.featuredUntil} > NOW() THEN 1 ELSE 0 END) DESC`,
       sql`(CASE WHEN ${listings.boostedUntil} IS NOT NULL AND ${listings.boostedUntil} > NOW() THEN 1 ELSE 0 END) DESC`,
-      sql`(SELECT CASE COALESCE(l.landlord_plan_tier, 'free') WHEN 'agency' THEN 3 WHEN 'premium' THEN 2 WHEN 'basic' THEN 1 ELSE 0 END FROM landlords l WHERE l.id = ${listings.landlordId}) DESC`,
+      sql`(SELECT CASE COALESCE(l.landlord_plan_tier, 'free') WHEN 'agency' THEN 3 WHEN 'pro' THEN 2 WHEN 'premium' THEN 2 WHEN 'starter' THEN 1 WHEN 'basic' THEN 1 ELSE 0 END FROM landlords l WHERE l.id = ${listings.landlordId}) DESC`,
+      sql`(CASE WHEN ${listings.urgentUntil} IS NOT NULL AND ${listings.urgentUntil} > NOW() THEN 1 ELSE 0 END) DESC`,
       desc(listings.verified),
       sql`(CASE WHEN ${listings.photos} IS NOT NULL AND ${listings.photos} != '[]' THEN 1 ELSE 0 END) + (CASE WHEN ${listings.description} IS NOT NULL AND LENGTH(${listings.description}) > 50 THEN 1 ELSE 0 END) DESC`,
       desc(listings.createdAt),
@@ -300,9 +302,15 @@ export async function getActiveListings(filters?: {
     }
   }
 
+  const listingColumns = getTableColumns(listings);
   let query = db
-    .select()
+    .select({
+      ...listingColumns,
+      landlordPlanTier: landlords.landlordPlanTier,
+      landlordPlanExpiresAt: landlords.landlordPlanExpiresAt,
+    })
     .from(listings)
+    .leftJoin(landlords, eq(listings.landlordId, landlords.id))
     .where(and(...conditions))
     .orderBy(...orderByArgs);
 

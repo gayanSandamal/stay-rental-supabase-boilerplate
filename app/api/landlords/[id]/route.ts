@@ -34,12 +34,12 @@ export async function PATCH(
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
   if (landlordPlanTier !== undefined) {
-    const valid = ['free', 'basic', 'premium', 'agency'].includes(
+    const valid = ['free', 'starter', 'pro', 'agency', 'basic', 'premium'].includes(
       String(landlordPlanTier).toLowerCase()
     );
     if (!valid) {
       return NextResponse.json(
-        { error: 'Invalid plan tier. Use: free, basic, premium, agency' },
+        { error: 'Invalid plan tier. Use: free, starter, pro, agency (basic/premium legacy)' },
         { status: 400 }
       );
     }

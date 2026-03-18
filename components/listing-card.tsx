@@ -1,12 +1,24 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight } from 'lucide-react';
+import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2 } from 'lucide-react';
 import { PublisherInfo } from './publisher-info';
 
 interface ListingCardProps {
   listing: any;
   viewMode?: 'grid' | 'list';
   showPublisher?: boolean;
+}
+
+function isActiveUntil(until: string | Date | null): boolean {
+  if (!until) return false;
+  return new Date(until) > new Date();
+}
+
+function isAgencyLandlord(listing: { landlordPlanTier?: string | null; landlordPlanExpiresAt?: string | Date | null }): boolean {
+  if (listing.landlordPlanTier !== 'agency') return false;
+  const expiresAt = listing.landlordPlanExpiresAt;
+  if (!expiresAt) return true;
+  return new Date(expiresAt) > new Date();
 }
 
 function getListingImage(listing: any): string | null {
@@ -43,8 +55,28 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   <Home className="h-12 w-12 text-teal-300" />
                 </div>
               )}
-              {(listing.verified || listing.visited) && (
-                <div className="absolute top-3 left-3 flex flex-col gap-1">
+              {(listing.verified || listing.visited || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
+                <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                  {isAgencyLandlord(listing) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold shadow">
+                      <Building2 className="h-2.5 w-2.5" /> Agency
+                    </span>
+                  )}
+                  {isActiveUntil(listing.featuredUntil) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold shadow">
+                      <Star className="h-2.5 w-2.5" /> Featured
+                    </span>
+                  )}
+                  {isActiveUntil(listing.boostedUntil) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-bold shadow">
+                      <Zap className="h-2.5 w-2.5" /> Boosted
+                    </span>
+                  )}
+                  {isActiveUntil(listing.urgentUntil) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow">
+                      <Clock className="h-2.5 w-2.5" /> Urgent
+                    </span>
+                  )}
                   {listing.verified && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow">
                       <ShieldCheck className="h-2.5 w-2.5" /> Verified
@@ -115,6 +147,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                     createdAt={listing.createdAt}
                     size="sm"
                     showDate
+                    landlordPlanTier={listing.landlordPlanTier}
+                    landlordPlanExpiresAt={listing.landlordPlanExpiresAt}
                   />
                 </div>
               )}
@@ -148,9 +182,29 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
           {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
 
-          {/* Trust badges */}
-          {(listing.verified || listing.visited) && (
-            <div className="absolute top-3 left-3 flex flex-col gap-1">
+          {/* Trust and visibility badges */}
+          {(listing.verified || listing.visited || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
+            <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+              {isAgencyLandlord(listing) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
+                  <Building2 className="h-2.5 w-2.5" /> Agency
+                </span>
+              )}
+              {isActiveUntil(listing.featuredUntil) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
+                  <Star className="h-2.5 w-2.5" /> Featured
+                </span>
+              )}
+              {isActiveUntil(listing.boostedUntil) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-600/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
+                  <Zap className="h-2.5 w-2.5" /> Boosted
+                </span>
+              )}
+              {isActiveUntil(listing.urgentUntil) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
+                  <Clock className="h-2.5 w-2.5" /> Urgent
+                </span>
+              )}
               {listing.verified && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
                   <ShieldCheck className="h-2.5 w-2.5" /> Verified
@@ -213,6 +267,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 createdAt={listing.createdAt}
                 size="sm"
                 showDate
+                landlordPlanTier={listing.landlordPlanTier}
+                landlordPlanExpiresAt={listing.landlordPlanExpiresAt}
               />
             </div>
           )}

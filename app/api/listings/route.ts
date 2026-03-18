@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, user.id));
     }
 
-    // Enforce landlord plan listing limits (skip for admin/ops creating on behalf)
+    // Listing limits: all plans allow unlimited (Reimagined model). Limit check kept for edge cases.
     if (user.role !== 'admin' && user.role !== 'ops') {
       const tier = getLandlordPlanTier(landlord);
       const limit = getListingLimit(tier);
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       if (currentCount >= limit) {
         return NextResponse.json(
           {
-            error: `You've reached your limit of ${limit} active listings. Upgrade to Basic for LKR 500/month to publish up to 5 listings.`,
+            error: `You've reached the maximum number of active listings. Contact support if you need assistance.`,
             code: 'LISTING_LIMIT_REACHED',
           },
           { status: 403 }

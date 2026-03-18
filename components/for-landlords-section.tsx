@@ -18,7 +18,7 @@ export function ForLandlordsSection() {
               <span className="gradient-text">Easy Rent</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              List your first 3 properties free. Need more visibility? Boost from LKR 250.
+              Post unlimited properties free. Need more visibility? Boost from LKR 250.
             </p>
           </div>
         </ScrollReveal>

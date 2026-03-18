@@ -69,6 +69,8 @@ export const landlords = pgTable('landlords', {
   kycVerifiedBy: integer('kyc_verified_by').references(() => users.id),
   landlordPlanTier: varchar('landlord_plan_tier', { length: 20 }).default('free'),
   landlordPlanExpiresAt: timestamp('landlord_plan_expires_at'),
+  boostsUsedThisMonth: integer('boosts_used_this_month').notNull().default(0),
+  boostsMonthResetAt: timestamp('boosts_month_reset_at'),
   profileSlug: varchar('profile_slug', { length: 50 }), // Custom URL (Premium+); one-time set
   publicId: varchar('public_id', { length: 36 })
     .notNull()
@@ -150,10 +152,12 @@ export const listings = pgTable('listings', {
   // Premium / exclusive
   exclusive: boolean('exclusive').notNull().default(false), // Premium renters only
 
-  // Boost (LKR 250/7 days) and featured (Premium/Agency)
+  // Boost (LKR 250/7 days), Featured (LKR 500/7 days), Urgent (LKR 150/7 days)
   boostedUntil: timestamp('boosted_until'),
   featured: boolean('featured').notNull().default(false),
   featuredAt: timestamp('featured_at'),
+  featuredUntil: timestamp('featured_until'),
+  urgentUntil: timestamp('urgent_until'),
   
   // Metadata
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -287,6 +291,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   'kyc_verified',
   'property_visited',
   'data_exported',
+  'listing_boost_activated',
+  'listing_featured_activated',
+  'listing_urgent_activated',
+  'listing_bundle_activated',
 ]);
 
 // Audit log table

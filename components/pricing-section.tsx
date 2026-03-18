@@ -44,38 +44,43 @@ const LANDLORD_PLANS = [
     name: 'Free',
     price: 'LKR 0',
     period: 'forever',
-    features: ['Up to 3 active listings', 'Direct contact', 'Phone & WhatsApp on listing', 'List on Easy Rent'],
+    features: ['Unlimited active listings', 'Direct contact', 'Phone & WhatsApp on listing', 'List on Easy Rent'],
     icon: Building2,
   },
   {
-    name: 'Basic',
-    price: 'LKR 500',
+    name: 'Starter',
+    price: 'LKR 900',
     period: '/month',
-    features: ['Up to 5 active listings', 'Higher ranking than Free', 'Direct contact', 'Phone & WhatsApp'],
+    features: ['Unlimited active listings', '1 free Boost per month', 'Higher visibility', 'Renewal reminders'],
     icon: Building2,
   },
   {
-    name: 'Premium',
-    price: 'LKR 1,250',
+    name: 'Pro',
+    price: 'LKR 2,500',
     period: '/month',
-    features: ['Up to 10 active listings', 'Featured placement', 'Rent comparison & market insights', 'Listing performance', 'Faster approval', 'Custom profile URL (e.g. easyrent.lk/prime-lands)'],
+    features: ['Unlimited active listings', '3 free Boosts per month', 'Featured priority', 'Listing performance', 'Faster approval', 'Custom profile URL'],
     icon: Zap,
   },
   {
     name: 'Agency',
-    price: 'LKR 3,500',
+    price: 'LKR 5,000',
     period: '/month',
-    features: ['Unlimited active listings', 'Featured placement', 'Portfolio dashboard', 'Bulk renewals', 'Priority support', 'Agency badge'],
+    features: ['Unlimited active listings', '6 free Boosts per month', 'Agency badge', 'Team support', 'Bulk renewals', 'Priority support'],
     icon: Building2,
-    hidden: true,
   },
 ];
 
-const BOOST_ADDON = {
-  price: 'LKR 250',
-  period: 'per 7 days',
-  description: 'Get more views for 7 days. Boost any listing.',
-};
+const VISIBILITY_ADDONS = [
+  { name: 'Boost', price: 'LKR 250', period: 'per 7 days', description: 'Improved ranking and exposure' },
+  { name: 'Featured', price: 'LKR 500', period: 'per 7 days', description: 'Top placement in search' },
+  { name: 'Urgent', price: 'LKR 150', period: 'per 7 days', description: 'Urgent badge for quick action' },
+];
+
+const BUNDLES = [
+  { name: 'Quick Results Pack', price: 'LKR 350', description: 'Boost + Urgent (7 days each)' },
+  { name: 'Priority Exposure Pack', price: 'LKR 650', description: 'Featured + Urgent (7 days each)' },
+  { name: 'Landlord Starter Bundle', price: 'LKR 1,000', description: 'Starter 30 days + 1 Boost' },
+];
 
 export function PricingSection() {
   return (
@@ -93,7 +98,7 @@ export function PricingSection() {
               <span className="gradient-text">Your Budget</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Start free. Upgrade only when you need more listings or better exposure.
+              List free. Pay only when you want more visibility, faster results, or included Boosts.
             </p>
           </div>
         </ScrollReveal>
@@ -162,8 +167,8 @@ export function PricingSection() {
             </h3>
           </div>
         </ScrollReveal>
-        <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          {LANDLORD_PLANS.filter((p: { hidden?: boolean }) => !p.hidden).map((plan) => {
+        <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          {LANDLORD_PLANS.map((plan) => {
             const Icon = plan.icon;
             return (
               <div
@@ -193,10 +198,30 @@ export function PricingSection() {
           })}
         </ScrollReveal>
         <ScrollReveal className="mb-8">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
-            <p className="text-sm font-medium text-amber-900">
-              <strong>Boost:</strong> {BOOST_ADDON.price} {BOOST_ADDON.period} — {BOOST_ADDON.description}
-            </p>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+            <p className="text-sm font-bold text-amber-900 mb-3">Add-ons & Bundles</p>
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-amber-800 mb-2">Paid visibility add-ons</p>
+              <div className="flex flex-wrap gap-4 justify-center">
+                {VISIBILITY_ADDONS.map((addon) => (
+                  <div key={addon.name} className="text-center">
+                    <p className="font-semibold text-amber-900">{addon.name}: {addon.price} {addon.period}</p>
+                    <p className="text-xs text-amber-800">{addon.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-amber-800 mb-2">Bundles</p>
+              <div className="flex flex-wrap gap-4 justify-center">
+                {BUNDLES.map((bundle) => (
+                  <div key={bundle.name} className="text-center">
+                    <p className="font-semibold text-amber-900">{bundle.name}: {bundle.price}</p>
+                    <p className="text-xs text-amber-800">{bundle.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </ScrollReveal>
         <ScrollReveal>

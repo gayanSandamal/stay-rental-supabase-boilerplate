@@ -82,6 +82,12 @@ async function reset() {
     '0016_listing_boost_featured.sql',
     '0017_listing_views.sql',
     '0018_landlord_profile_slug.sql',
+    '0019_add_auth_user_id.sql',
+    '0020_auth_user_trigger.sql',
+    '0021_featured_urgent_until.sql',
+    '0022_landlord_included_boosts.sql',
+    '0023_sync_featured_with_featured_until.sql',
+    '0024_audit_visibility_actions.sql',
   ];
 
   function splitStatements(sql: string): string[] {

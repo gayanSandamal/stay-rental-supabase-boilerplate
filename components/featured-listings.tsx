@@ -15,12 +15,14 @@ export async function FeaturedListings() {
     hideNewListingsHours: isPremium ? undefined : 24,
   });
 
-  const featured = allListings.filter((l) => l.verified || l.visited).slice(0, 6);
-  const display = featured.length > 0 ? featured : allListings.slice(0, 6);
-
+  // Ranking already: Featured > Boost > Plan > Urgent > verified > newest. Take top 6.
+  const display = allListings.slice(0, 6);
   if (display.length === 0) return null;
 
-  const isVerified = featured.length > 0;
+  const isFeatured = (l: { featuredUntil?: string | Date | null }) =>
+    l.featuredUntil && new Date(l.featuredUntil) > new Date();
+  const hasFeatured = display.some(isFeatured);
+  const isVerified = display.some((l) => l.verified || l.visited);
 
   return (
     <section className="py-20 bg-white">
@@ -29,13 +31,15 @@ export async function FeaturedListings() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div>
               <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-3">
-                {isVerified ? 'Hand-picked' : 'Latest'}
+                {hasFeatured ? 'Featured' : isVerified ? 'Hand-picked' : 'Latest'}
               </span>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
-                {isVerified ? 'Verified Properties' : 'Browse Properties'}
+                {hasFeatured ? 'Featured Properties' : isVerified ? 'Verified Properties' : 'Browse Properties'}
               </h2>
               <p className="text-slate-500 mt-1.5">
-                {isVerified
+                {hasFeatured
+                  ? 'Top placement for maximum visibility'
+                  : isVerified
                   ? 'Verified and site-visited by our team'
                   : 'Explore available rentals across Sri Lanka'}
               </p>

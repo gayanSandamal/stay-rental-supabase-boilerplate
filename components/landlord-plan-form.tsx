@@ -11,7 +11,7 @@ type LandlordPlanFormProps = {
   currentExpiresAt: Date | string | null;
 };
 
-const TIERS = ['free', 'basic', 'premium', 'agency'] as const;
+const TIERS = ['free', 'starter', 'pro', 'agency'] as const;
 
 export function LandlordPlanForm({
   landlordId,

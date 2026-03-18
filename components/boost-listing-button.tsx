@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Zap } from 'lucide-react';
 
@@ -8,13 +9,16 @@ type BoostListingButtonProps = {
   listingId: number;
   boostedUntil: Date | string | null;
   isAdminOrOps: boolean;
+  includedBoostsRemaining?: number;
 };
 
 export function BoostListingButton({
   listingId,
   boostedUntil,
   isAdminOrOps,
+  includedBoostsRemaining = 0,
 }: BoostListingButtonProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [boostedUntilState, setBoostedUntilState] = useState(boostedUntil);
 
@@ -32,6 +36,7 @@ export function BoostListingButton({
       const data = await res.json();
       if (res.ok && data.boostedUntil) {
         setBoostedUntilState(data.boostedUntil);
+        router.refresh();
       } else {
         alert(data.error || 'Failed to activate boost');
       }
@@ -53,16 +58,23 @@ export function BoostListingButton({
 
   if (isAdminOrOps) {
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={handleActivate}
-        disabled={loading}
-        className="border-amber-300 text-amber-800 hover:bg-amber-50"
-      >
-        <Zap className="h-4 w-4 mr-1.5" />
-        {loading ? 'Activating...' : 'Activate Boost (LKR 250/7d)'}
-      </Button>
+      <div className="space-y-1.5">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleActivate}
+          disabled={loading}
+          className="border-amber-300 text-amber-800 hover:bg-amber-50"
+        >
+          <Zap className="h-4 w-4 mr-1.5" />
+          {loading ? 'Activating...' : 'Activate Boost (LKR 250/7d)'}
+        </Button>
+        {includedBoostsRemaining > 0 && (
+          <p className="text-xs text-amber-700">
+            {includedBoostsRemaining} included Boost{includedBoostsRemaining !== 1 ? 's' : ''} remaining this month
+          </p>
+        )}
+      </div>
     );
   }
 

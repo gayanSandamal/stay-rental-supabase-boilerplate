@@ -1,10 +1,14 @@
 import { notFound } from 'next/navigation';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
+import { getIncludedBoostsRemaining } from '@/lib/landlord-plans';
 import { ListingApprovalForm } from './listing-approval-form';
 import { RequestReReviewButton } from './request-rereview-button';
 import { ArchiveListingButton } from './archive-listing-button';
 import { DeleteListingButton } from './delete-listing-button';
 import { BoostListingButton } from '@/components/boost-listing-button';
+import { FeatureListingButton } from '@/components/feature-listing-button';
+import { UrgentListingButton } from '@/components/urgent-listing-button';
+import { BundleActivationButtons } from '@/components/bundle-activation-buttons';
 import { LandlordPlanForm } from '@/components/landlord-plan-form';
 import { PropertyImagesGallery } from '@/components/property-images-gallery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -341,18 +345,42 @@ export default async function ListingEditPage({
         </div>
 
         <div className="lg:col-span-1 space-y-4">
-          {/* Boost: landlords see CTA, admin/ops can activate */}
+          {/* Paid visibility: Boost, Featured, Urgent */}
           {(listing.status === 'active' || isAdminOrOps) && (
             <Card>
               <CardHeader>
-                <CardTitle>Boost Listing</CardTitle>
+                <CardTitle>Paid Visibility</CardTitle>
+                <p className="text-sm text-gray-500">Activate after payment confirmation</p>
               </CardHeader>
-              <CardContent>
-                <BoostListingButton
-                  listingId={listing.id}
-                  boostedUntil={listing.boostedUntil}
-                  isAdminOrOps={isAdminOrOps}
-                />
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Boost</p>
+                  <BoostListingButton
+                    listingId={listing.id}
+                    boostedUntil={listing.boostedUntil}
+                    isAdminOrOps={isAdminOrOps}
+                    includedBoostsRemaining={listing.landlord ? getIncludedBoostsRemaining(listing.landlord) : 0}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Featured</p>
+                  <FeatureListingButton
+                    listingId={listing.id}
+                    featuredUntil={listing.featuredUntil}
+                    isAdminOrOps={isAdminOrOps}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Urgent</p>
+                  <UrgentListingButton
+                    listingId={listing.id}
+                    urgentUntil={listing.urgentUntil}
+                    isAdminOrOps={isAdminOrOps}
+                  />
+                </div>
+                <div className="border-t pt-4">
+                  <BundleActivationButtons listingId={listing.id} isAdminOrOps={isAdminOrOps} />
+                </div>
               </CardContent>
             </Card>
           )}
