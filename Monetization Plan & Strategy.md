@@ -25,6 +25,11 @@ These individuals are typically looking for **affordable, trustworthy housing so
 
 The goal is to **monetize from Day 1** by offering a **freemium model** with **premium features** that cater to both renters and landlords. The pricing will be **affordable**, designed to create long-term user engagement while building trust and reliability.
 
+### **Implementation Status**
+
+* **Live:** Renter Free/Premium tiers, Landlord Free/Basic/Premium/Agency tiers, saved search limits (3 for free), early access (24h for premium), exclusive listings, Boost add-on (LKR 250/7 days), listing limits enforced, custom profile URLs (Premium+), bulk renewals (Agency), business accounts.
+* **Planned:** Transaction fees (security deposit escrow), tenant insurance, property maintenance, furniture rental.
+
 ### **1. Pricing Structure for Renters (Users)**
 
 #### **Free Plan (Basic Access)**
@@ -32,34 +37,46 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
 * **Cost:** Free
 * **Features:**
 
-  * Browse listings
-  * View property details
-  * Contact landlords
-  * Receive up to 3 alerts for saved searches (without priority)
+  * Browse all verified listings
+  * View full property details
+  * Contact landlords directly (phone & WhatsApp)
+  * Up to 3 saved search alerts (email/WhatsApp notifications)
+  * Alerts for listings 24+ hours old only (no early access)
 
 #### **Premium Plan (Priority Access)**
 
-* **Cost:** LKR 300–500/month
+* **Cost:** LKR 300/month
 * **Features:**
 
-  * Early access to new listings (see new properties 24 hours before free users)
-  * Unlimited saved search alerts for new listings
-  * Access to exclusive listings
+  * Everything in Free
+  * Early access to new listings (24-hour head start before free users)
+  * Unlimited saved search alerts
+  * Access to exclusive listings (landlord-marked premium listings)
 
 ---
 
 ### **2. Pricing Structure for Landlords**
 
-#### **Basic Listing Plan**
+#### **Free Plan**
 
-* **Cost:** LKR 500/month per listing
+* **Cost:** Free
 * **Features:**
 
-  * List up to 1 property
-  * Basic listing visibility (not featured)
-  * Standard property support
+  * Up to 3 active listings
+  * Direct contact (phone & WhatsApp on listing)
+  * Standard listing visibility (no featured placement)
+  * List on Easy Rent
 
-#### **Premium Listing Plan**
+#### **Basic Plan**
+
+* **Cost:** LKR 500/month
+* **Features:**
+
+  * Up to 5 active listings
+  * Higher search ranking than Free
+  * Direct contact (phone & WhatsApp on listing)
+
+#### **Premium Plan**
 
 * **Cost:** LKR 1,250/month
 * **Features:**
@@ -69,38 +86,50 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
   * Rent comparison & market insights
   * Listing performance insights
   * Faster approval
+  * Custom profile URL (e.g. easyrent.lk/prime-lands)
 
 #### **Agency Plan**
 
 * **Cost:** LKR 3,500/month
 * **Features:**
 
-  * Unlimited listings
+  * Unlimited active listings
   * Featured placement
   * Portfolio dashboard
-  * Bulk renewals
+  * Bulk renewals (extend expiring listings in one action)
   * Priority support
   * Agency badge
+  * Business account (team members)
+
+#### **Boost Add-On**
+
+* **Cost:** LKR 250 per 7 days
+* **Features:**
+
+  * Get more views for any listing for 7 days
+  * Available to all landlords (admin/ops activates after payment)
 
 ---
 
-### **3. Transaction Fees (Optional)**
+### **3. Transaction Fees (Planned)**
 
 #### **Security Deposit Handling**
 
-* **Cost:** 1–2% of the security deposit amount
+* **Cost:** 1–2% of the security deposit amount (planned)
 * **Features:**
 
   * Safe escrow for deposit transactions between renters and landlords
   * Security for both parties
 
+* *Not yet implemented in the platform.*
+
 ---
 
-### **4. Add-On Services**
+### **4. Add-On Services (Planned)**
 
 #### **Tenant Insurance (Optional for Renters)**
 
-* **Cost:** LKR 500–1000/month
+* **Cost:** LKR 500–1000/month (planned)
 * **Features:**
 
   * Coverage for tenant’s personal belongings
@@ -108,7 +137,7 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
 
 #### **Property Maintenance (For Renters & Landlords)**
 
-* **Cost:** LKR 1000–5000 per maintenance request
+* **Cost:** LKR 1000–5000 per maintenance request (planned)
 * **Features:**
 
   * Scheduled repairs for rented properties (plumbing, electrical, etc.)
@@ -116,11 +145,13 @@ The goal is to **monetize from Day 1** by offering a **freemium model** with **p
 
 #### **Furniture Rental (For Renters)**
 
-* **Cost:** LKR 1000–5000/month (depending on furniture)
+* **Cost:** LKR 1000–5000/month (depending on furniture) (planned)
 * **Features:**
 
   * Rent basic furniture (bed, table, chairs, etc.)
   * Flexible rental terms
+
+* *These add-on services are not yet implemented in the platform.*
 
 ---
 
@@ -198,12 +229,12 @@ Offer a **loyalty program** where users earn points for every transaction (e.g.,
 
 ## **Total Revenue Potential in 6 Months (if targeting 5000 users)**
 
-* **Subscription Plans (Landlords):** LKR 1000 x 500 landlords = **LKR 500,000**/month.
-* **Priority Services (Renters):** LKR 300 x 2000 users = **LKR 600,000**/month.
-* **Featured Listings (Landlords):** LKR 500 x 500 landlords = **LKR 250,000**/month.
-* **Transaction Fees (Security Deposits)**: 1% of LKR 10 million = **LKR 100,000**/month.
+* **Landlord Plans:** Mix of Basic (LKR 500), Premium (LKR 1,250), Agency (LKR 3,500). Example: 300 Basic + 150 Premium + 50 Agency ≈ **LKR 462,500**/month.
+* **Renter Premium (LKR 300/month):** 2,000 premium users = **LKR 600,000**/month.
+* **Boost Add-On (LKR 250/7 days):** 200 boosts/month ≈ **LKR 50,000**/month.
+* **Transaction Fees (Security Deposits) (planned):** 1% of LKR 10 million = **LKR 100,000**/month (when implemented).
 
-**Total monthly revenue after 6 months = LKR 1.45 million.**
+**Total monthly revenue after 6 months ≈ LKR 1.2 million** (excluding planned transaction fees).
 
 ---
 
