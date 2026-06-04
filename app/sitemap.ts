@@ -3,6 +3,10 @@ import { listings } from '@/lib/db/schema';
 import { eq, and, or, isNull, gte } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 
+// Generated on-request from the DB — never prerender at build time (the listings
+// query would otherwise run during build and time out).
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -41,6 +45,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/how-to-use`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
     },
     {
       url: `${baseUrl}/privacy-policy`,

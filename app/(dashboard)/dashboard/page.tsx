@@ -3,6 +3,10 @@ import { SignedUpBanner } from '@/components/signed-up-banner';
 import { getOpsDashboardStats } from '@/lib/db/queries';
 import { Home, Shield } from 'lucide-react';
 
+// Authenticated, DB-backed dashboard — never statically prerender (the stats
+// query would run at build time and time out).
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage({
   searchParams,
 }: {

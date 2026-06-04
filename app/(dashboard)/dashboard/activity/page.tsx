@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { getRecentAuditLogs } from '@/lib/db/queries';
 
+// Authenticated, DB-backed page — never statically prerender (avoids build-time
+// DB calls that time out and stale audit data being baked into the page).
+export const dynamic = 'force-dynamic';
+
 type AuditAction =
   | 'listing_created'
   | 'listing_updated'

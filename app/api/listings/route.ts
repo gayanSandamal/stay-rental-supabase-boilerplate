@@ -61,7 +61,6 @@ export async function POST(request: NextRequest) {
       photos,
       contactNumbers, // Array of contact number IDs
       businessAccountId, // New field
-      createdBy,
       exclusive,
     } = body;
 
@@ -211,10 +210,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Add createdBy if provided (only if column exists)
-    if (createdBy) {
-      listingData.createdBy = createdBy;
-    }
+    // Always attribute creation to the authenticated user. Never trust a
+    // client-supplied createdBy — it later grants edit/delete via the
+    // `listing.createdBy === user.id` ownership check.
+    listingData.createdBy = user.id;
 
     // Duplicate listing detection
     if (isFeatureEnabled('enableDuplicateDetection')) {

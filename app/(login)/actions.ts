@@ -165,8 +165,10 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   if (authError) {
     const msg = authError.message?.toLowerCase() ?? '';
     if (msg.includes('already registered')) {
+      // Generic message — do not confirm whether an email is already registered
+      // (avoids account enumeration).
       return {
-        error: 'User with this email already exists. Please sign in instead.',
+        error: 'We couldn\'t create an account with these details. If you already have an account, please sign in or reset your password.',
         email,
         password
       };
@@ -258,8 +260,9 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
           // Orphan auth user from prior failed sign-up - app user exists, treat as success
           createdUser = existingByAuthId;
         } else if (existingByEmail) {
+          // Generic message — do not confirm the email is registered.
           return {
-            error: 'User with this email already exists. Please sign in instead.',
+            error: 'We couldn\'t create an account with these details. If you already have an account, please sign in or reset your password.',
             email,
             password
           };
