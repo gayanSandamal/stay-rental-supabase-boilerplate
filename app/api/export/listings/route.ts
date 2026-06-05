@@ -4,9 +4,11 @@ import { listings, landlords, users } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
 import { eq, desc } from 'drizzle-orm';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { logAudit } from '@/lib/db/audit-logger';
 
 export async function GET(request: NextRequest) {
+  await loadFeatureFlags();
   if (!isFeatureEnabled('enableDataExport')) {
     return NextResponse.json({ error: 'Feature not available' }, { status: 403 });
   }

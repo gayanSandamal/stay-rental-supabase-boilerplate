@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Bell, Trash2, ExternalLink, BookmarkPlus } from 'lucide-react';
 import useSWR from 'swr';
 import type { SavedSearch } from '@/lib/db/schema';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -21,6 +22,7 @@ export function SavedSearchesClient({
   limit: number | null;
   isPremium: boolean;
 }) {
+  const pricingEnabled = useFeatureFlag('enablePricingSection');
   const { data, mutate: revalidate } = useSWR<{
     savedSearches: SavedSearch[];
     count: number;
@@ -122,7 +124,7 @@ export function SavedSearchesClient({
         </div>
       )}
 
-      {!isPremium && currentCount >= (currentLimit ?? 3) && (
+      {pricingEnabled && !isPremium && currentCount >= (currentLimit ?? 3) && (
         <Card className="border-teal-200 bg-teal-50/50">
           <CardContent className="py-4">
             <p className="text-sm text-teal-800">

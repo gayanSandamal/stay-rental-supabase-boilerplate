@@ -27,6 +27,7 @@ const MIGRATIONS = [
   '0022_landlord_included_boosts.sql',
   '0023_sync_featured_with_featured_until.sql',
   '0024_audit_visibility_actions.sql',
+  '0025_feature_flags.sql',
 ];
 
 function splitStatements(sql: string): string[] {

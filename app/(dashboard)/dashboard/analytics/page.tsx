@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { BarChart3, TrendingUp, Eye, Calendar, ArrowRight } from 'lucide-react';
 import { BulkRenewButton } from '@/components/bulk-renew-button';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function AnalyticsPage() {
   const tier = landlord ? getLandlordPlanTier(landlord) : 'free';
 
   if (tier !== 'premium' && tier !== 'agency') {
+    const pricingEnabled = isFeatureEnabled('enablePricingSection');
     return (
       <div className="p-6 max-w-lg mx-auto">
         <Card>
@@ -30,13 +32,15 @@ export default async function AnalyticsPage() {
             <p className="text-slate-600 mb-4">
               Rent comparison, listing performance, and portfolio insights are available on Premium and Agency plans.
             </p>
-            <Link
-              href="/#pricing"
-              className="inline-flex items-center gap-2 text-teal-600 font-medium hover:underline"
-            >
-              Upgrade to Premium
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {pricingEnabled && (
+              <Link
+                href="/#pricing"
+                className="inline-flex items-center gap-2 text-teal-600 font-medium hover:underline"
+              >
+                Upgrade to Premium
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 import {
   Home,
   Building2,
@@ -52,6 +53,8 @@ type Step = {
   icon: ComponentType<{ className?: string }>;
   optional: boolean;
   illustration: () => ReactNode;
+  // Hidden when paid visibility (enablePricingSection) is off.
+  premiumOnly?: boolean;
 };
 
 const RENTER_STEPS: Step[] = [
@@ -99,6 +102,7 @@ const RENTER_STEPS: Step[] = [
     icon: Zap,
     optional: true,
     illustration: PremiumIllustration,
+    premiumOnly: true,
   },
 ];
 
@@ -159,7 +163,18 @@ const LANDLORD_STEPS: Step[] = [
   },
 ];
 
+// Dynamic so the pricing/visibility flag (read in the root layout) gates the
+// Premium steps at request time rather than being baked in at build.
+export const dynamic = 'force-dynamic';
+
 export default function HowToUsePage() {
+  const pricingEnabled = isFeatureEnabled('enablePricingSection');
+  const renterSteps = pricingEnabled
+    ? RENTER_STEPS
+    : RENTER_STEPS.filter((s) => !s.premiumOnly);
+  const landlordSteps = pricingEnabled
+    ? LANDLORD_STEPS
+    : LANDLORD_STEPS.filter((s) => !s.premiumOnly);
   return (
     <>
       {/* ── Keyframe animations ── */}
@@ -443,9 +458,9 @@ export default function HowToUsePage() {
                   {/* Timeline with illustrations */}
                   <div className="px-7 py-7">
                     <ol className="space-y-0">
-                      {RENTER_STEPS.map((step, idx) => {
+                      {renterSteps.map((step, idx) => {
                         const Illus = step.illustration;
-                        const isLast = idx === RENTER_STEPS.length - 1;
+                        const isLast = idx === renterSteps.length - 1;
                         const delay = `${0.1 + idx * 0.15}s`;
                         return (
                           <li key={step.num} className="relative flex gap-4">
@@ -551,9 +566,9 @@ export default function HowToUsePage() {
                   {/* Timeline with illustrations */}
                   <div className="px-7 py-7">
                     <ol className="space-y-0">
-                      {LANDLORD_STEPS.map((step, idx) => {
+                      {landlordSteps.map((step, idx) => {
                         const Illus = step.illustration;
-                        const isLast = idx === LANDLORD_STEPS.length - 1;
+                        const isLast = idx === landlordSteps.length - 1;
                         const delay = `${0.1 + idx * 0.15}s`;
                         return (
                           <li key={step.num} className="relative flex gap-4">

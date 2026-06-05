@@ -12,6 +12,7 @@ import useSWR from 'swr';
 import { Suspense } from 'react';
 import { Shield } from 'lucide-react';
 import Link from 'next/link';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -86,6 +87,7 @@ function ProfileUrlCard() {
     '/api/landlords/me/profile-slug',
     fetcher
   );
+  const pricingEnabled = useFeatureFlag('enablePricingSection');
   const [slugInput, setSlugInput] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -202,11 +204,16 @@ function ProfileUrlCard() {
           </div>
         ) : (
           <p className="text-sm text-gray-500">
-            Custom URLs are a Premium feature.{' '}
-            <Link href="/list-your-property" className="text-teal-700 font-medium hover:underline">
-              Upgrade to Premium
-            </Link>{' '}
-            to get a personalized profile link.
+            Custom URLs are a Premium feature.
+            {pricingEnabled && (
+              <>
+                {' '}
+                <Link href="/list-your-property" className="text-teal-700 font-medium hover:underline">
+                  Upgrade to Premium
+                </Link>{' '}
+                to get a personalized profile link.
+              </>
+            )}
           </p>
         )}
       </CardContent>

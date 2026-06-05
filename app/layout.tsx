@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import { getUser } from '@/lib/db/queries';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { SWRConfig } from 'swr';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
@@ -72,11 +73,15 @@ const websiteJsonLd = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
+  // Refresh the per-instance feature-flag snapshot from the DB (TTL-cached) so
+  // server-rendered pages and downstream isFeatureEnabled() calls see overrides.
+  await loadFeatureFlags();
+
   return (
     <html
       lang="en"

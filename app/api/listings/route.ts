@@ -8,11 +8,13 @@ import { eq, and, inArray, or, sql } from 'drizzle-orm';
 import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
 
 export async function POST(request: NextRequest) {
   try {
+    await loadFeatureFlags();
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || request.headers.get('x-real-ip') || '127.0.0.1';
     const rl = checkRateLimit(ip, 'POST', '/api/listings');
