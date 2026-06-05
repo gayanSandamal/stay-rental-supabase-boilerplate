@@ -295,6 +295,7 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_featured_activated',
   'listing_urgent_activated',
   'listing_bundle_activated',
+  'feature_flag_updated',
 ]);
 
 // Audit log table
@@ -308,6 +309,18 @@ export const auditLogs = pgTable('audit_logs', {
   ipAddress: varchar('ip_address', { length: 45 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
+
+// Feature flag overrides — defaults live in lib/feature-flags.ts; rows here
+// override them at runtime (managed from the back-office settings page).
+export const featureFlags = pgTable('feature_flags', {
+  key: varchar('key', { length: 100 }).primaryKey(),
+  value: text('value').notNull(), // 'true'/'false' for booleans, numeric string for config flags
+  updatedBy: integer('updated_by').references(() => users.id),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type FeatureFlagRow = typeof featureFlags.$inferSelect;
+export type NewFeatureFlagRow = typeof featureFlags.$inferInsert;
 
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({

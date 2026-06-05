@@ -1,5 +1,6 @@
 import { Zap, Droplet, Wifi, ShieldCheck, MapPin, Clock, Wallet } from 'lucide-react';
 import { ScrollReveal } from './scroll-reveal';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const FEATURES = [
   {
@@ -57,6 +58,7 @@ const FEATURES = [
     tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
   },
   {
+    id: 'plans',
     icon: Wallet,
     title: 'Affordable Plans',
     description:
@@ -67,7 +69,16 @@ const FEATURES = [
   },
 ];
 
+// Copy for the "plans" card when paid visibility is off (everything is free).
+const FREE_PLANS_CARD = {
+  title: 'Completely Free',
+  description:
+    'Browse, view, and contact landlords directly — no fees, no subscriptions. Just you and the property owner.',
+  tag: 'No Fees',
+};
+
 export function KeyDifferentiators() {
+  const pricingEnabled = isFeatureEnabled('enablePricingSection');
   return (
     <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
@@ -93,6 +104,10 @@ export function KeyDifferentiators() {
         <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f, i) => {
             const Icon = f.icon;
+            const isPlans = 'id' in f && f.id === 'plans';
+            const title = isPlans && !pricingEnabled ? FREE_PLANS_CARD.title : f.title;
+            const description = isPlans && !pricingEnabled ? FREE_PLANS_CARD.description : f.description;
+            const tag = isPlans && !pricingEnabled ? FREE_PLANS_CARD.tag : f.tag;
             return (
               <div
                 key={i}
@@ -103,11 +118,11 @@ export function KeyDifferentiators() {
                 </div>
 
                 <span className={`inline-block px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full border mb-3 ${f.tagColor}`}>
-                  {f.tag}
+                  {tag}
                 </span>
 
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{f.title}</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">{f.description}</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">{description}</p>
               </div>
             );
           })}

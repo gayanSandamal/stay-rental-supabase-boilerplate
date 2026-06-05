@@ -107,6 +107,10 @@ const steps = [
   },
 ];
 
+// Dynamic so the footer's pricing-gated content (read in the root layout)
+// reflects the runtime feature flag rather than the build-time default.
+export const dynamic = 'force-dynamic';
+
 export default function ListYourPropertyPage() {
   return (
     <>

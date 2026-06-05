@@ -7,6 +7,7 @@ import { PricingSection } from '@/components/pricing-section';
 import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
 import { SiteFooter } from '@/components/site-footer';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -39,7 +40,7 @@ export default async function HomePage() {
 
         <KeyDifferentiators />
         <HowItWorks />
-        <PricingSection />
+        {isFeatureEnabled('enablePricingSection') && <PricingSection />}
         <ForLandlordsSection />
         <Testimonials />
       </main>

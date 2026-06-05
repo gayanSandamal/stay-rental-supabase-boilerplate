@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
 import { ShieldCheck, Mail, Phone, Gift } from 'lucide-react';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const FOOTER_LINKS = {
   Renters: [
@@ -30,6 +31,7 @@ interface SiteFooterProps {
 
 export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
   const isLandlord = variant === 'landlord';
+  const pricingEnabled = isFeatureEnabled('enablePricingSection');
 
   return (
     <footer
@@ -62,10 +64,12 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                   ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
                   : 'Join thousands of renters who found verified, affordable rentals through Easy Rent.'}
               </p>
-              <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
-                <Gift className="h-4 w-4" />
-                Refer a friend — both get LKR 500 off.
-              </p>
+              {pricingEnabled && (
+                <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
+                  <Gift className="h-4 w-4" />
+                  Refer a friend — both get LKR 500 off.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-3 shrink-0">
               <Link

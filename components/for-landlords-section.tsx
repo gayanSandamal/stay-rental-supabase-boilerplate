@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
 import { Shield, Users, ArrowRight } from 'lucide-react';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 export function ForLandlordsSection() {
+  const pricingEnabled = isFeatureEnabled('enablePricingSection');
   return (
     <section className="py-20 lg:py-28 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
@@ -18,7 +20,9 @@ export function ForLandlordsSection() {
               <span className="gradient-text">Easy Rent</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Post unlimited properties free. Need more visibility? Boost from LKR 250.
+              {pricingEnabled
+                ? 'Post unlimited properties free. Need more visibility? Boost from LKR 250.'
+                : 'Post unlimited properties for free.'}
             </p>
           </div>
         </ScrollReveal>
