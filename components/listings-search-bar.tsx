@@ -2,12 +2,13 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, CircleIcon, Plus } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { FilterButtonWithModal } from '@/components/filter-button-with-modal';
 import { UserMenu } from '@/components/user-menu';
 import { SearchInputWithSuggestions } from '@/components/search-input-with-suggestions';
+import { EasyRentMark } from '@/components/brand/easy-rent-logo';
 
 type User = {
   id: number;
@@ -49,10 +50,10 @@ export function ListingsSearchBar({ user }: ListingsSearchBarProps) {
       {/* Top row: Logo, Search Bar, and Sign Up */}
       <div className="flex items-center justify-between gap-4 w-full">
         {/* Logo on the left */}
-        <Link href="/" className="flex items-center flex-shrink-0">
-          <CircleIcon className="h-6 w-6 text-teal-700" />
-          <div className="ml-2 hidden sm:block">
-            <span className="text-lg font-semibold text-gray-900">Easy Rent</span>
+        <Link href="/" className="flex items-center flex-shrink-0 gap-2">
+          <EasyRentMark size={30} title="Easy Rent" className="text-teal-700" />
+          <div className="hidden sm:block">
+            <span className="text-base font-semibold tracking-[0.16em] text-gray-900">EASY RENT</span>
           </div>
         </Link>
 

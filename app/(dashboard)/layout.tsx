@@ -7,6 +7,7 @@ import { Home, List, PlusCircle, BookOpen, Menu, X } from 'lucide-react';
 import { UserMenu } from '@/components/user-menu';
 import { NotificationCenter } from '@/components/notification-center';
 import { EmailUnverifiedBanner } from '@/components/email-unverified-banner';
+import { EasyRentMark } from '@/components/brand/easy-rent-logo';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home', icon: Home },
@@ -40,19 +41,18 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-teal-700 to-teal-900 shadow-lg shadow-teal-800/30 group-hover:scale-105 transition-transform duration-200">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path d="M3 9.5L12 3l9 6.5V21H3V9.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="rgba(255,255,255,0.2)" />
-                <rect x="9" y="14" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-            <div>
-              <span className={`text-lg font-bold tracking-tight transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white' : 'text-slate-900'}`}>
-                Easy<span className="text-teal-700">Rent</span>
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <EasyRentMark
+              size={36}
+              title="Easy Rent"
+              className={`shrink-0 transition-transform duration-200 group-hover:scale-105 ${isHeroPage && !scrolled ? 'text-white' : 'text-teal-700'}`}
+            />
+            <div className="leading-none">
+              <span className={`block text-[15px] font-semibold tracking-[0.2em] transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white' : 'text-slate-900'}`}>
+                EASY RENT
               </span>
-              <span className={`hidden sm:block text-[10px] font-medium leading-none transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white/60' : 'text-slate-500'}`}>
-                Verified Rentals · Sri Lanka
+              <span className={`hidden sm:block mt-1 text-[9px] font-medium tracking-[0.22em] leading-none transition-colors duration-300 ${isHeroPage && !scrolled ? 'text-white/55' : 'text-slate-500'}`}>
+                VERIFIED RENTALS · SRI LANKA
               </span>
             </div>
           </Link>
