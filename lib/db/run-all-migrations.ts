@@ -28,6 +28,7 @@ const MIGRATIONS = [
   '0023_sync_featured_with_featured_until.sql',
   '0024_audit_visibility_actions.sql',
   '0025_feature_flags.sql',
+  '0026_enable_rls.sql',
 ];
 
 function splitStatements(sql: string): string[] {
