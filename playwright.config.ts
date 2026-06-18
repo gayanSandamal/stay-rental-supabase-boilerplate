@@ -35,5 +35,7 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    // M2 browser matrix — opt-in (webkit ≈ Safari) via `--project=webkit`.
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
 });

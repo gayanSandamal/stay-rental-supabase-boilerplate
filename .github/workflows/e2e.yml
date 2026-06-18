@@ -1,0 +1,67 @@
+name: E2E (Playwright)
+
+# Runs the launch-plan E2E suite against a deployed target.
+#   • Manual run (workflow_dispatch): pick a target URL; defaults to STAGING_URL.
+#   • Set the four seed-credential secrets to unlock the login-gated + mutating
+#     suites; without them those specs self-skip (public/SEO/security still run).
+#
+# Required repo secrets for the full suite:
+#   STAGING_URL, ADMIN_EMAIL/ADMIN_PASSWORD, OPS_EMAIL/OPS_PASSWORD,
+#   LANDLORD_EMAIL/LANDLORD_PASSWORD, TENANT_EMAIL/TENANT_PASSWORD
+#
+# IMPORTANT: point this only at a dedicated staging/preview deploy with its own
+# Supabase project + seeded test accounts — never at a production data store,
+# and never at the local BizAssist database.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target base URL (defaults to STAGING_URL secret)'
+        required: false
+        type: string
+      allow_mutation:
+        description: 'Run mutating cases (create listing, toggle flags)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: ${{ inputs.base_url || secrets.STAGING_URL }}
+      ALLOW_MUTATION: ${{ inputs.allow_mutation && '1' || '' }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      OPS_EMAIL: ${{ secrets.OPS_EMAIL }}
+      OPS_PASSWORD: ${{ secrets.OPS_PASSWORD }}
+      LANDLORD_EMAIL: ${{ secrets.LANDLORD_EMAIL }}
+      LANDLORD_PASSWORD: ${{ secrets.LANDLORD_PASSWORD }}
+      TENANT_EMAIL: ${{ secrets.TENANT_EMAIL }}
+      TENANT_PASSWORD: ${{ secrets.TENANT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run E2E suite
+        run: pnpm exec playwright test --project=desktop --project=mobile
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/.report
+          retention-days: 14

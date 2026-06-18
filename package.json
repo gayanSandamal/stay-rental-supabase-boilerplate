@@ -19,7 +19,10 @@
     "db:set-admin": "npx tsx scripts/set-admin.ts",
     "db:hard-delete-user": "npx tsx scripts/hard-delete-user.ts",
     "db:studio": "drizzle-kit studio",
-    "storage:setup": "npx tsx lib/db/setup-storage.ts"
+    "storage:setup": "npx tsx lib/db/setup-storage.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:public": "playwright test public seo security",
+    "test:e2e:report": "playwright show-report e2e/.report"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
