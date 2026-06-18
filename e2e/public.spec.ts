@@ -45,6 +45,30 @@ test.describe('Public marketplace', () => {
     // Record the status as evidence rather than hard-failing the render check.
     console.log('not-found HTTP status:', resp?.status());
   });
+
+  test('C6 listing detail shows rent, location and resilience fields', async ({ page }) => {
+    await page.goto('/listings');
+    const firstCard = page.locator('a[href^="/listings/"]').first();
+    test.skip((await firstCard.count()) === 0, 'no active listings on target to open');
+    await firstCard.click();
+    await expect(page).toHaveURL(/\/listings\/[^/]+$/);
+    // LKR price is a marketplace invariant; SL resilience fields are first-class.
+    await expect(page.getByText(/LKR|Rs\.?/i).first()).toBeVisible();
+    await expect(page.getByText(/power|water|fiber|backup/i).first()).toBeVisible();
+  });
+
+  test('C7 contact reveal exposes phone/WhatsApp to anon visitor', async ({ page }) => {
+    await page.goto('/listings');
+    const firstCard = page.locator('a[href^="/listings/"]').first();
+    test.skip((await firstCard.count()) === 0, 'no active listings on target to open');
+    await firstCard.click();
+    const reveal = page.getByRole('button', { name: /contact|show (number|phone)|whatsapp|call/i }).first();
+    if (await reveal.count()) await reveal.click();
+    // A tel: or WhatsApp deep link must appear (no in-app messaging product).
+    await expect(
+      page.locator('a[href^="tel:"], a[href*="wa.me"], a[href*="whatsapp"]').first()
+    ).toBeVisible();
+  });
 });
 
 test.describe('Responsive (mobile project)', () => {

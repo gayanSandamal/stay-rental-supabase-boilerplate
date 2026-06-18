@@ -35,6 +35,21 @@ test.describe('Landlord', () => {
     await expect(page.getByRole('heading', { name: /business accounts|team members/i })).toHaveCount(0);
   });
 
+  test('H2 landlord cannot self-activate visibility (403)', async ({ page }) => {
+    await login(page, landlord!.email, landlord!.password);
+    // page.request inherits the logged-in session cookies. Grab any listing id
+    // from the public index; the admin/ops-only gate fires regardless of owner,
+    // and a rejected POST mutates nothing.
+    await page.goto('/listings');
+    const href = await page.locator('a[href^="/listings/"]').first().getAttribute('href');
+    const id = href?.split('/').pop();
+    test.skip(!id, 'no listing id available on target to probe');
+    for (const action of ['boost', 'feature', 'urgent', 'bundle']) {
+      const resp = await page.request.post(`/api/listings/${id}/${action}`);
+      expect([401, 403], `landlord POST ${action}`).toContain(resp.status());
+    }
+  });
+
   test('F-create new listing starts as pending [mutates — local/staging only]', async ({ page }) => {
     test.skip(!process.env.ALLOW_MUTATION, 'Set ALLOW_MUTATION=1 to run create/mutation cases');
     await login(page, landlord!.email, landlord!.password);
