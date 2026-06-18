@@ -42,3 +42,10 @@ postgres_data/
 
 # Uploaded images
 /public/uploads/
+
+# Playwright
+e2e/.artifacts/
+e2e/.report/
+
+# Claude local settings
+.claude/settings.local.json
