@@ -74,6 +74,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // landlordId is required — without this guard the landlord lookup below
+    // throws UNDEFINED_VALUE and surfaces as a 500. The dashboard form always
+    // injects it (new-listing page auto-creates the landlord record).
+    if (!landlordId || isNaN(Number(landlordId))) {
+      return NextResponse.json(
+        { error: 'Missing or invalid landlordId' },
+        { status: 400 }
+      );
+    }
+
     // Validate contact numbers
     if (!contactNumbers || !Array.isArray(contactNumbers) || contactNumbers.length === 0) {
       return NextResponse.json(
