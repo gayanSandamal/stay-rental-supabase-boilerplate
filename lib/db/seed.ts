@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { db } from './drizzle';
 import { users, landlords, listings } from './schema';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -33,6 +34,9 @@ async function createUserIfNotExists(
       throw new Error(`Failed to create or find auth user for ${email}: ${error?.message ?? 'unknown'}`);
     }
 
+    // Upsert: the auth trigger (migration 0020) may have already created this
+    // row with the default 'tenant' role the moment createUser ran — a plain
+    // insert would conflict and leave the role drifted.
     [appUser] = await db
       .insert(users)
       .values({
@@ -42,9 +46,22 @@ async function createUserIfNotExists(
         name,
         phone,
       })
+      .onConflictDoUpdate({
+        target: users.email,
+        set: { authUserId, role, name, phone, updatedAt: new Date() },
+      })
       .returning();
 
     console.log(`User created: ${email}`);
+  } else if (appUser.role !== role || !appUser.name) {
+    // Repair drift from earlier seeds: the trigger-created row defaults to
+    // 'tenant', which locks admin/ops out of the back-office.
+    [appUser] = await db
+      .update(users)
+      .set({ role, name: appUser.name ?? name, updatedAt: new Date() })
+      .where(eq(users.id, appUser.id))
+      .returning();
+    console.log(`User existed with drifted role — repaired to '${role}': ${email}`);
   } else {
     console.log(`User already exists: ${email}`);
   }
