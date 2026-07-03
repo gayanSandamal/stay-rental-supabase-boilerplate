@@ -10,11 +10,11 @@ import { Eye } from 'lucide-react';
 export default async function BackOfficeListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ businessAccountId?: string }> | { businessAccountId?: string };
+  searchParams: Promise<{ businessAccountId?: string }>;
 }) {
   await requireBackOfficeAccess();
 
-  const resolvedParams = searchParams instanceof Promise ? await searchParams : searchParams;
+  const resolvedParams = await searchParams;
   const businessAccountId = resolvedParams.businessAccountId 
     ? Number(resolvedParams.businessAccountId) 
     : null;

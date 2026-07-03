@@ -109,7 +109,7 @@ These are product decisions encoded in the code. Test cases assume the **launch*
 
 | ID | Pri | Title | Steps | Expected |
 |---|---|---|---|---|
-| E1 | P0 | Tenant cannot access dashboard | As tenant, visit `/dashboard` | Redirected (no dashboard) until upgraded to landlord |
+| E1 | P0 | Tenant may access dashboard (by design) | As tenant, visit `/dashboard` | Loads — middleware only gates unauthenticated users; per USER_MANUAL tenants can access `/dashboard` but primarily use `/listings`. The enforced tenant gate is `/back-office` (E2). Automated in `e2e/tenant.spec.ts` |
 | E2 | P0 | Tenant cannot access back-office | As tenant, visit `/back-office` | Redirected; no back-office UI (verify in-browser, not just HTTP — PPR returns a 200 shell, see LAUNCH_READINESS ⚪) |
 | E3 | P1 | Save a search | As tenant, build filters and save the search | Saved search persists; appears in `/dashboard/saved-searches` (after upgrade) or tenant-visible list |
 | E4 | P1 | Saved-search alert emails | Trigger `saved-search-alerts` cron (with `CRON_SECRET`) after a matching listing goes active | Tenant receives alert email (gated by `enableLeadNurturing`) |

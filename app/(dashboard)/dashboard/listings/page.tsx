@@ -12,11 +12,11 @@ import { eq } from 'drizzle-orm';
 // Force dynamic rendering to avoid build-time issues
 export const dynamic = 'force-dynamic';
 
-export default async function ListingsPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
+export default async function ListingsPage(props: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // Next 15: searchParams is a Promise and must be awaited before property access.
+  const searchParams = await props.searchParams;
   const user = await getUser();
   
   if (!user) {

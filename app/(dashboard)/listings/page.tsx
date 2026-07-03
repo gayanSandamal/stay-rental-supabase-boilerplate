@@ -23,9 +23,9 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }): Promise<Metadata> {
-  const params = searchParams instanceof Promise ? await searchParams : searchParams;
+  const params = await searchParams;
   const city = typeof params.city === 'string' ? params.city : undefined;
   const propertyType = typeof params.propertyType === 'string' ? params.propertyType : undefined;
   const minPrice = params.minPrice ? parseInt(String(params.minPrice)) : undefined;
@@ -74,11 +74,11 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListingsPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
+export default async function ListingsPage(props: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // Next 15: searchParams is a Promise and must be awaited before property access.
+  const searchParams = await props.searchParams;
   // Load initial batch of listings (first page)
   const initialLimit = 20;
   const filters: any = { limit: initialLimit };
