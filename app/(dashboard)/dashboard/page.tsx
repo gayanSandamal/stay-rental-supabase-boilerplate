@@ -7,12 +7,12 @@ import { Home, Shield } from 'lucide-react';
 // query would run at build time and time out).
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: { [key: string]: string | string[] | undefined };
+export default async function DashboardPage(props: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const stats = await getOpsDashboardStats();
+  // Next 15: searchParams is a Promise and must be awaited before property access.
+  const searchParams = await props.searchParams;
   const showSignedUpBanner = searchParams?.signed_up === '1';
 
   return (
