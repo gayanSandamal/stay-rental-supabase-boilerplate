@@ -33,7 +33,7 @@ function FloatingCard({
   );
 }
 
-export function HeroSection() {
+export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
 
@@ -76,14 +76,14 @@ export function HeroSection() {
         />
       <FloatingCard
         icon={Building2}
-        label="Across Sri Lanka"
-        value="150+ Properties"
+        label={foundingMode ? 'Founding Landlords' : 'Across Sri Lanka'}
+        value={foundingMode ? 'List Free, Forever' : '150+ Properties'}
         className="top-[18%] right-[5%] animate-float-reverse"
         />
       <FloatingCard
         icon={Clock}
-        label="Avg. response"
-        value="Under 24h"
+        label={foundingMode ? 'Direct contact' : 'Avg. response'}
+        value={foundingMode ? 'Phone & WhatsApp' : 'Under 24h'}
         className="bottom-[28%] right-[7%] animate-float-slow [animation-delay:2s]"
       />
 
@@ -93,7 +93,9 @@ export function HeroSection() {
         <div className="flex justify-center mb-6">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal-500/25 text-teal-200 border border-teal-400/35 backdrop-blur-sm">
             <ShieldCheck className="h-3.5 w-3.5" />
-            Sri Lanka&apos;s #1 Verified Rental Platform
+            {foundingMode
+              ? 'Sri Lanka’s Verified Rental Platform — Now Launching'
+              : 'Sri Lanka’s #1 Verified Rental Platform'}
           </span>
         </div>
 
