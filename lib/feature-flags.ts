@@ -33,6 +33,12 @@ export const featureFlagDefaults = {
   // plan" CTA are hidden. Flip ON when paid visibility launches.
   enablePricingSection: false,
 
+  // While ON the public site shows honest founding-stage copy instead of
+  // social-proof claims (property counts, ratings, testimonials) that real
+  // usage does not yet back. Switch OFF once the platform has genuine numbers —
+  // and make sure the claims are updated to the real figures at that point.
+  showFoundingStageCopy: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
 } as const;
@@ -130,6 +136,13 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     group: 'Marketing',
     appWide: true,
     public: true,
+  },
+  showFoundingStageCopy: {
+    label: 'Founding-stage copy',
+    description: 'Show honest founding-stage marketing copy instead of social-proof stats (property counts, ratings, testimonials). Switch off only when real usage backs those claims.',
+    group: 'Marketing',
+    appWide: true,
+    public: false,
   },
   listingExpirationDays: {
     label: 'Listing expiration (days)',

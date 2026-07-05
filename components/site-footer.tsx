@@ -61,9 +61,13 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                 )}
               </h3>
               <p className="text-slate-400 mt-2 text-base max-w-md">
-                {isLandlord
-                  ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
-                  : 'Join thousands of renters who found verified, affordable rentals through Easy Rent.'}
+                {isFeatureEnabled('showFoundingStageCopy')
+                  ? isLandlord
+                    ? 'List free as a founding landlord — we verify every listing and tenants contact you directly.'
+                    : 'Every listing is verified and every contact number checked before it goes live. No scams, no surprises.'
+                  : isLandlord
+                    ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
+                    : 'Join thousands of renters who found verified, affordable rentals through Easy Rent.'}
               </p>
               {pricingEnabled && (
                 <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">

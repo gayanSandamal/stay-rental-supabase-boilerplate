@@ -6,6 +6,7 @@ import { HowItWorks } from '@/components/how-it-works';
 import { PricingSection } from '@/components/pricing-section';
 import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
+import { FoundingLandlordCta } from '@/components/founding-landlord-cta';
 import { SiteFooter } from '@/components/site-footer';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 
@@ -21,10 +22,14 @@ export const metadata = {
 };
 
 export default async function HomePage() {
+  // Founding-stage copy: honest claims only, until real usage backs the
+  // social-proof numbers (toggle in Back Office → Settings).
+  const foundingMode = isFeatureEnabled('showFoundingStageCopy');
+
   return (
     <>
       <main>
-        <HeroSection />
+        <HeroSection foundingMode={foundingMode} />
 
         <Suspense fallback={
           <div className="py-14 bg-white">
@@ -42,7 +47,7 @@ export default async function HomePage() {
         <HowItWorks />
         {isFeatureEnabled('enablePricingSection') && <PricingSection />}
         <ForLandlordsSection />
-        <Testimonials />
+        {foundingMode ? <FoundingLandlordCta /> : <Testimonials />}
       </main>
 
       <SiteFooter variant="default" />
