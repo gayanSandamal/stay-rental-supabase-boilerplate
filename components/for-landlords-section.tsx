@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
 import { Shield, Users, ArrowRight } from 'lucide-react';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { WhatsAppConciergeButton } from './whatsapp-concierge-button';
 
 export function ForLandlordsSection() {
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
+  const conciergeEnabled = isFeatureEnabled('enableWhatsAppConcierge');
   return (
     <section className="py-20 lg:py-28 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
@@ -53,7 +55,7 @@ export function ForLandlordsSection() {
         </ScrollReveal>
 
         <ScrollReveal>
-          <div className="text-center">
+          <div className="flex flex-wrap justify-center items-center gap-4">
             <Link
               href="/list-your-property"
               className="btn-amber-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-amber-800/25 hover:opacity-95 transition-opacity"
@@ -61,6 +63,14 @@ export function ForLandlordsSection() {
               Learn More & Get Started
               <ArrowRight className="h-4 w-4" />
             </Link>
+            {conciergeEnabled && (
+              <WhatsAppConciergeButton
+                variant="light"
+                source="from homepage landlord section"
+                label="WhatsApp us 6 photos — we list it for you"
+                className="px-8 py-3.5 rounded-xl text-base"
+              />
+            )}
           </div>
         </ScrollReveal>
       </div>

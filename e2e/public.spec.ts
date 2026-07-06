@@ -71,6 +71,43 @@ test.describe('Public marketplace', () => {
   });
 });
 
+test.describe('Landlord conversion surfaces', () => {
+  // Concierge assertions only make sense when the target env configures the
+  // WhatsApp number (the CTAs hide themselves otherwise, by design).
+  const conciergeConfigured = !!process.env.NEXT_PUBLIC_WHATSAPP_SUPPORT;
+
+  test('list-your-property renders FAQ + two-ways-to-list', async ({ page }) => {
+    await page.goto('/list-your-property');
+    await expect(page.getByText(/two ways to list/i).first()).toBeVisible();
+    await expect(page.getByText(/is it really free\?/i).first()).toBeVisible();
+    await expect(page.getByText(/60-second form/i).first()).toBeVisible();
+  });
+
+  test('list-your-property concierge wa.me CTA carries prefilled message', async ({ page }) => {
+    test.skip(!conciergeConfigured, 'NEXT_PUBLIC_WHATSAPP_SUPPORT not set on target');
+    await page.goto('/list-your-property');
+    const wa = page.locator('a[href*="wa.me"]').first();
+    await expect(wa).toBeVisible();
+    const href = await wa.getAttribute('href');
+    expect(href).toContain(encodeURIComponent('I want to list my property'));
+  });
+
+  test('empty listings results recruit landlords', async ({ page }) => {
+    await page.goto('/listings?minPrice=999999999');
+    await expect(page.getByText(/no listings found/i).first()).toBeVisible();
+    await expect(page.getByText(/own a property in/i).first()).toBeVisible();
+    // Quick-list (or fallback) CTA present
+    await expect(
+      page.locator('a[href="/dashboard/listings/quick-new"], a[href="/list-your-property"]').first()
+    ).toBeVisible();
+  });
+
+  test('anon quick-new visit bounces to sign-in preserving redirect', async ({ page }) => {
+    await page.goto('/dashboard/listings/quick-new');
+    await expect(page).toHaveURL(/\/sign-in\?redirect=/);
+  });
+});
+
 test.describe('Responsive (mobile project)', () => {
   test('M1 homepage usable on mobile width', async ({ page }) => {
     await page.goto('/');

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { ShieldCheck, Eye, MessageCircle, ArrowRight } from 'lucide-react';
 import { ScrollReveal } from './scroll-reveal';
+import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getConciergeWhatsAppLink } from '@/lib/site-config';
 
 /**
  * Founding-stage replacement for the Testimonials section (gated by the
@@ -29,6 +31,12 @@ const PROMISES = [
 ];
 
 export function FoundingLandlordCta() {
+  // When the concierge is live, "send us your photos" becomes the real
+  // WhatsApp deep link instead of routing through the landing page.
+  const conciergeLink = isFeatureEnabled('enableWhatsAppConcierge')
+    ? getConciergeWhatsAppLink('from homepage founding section')
+    : null;
+
   return (
     <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px divider-gradient" />
@@ -72,13 +80,25 @@ export function FoundingLandlordCta() {
               Have a property to rent? We&apos;ll help you create your first listing —
               send us your photos and we&apos;ll handle the rest.
             </p>
-            <Link
-              href="/list-your-property"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold shadow-md transition-colors shrink-0"
-            >
-              List your property free
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {conciergeLink ? (
+              <a
+                href={conciergeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md transition-colors shrink-0"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp us your photos
+              </a>
+            ) : (
+              <Link
+                href="/list-your-property"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold shadow-md transition-colors shrink-0"
+              >
+                List your property free
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </div>
         </ScrollReveal>
       </div>

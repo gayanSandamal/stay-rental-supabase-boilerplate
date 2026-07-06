@@ -19,9 +19,17 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  // Preserve the intended destination so sign-in/sign-up can bounce back
+  // (e.g. anonymous visitor clicking "List in 60 seconds" → quick-list form).
+  const signInWithRedirect = () => {
+    const signIn = new URL('/sign-in', request.url);
+    signIn.searchParams.set('redirect', pathname + request.nextUrl.search);
+    return NextResponse.redirect(signIn);
+  };
+
   if (!supabaseUrl || !supabaseKey) {
     if (isProtectedRoute) {
-      return NextResponse.redirect(new URL('/sign-in', request.url));
+      return signInWithRedirect();
     }
     return response;
   }
@@ -44,7 +52,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (isProtectedRoute && !user) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+    return signInWithRedirect();
   }
 
   return response;
