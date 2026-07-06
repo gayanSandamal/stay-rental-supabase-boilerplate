@@ -1,14 +1,17 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { ListingCard } from './listing-card';
 import { Listing } from '@/lib/db/schema';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Grid, List, Map, Loader2 } from 'lucide-react';
+import { Grid, List, Map, Loader2, ArrowRight } from 'lucide-react';
 import { SaveSearchButton } from '@/components/save-search-button';
 import { useRouter } from 'next/navigation';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
+import { WhatsAppConciergeButton } from '@/components/whatsapp-concierge-button';
 
 type ViewMode = 'grid' | 'list' | 'map';
 
@@ -20,6 +23,8 @@ interface EnhancedListingsGridProps {
 export function EnhancedListingsGrid({ initialListings, showPublisher = true }: EnhancedListingsGridProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const quickListEnabled = useFeatureFlag('enableQuickList');
+  const conciergeEnabled = useFeatureFlag('enableWhatsAppConcierge');
   const [listings, setListings] = useState<Listing[]>(initialListings);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -325,6 +330,43 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
             >
               Clear All Filters
             </Button>
+
+            {/* Landlord recruitment — an empty result is a supply opportunity */}
+            <div className="mt-8 pt-6 border-t border-slate-200 text-left sm:text-center">
+              <p className="text-sm font-semibold text-slate-900 mb-1">
+                Own a property in {searchParams.get('city') || 'Sri Lanka'}?
+              </p>
+              <p className="text-sm text-slate-600 mb-4">
+                Be the first to list it here — free, verified, and tenants contact
+                you directly.
+              </p>
+              <div className="flex flex-wrap gap-3 sm:justify-center">
+                {quickListEnabled ? (
+                  <Link
+                    href="/dashboard/listings/quick-new"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition-colors"
+                  >
+                    List it in 60 seconds
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : (
+                  <Link
+                    href="/list-your-property"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition-colors"
+                  >
+                    List your property free
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
+                {conciergeEnabled && (
+                  <WhatsAppConciergeButton
+                    variant="compact"
+                    source="from empty listings results"
+                    label="WhatsApp us — we list it for you"
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </Card>
       )}

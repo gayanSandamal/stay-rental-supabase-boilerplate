@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
 import { ShieldCheck, Mail, Phone, Gift } from 'lucide-react';
+import { formatWhatsAppDisplay, getWhatsAppSupportNumber } from '@/lib/site-config';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { EasyRentMark } from '@/components/brand/easy-rent-logo';
 
@@ -114,10 +115,19 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <Mail className="h-3.5 w-3.5" />
               <span>hello@easyrent.lk</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-              <Phone className="h-3.5 w-3.5" />
-              <span>+94 77 000 0000</span>
-            </div>
+            {formatWhatsAppDisplay() && (
+              <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+                <Phone className="h-3.5 w-3.5" />
+                <a
+                  href={`https://wa.me/${getWhatsAppSupportNumber()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-emerald-400 transition-colors"
+                >
+                  {formatWhatsAppDisplay()} (WhatsApp)
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Links */}

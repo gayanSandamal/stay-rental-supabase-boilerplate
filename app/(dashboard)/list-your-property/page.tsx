@@ -8,10 +8,16 @@ import {
   ArrowRight,
   Phone,
   Building2,
+  Zap,
+  MessageCircle,
+  Gift,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import { ScrollReveal } from '@/components/scroll-reveal';
 import { SiteFooter } from '@/components/site-footer';
+import { WhatsAppConciergeButton } from '@/components/whatsapp-concierge-button';
+import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getConciergeWhatsAppLink } from '@/lib/site-config';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -107,13 +113,78 @@ const steps = [
   },
 ];
 
-// Dynamic so the footer's pricing-gated content (read in the root layout)
-// reflects the runtime feature flag rather than the build-time default.
+// Objection-handling FAQ. `conciergeOnly` entries render only when the
+// WhatsApp concierge is enabled + configured.
+function buildFaqs(conciergeAvailable: boolean) {
+  const faqs = [
+    {
+      q: 'Is it really free?',
+      a: 'Yes. Listing is free — no listing fees, no commissions, no charges when a tenant contacts you. Founding landlords keep free listings for good.',
+    },
+    {
+      q: 'Do I need professional photos?',
+      a: conciergeAvailable
+        ? 'No — clear phone photos work fine. Or WhatsApp us 6 photos and we will prepare the listing for you.'
+        : 'No — clear phone photos work fine. Good light and a tidy room matter more than equipment.',
+    },
+    {
+      q: 'Who talks to the tenants?',
+      a: 'You do, directly. Your verified phone number and WhatsApp appear on the listing — there is no middleman and we never sit between you and a tenant.',
+    },
+    {
+      q: 'I already posted on ikman or Facebook. Why list here too?',
+      a: 'It costs nothing and reaches renters who specifically want verified, scam-free listings. Your listing stays active for 30 days with no daily re-posting, and verification badges make your property stand out.',
+    },
+    {
+      q: 'How long until my listing goes live?',
+      a: 'After our team verifies it — we call or WhatsApp you to confirm the details first. Verified listings earn a badge tenants can trust.',
+    },
+    {
+      q: 'Can I list more than one property?',
+      a: 'Yes — unlimited properties, all free. Agencies and portfolio landlords can also get a business account to manage listings as a team.',
+    },
+  ];
+  if (conciergeAvailable) {
+    faqs.push({
+      q: 'Can you create the listing for me?',
+      a: 'Yes. WhatsApp us 6 photos and the address, and our team prepares and publishes the listing for you — free.',
+    });
+  }
+  return faqs;
+}
+
+// Flag-gated page — copy and sections must reflect back-office toggles
+// without a rebuild.
 export const dynamic = 'force-dynamic';
 
 export default function ListYourPropertyPage() {
+  const founding = isFeatureEnabled('showFoundingStageCopy');
+  const quickListEnabled = isFeatureEnabled('enableQuickList');
+  const conciergeAvailable =
+    isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink();
+
+  // Anonymous visitors sign up first; the redirect preserves the funnel.
+  const primaryCtaHref = quickListEnabled
+    ? '/sign-up?redirect=/dashboard/listings/quick-new'
+    : '/sign-up';
+
+  const faqs = buildFaqs(conciergeAvailable);
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <main>
         {/* Hero — matches landing page style but landlord-focused */}
         <section
@@ -145,18 +216,27 @@ export default function ListYourPropertyPage() {
               <span className="gradient-text">Easy Rent</span>
             </h1>
             <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
-              Reach thousands of verified tenants looking for mid-to-long-term
-              rentals in Sri Lanka. Free to list, hassle-free management.
+              {founding
+                ? 'Free to list, personally verified, and tenants contact you directly. No middlemen, no commissions, no scams.'
+                : 'Reach thousands of verified tenants looking for mid-to-long-term rentals in Sri Lanka. Free to list, hassle-free management.'}
             </p>
 
             <div className="flex flex-wrap justify-center gap-4">
               <Link
-                href="/sign-up"
+                href={primaryCtaHref}
                 className="btn-primary-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-teal-800/25"
               >
                 Get Started Free
                 <ArrowRight className="h-5 w-5" />
               </Link>
+              {conciergeAvailable && (
+                <WhatsAppConciergeButton
+                  variant="dark"
+                  source="from list-your-property hero"
+                  label="WhatsApp us 6 photos — we list it for you"
+                  className="px-8 py-3.5 rounded-xl text-base"
+                />
+              )}
               <Link
                 href="/sign-in"
                 className="px-8 py-3.5 rounded-xl text-slate-100 font-semibold text-base border border-white/30 hover:border-white/50 hover:text-white hover:bg-white/10 transition-all duration-200"
@@ -181,6 +261,86 @@ export default function ListYourPropertyPage() {
             </svg>
           </div>
         </section>
+
+        {/* Two ways to list — collapses when both mechanisms are off */}
+        {(quickListEnabled || conciergeAvailable) && (
+          <section className="py-16 bg-white relative overflow-hidden">
+            <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <ScrollReveal>
+                <div className="text-center mb-10">
+                  <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
+                    Two Ways to List —{' '}
+                    <span className="gradient-text">Both Free</span>
+                  </h2>
+                  <p className="mt-3 text-lg text-slate-600 max-w-xl mx-auto">
+                    Pick whichever is easier. Either way, we verify before it goes live.
+                  </p>
+                </div>
+              </ScrollReveal>
+
+              <ScrollReveal stagger className="grid md:grid-cols-2 gap-7">
+                {quickListEnabled && (
+                  <div className="bg-white rounded-2xl p-8 border border-slate-200/80 shadow-sm card-hover card-glow flex flex-col">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center shadow-md mb-5">
+                      <Zap className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
+                      The 60-second form
+                    </h3>
+                    <p className="text-slate-600 text-sm leading-relaxed flex-1 mb-6">
+                      Six quick fields — title, city, address, bedrooms, rent, and
+                      your phone number. We call or WhatsApp you to confirm the
+                      details and photos before it goes live.
+                    </p>
+                    <Link
+                      href={primaryCtaHref}
+                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold shadow-md transition-colors"
+                    >
+                      Start the 60-second form
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                )}
+                {conciergeAvailable && (
+                  <div className="bg-white rounded-2xl p-8 border border-slate-200/80 shadow-sm card-hover card-glow flex flex-col">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center shadow-md mb-5">
+                      <MessageCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
+                      The WhatsApp concierge
+                    </h3>
+                    <p className="text-slate-600 text-sm leading-relaxed flex-1 mb-6">
+                      No forms at all. WhatsApp us 6 photos and the address — our
+                      team prepares, verifies, and publishes the listing for you.
+                      You just approve it.
+                    </p>
+                    <WhatsAppConciergeButton
+                      variant="light"
+                      source="from two-ways-to-list"
+                      label="WhatsApp us your photos"
+                      className="justify-center"
+                    />
+                  </div>
+                )}
+              </ScrollReveal>
+
+              {/* Founding-offer strip — honest perks, no prices */}
+              {founding && (
+                <ScrollReveal>
+                  <div className="mt-10 flex items-start sm:items-center gap-4 py-5 px-6 rounded-2xl bg-amber-50 border border-amber-200">
+                    <Gift className="h-6 w-6 text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
+                    <p className="text-sm text-amber-900">
+                      <strong>Founding landlord perks:</strong> free listings
+                      forever, and a free week of Featured placement when featured
+                      spots launch. Early landlords set the standard — and get the
+                      spotlight first.
+                    </p>
+                  </div>
+                </ScrollReveal>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Benefits — KeyDifferentiators style */}
         <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
@@ -259,6 +419,44 @@ export default function ListYourPropertyPage() {
           </div>
         </section>
 
+        {/* FAQ — objection handling */}
+        <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
+          <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
+          <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ScrollReveal>
+              <div className="text-center mb-12">
+                <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-amber-700 bg-amber-50 border border-amber-200 rounded-full uppercase mb-4">
+                  Common Questions
+                </span>
+                <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
+                  Before You <span className="gradient-text">Ask</span>
+                </h2>
+              </div>
+            </ScrollReveal>
+
+            <ScrollReveal>
+              <div className="space-y-3">
+                {faqs.map((faq) => (
+                  <details
+                    key={faq.q}
+                    className="group bg-white rounded-2xl border border-slate-200/80 shadow-sm open:shadow-md transition-shadow"
+                  >
+                    <summary className="cursor-pointer select-none list-none px-6 py-4 flex items-center justify-between gap-4 text-slate-900 font-semibold">
+                      {faq.q}
+                      <span className="text-teal-700 transition-transform duration-200 group-open:rotate-45 text-xl leading-none">
+                        +
+                      </span>
+                    </summary>
+                    <p className="px-6 pb-5 text-slate-600 text-sm leading-relaxed">
+                      {faq.a}
+                    </p>
+                  </details>
+                ))}
+              </div>
+            </ScrollReveal>
+          </div>
+        </section>
+
         {/* CTA */}
         <section
           className="py-20"
@@ -273,16 +471,27 @@ export default function ListYourPropertyPage() {
                 Ready to Find Your Next Tenant?
               </h2>
               <p className="text-slate-300 mb-8 text-lg max-w-xl mx-auto">
-                Join hundreds of landlords who trust Easy Rent to manage their
-                listings and find qualified tenants.
+                {founding
+                  ? "Be one of the first landlords on Sri Lanka's most transparent rental platform — free, verified, direct."
+                  : 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'}
               </p>
-              <Link
-                href="/sign-up"
-                className="btn-amber-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-amber-800/25"
-              >
-                <CheckCircle className="h-5 w-5" />
-                List Your Property Now
-              </Link>
+              <div className="flex flex-wrap justify-center gap-4">
+                <Link
+                  href={primaryCtaHref}
+                  className="btn-amber-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-amber-800/25"
+                >
+                  <CheckCircle className="h-5 w-5" />
+                  List Your Property Now
+                </Link>
+                {conciergeAvailable && (
+                  <WhatsAppConciergeButton
+                    variant="dark"
+                    source="from list-your-property footer CTA"
+                    label="Or WhatsApp us your photos"
+                    className="px-8 py-3.5 rounded-xl text-base"
+                  />
+                )}
+              </div>
             </ScrollReveal>
           </div>
         </section>

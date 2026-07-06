@@ -1,11 +1,13 @@
 import { FormConfig } from '@/components/form-builder';
 import { listingFormConfig } from './listing-form-config';
+import { quickListFormConfig } from './quick-list-form-config';
 import { filterFormConfig } from './filter-form-config';
 import { businessAccountFormConfig } from './business-account-form-config';
 import { addTeamMemberFormConfig } from './add-team-member-form-config';
 
 export const formConfigs = {
   listing: listingFormConfig,
+  quickList: quickListFormConfig,
   filter: filterFormConfig,
   businessAccount: businessAccountFormConfig,
   addTeamMember: addTeamMemberFormConfig,

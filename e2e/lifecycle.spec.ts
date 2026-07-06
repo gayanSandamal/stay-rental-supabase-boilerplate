@@ -103,4 +103,27 @@ test.describe.serial('Listing lifecycle (mutating)', () => {
     const resp = await page.request.delete(`/api/listings/${deleteId}`);
     expect(resp.ok(), `delete status ${resp.status()}`).toBeTruthy();
   });
+
+  test('quick-list form creates a pending listing via the UI', async ({ page }) => {
+    test.setTimeout(60_000);
+    const tag = `E2E Lifecycle quicklist ${Date.now()}`;
+    await login(page, landlord!.email, landlord!.password);
+    await page.goto('/dashboard/listings/quick-new');
+    // Flag off → page redirects to the full form; treat as skip, not failure.
+    if (!page.url().includes('quick-new')) {
+      test.skip(true, 'enableQuickList is off on this target');
+    }
+    await page.fill('input[name="title"]', tag);
+    await page.fill('input[name="city"]', 'Colombo');
+    await page.fill('input[name="address"]', `9 Quick Lane ${Date.now()}`);
+    await page.fill('input[name="bedrooms"]', '2');
+    await page.fill('input[name="rentPerMonth"]', '65000');
+    // Seed landlord already has a contact number — select the first checkbox.
+    await page.locator('input[type="checkbox"]').first().check();
+    await page.getByRole('button', { name: /submit my listing/i }).click();
+    await expect(page.getByText(/submitted!/i)).toBeVisible({ timeout: 15_000 });
+    // It lands in the dashboard as pending.
+    await page.goto('/dashboard/listings?status=pending');
+    await expect(page.getByText(tag).first()).toBeVisible();
+  });
 });

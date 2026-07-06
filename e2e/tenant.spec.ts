@@ -33,4 +33,20 @@ test.describe('Tenant', () => {
     // Must be redirected away (PPR may serve a shell, so assert no back-office UI).
     await expect(page.getByRole('heading', { name: /business accounts|back office|team members/i })).toHaveCount(0);
   });
+
+  test('landlord cross-sell banner shows for tenants and dismissal persists', async ({ page }) => {
+    await login(page, tenant!.email, tenant!.password);
+    await page.goto('/listings');
+    const banner = page.getByText(/also have a property to rent out\?/i).first();
+    await expect(banner).toBeVisible();
+    // Dismiss (X button inside the banner container), reload, assert gone.
+    await page
+      .locator('div', { has: banner })
+      .getByRole('button', { name: /dismiss/i })
+      .first()
+      .click();
+    await expect(banner).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText(/also have a property to rent out\?/i)).toHaveCount(0);
+  });
 });

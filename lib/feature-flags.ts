@@ -39,6 +39,17 @@ export const featureFlagDefaults = {
   // and make sure the claims are updated to the real figures at that point.
   showFoundingStageCopy: true,
 
+  // "WhatsApp us 6 photos — we list it for you" concierge CTAs. Only effective
+  // when NEXT_PUBLIC_WHATSAPP_SUPPORT is configured; CTAs hide themselves
+  // otherwise, so default-ON is safe. Kill here if WhatsApp volume overwhelms ops.
+  enableWhatsAppConcierge: true,
+
+  // The 60-second quick-list form (/dashboard/listings/quick-new): 6 required
+  // fields create a normal pending listing; ops enriches details during the
+  // verification call. Off → entry points hide and the page falls back to the
+  // full form.
+  enableQuickList: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
 } as const;
@@ -143,6 +154,20 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     group: 'Marketing',
     appWide: true,
     public: false,
+  },
+  enableWhatsAppConcierge: {
+    label: 'WhatsApp concierge listing',
+    description: '"WhatsApp us 6 photos — we list it for you" CTAs across landlord surfaces. Requires NEXT_PUBLIC_WHATSAPP_SUPPORT to be set; CTAs hide themselves otherwise. Turn off if WhatsApp volume overwhelms ops.',
+    group: 'Marketing',
+    appWide: true,
+    public: true,
+  },
+  enableQuickList: {
+    label: '60-second quick-list form',
+    description: 'The 6-field quick listing form. Listings created are normal pending listings; ops enriches details during verification. Off hides entry points and redirects the page to the full form.',
+    group: 'Marketing',
+    appWide: true,
+    public: true,
   },
   listingExpirationDays: {
     label: 'Listing expiration (days)',
