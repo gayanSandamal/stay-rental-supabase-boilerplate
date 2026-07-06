@@ -1,5 +1,5 @@
 import { getActiveListings, getUser } from '@/lib/db/queries';
-import { isUserPremium } from '@/lib/subscription';
+import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
 import { SignedUpBanner } from '@/components/signed-up-banner';
 import { Suspense } from 'react';
@@ -103,7 +103,7 @@ export default async function ListingsPage(props: {
   const isPremium = isUserPremium(user);
   filters.excludeExclusive = !isPremium;
   filters.sortExclusiveFirst = isPremium;
-  filters.hideNewListingsHours = isPremium ? undefined : 24;
+  filters.hideNewListingsHours = newListingHideHours(user);
 
   const listings = await getActiveListings(filters);
 

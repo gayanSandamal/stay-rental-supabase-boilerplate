@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getActiveListings } from '@/lib/db/queries';
 import { sendSavedSearchAlert } from '@/lib/email';
 import { createNotification } from '@/lib/notifications';
-import { isUserPremium } from '@/lib/subscription';
+import { newListingHideHours } from '@/lib/subscription';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
@@ -73,12 +73,12 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Early access: free users only get alerted about listings they can see (>= 24h old)
-      const isPremium = isUserPremium({
+      // Early access: free users only get alerted about listings they can see
+      // (>= 24h old). No delay for anyone while paid visibility is off.
+      filters.hideNewListingsHours = newListingHideHours({
         subscriptionTier: search.subscriptionTier,
         subscriptionExpiresAt: search.subscriptionExpiresAt,
       });
-      if (!isPremium) filters.hideNewListingsHours = 24;
 
       const listings = await getActiveListings(filters as any);
 

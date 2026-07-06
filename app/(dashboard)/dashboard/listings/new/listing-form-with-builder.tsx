@@ -2,6 +2,7 @@
 
 import { FormBuilder } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -18,6 +19,7 @@ export function ListingFormWithBuilder({
 }: ListingFormWithBuilderProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pricingEnabled = useFeatureFlag('enablePricingSection');
 
   const handleSubmit = async (data: Record<string, any>) => {
     setIsSubmitting(true);
@@ -52,18 +54,26 @@ export function ListingFormWithBuilder({
     router.back();
   };
 
-  // Update contact numbers field with businessAccountId
+  // Update contact numbers field with businessAccountId; hide the
+  // "Exclusive (Premium renters only)" visibility fields while paid
+  // visibility is off — the perk isn't purchasable then, and an exclusive
+  // listing would be invisible to every renter.
   const configWithBusinessAccount = {
     ...formConfigs.listing,
-    fields: formConfigs.listing.fields.map((field) => {
-      if (field.type === 'contact-numbers') {
-        return {
-          ...field,
-          businessAccountId: businessAccountId || null,
-        };
-      }
-      return field;
-    }),
+    fields: formConfigs.listing.fields
+      .filter(
+        (field) =>
+          pricingEnabled || !['visibilitySection', 'exclusive'].includes(field.name)
+      )
+      .map((field) => {
+        if (field.type === 'contact-numbers') {
+          return {
+            ...field,
+            businessAccountId: businessAccountId || null,
+          };
+        }
+        return field;
+      }),
     onSubmit: handleSubmit,
     onCancel: handleCancel,
   };

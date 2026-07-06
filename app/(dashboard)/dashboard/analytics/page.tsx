@@ -30,7 +30,9 @@ export default async function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-slate-600 mb-4">
-              Rent comparison, listing performance, and portfolio insights are available on Premium and Agency plans.
+              {pricingEnabled
+                ? 'Rent comparison, listing performance, and portfolio insights are available on Premium and Agency plans.'
+                : 'Rent comparison, listing performance, and portfolio insights aren’t available on your account yet.'}
             </p>
             {pricingEnabled && (
               <Link

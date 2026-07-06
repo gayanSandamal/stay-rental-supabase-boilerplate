@@ -2,6 +2,7 @@
 
 import { FormBuilder } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Listing } from '@/lib/db/schema';
@@ -12,6 +13,7 @@ interface EditListingFormProps {
 
 export function EditListingForm({ listing }: EditListingFormProps) {
   const router = useRouter();
+  const pricingEnabled = useFeatureFlag('enablePricingSection');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contactNumberIds, setContactNumberIds] = useState<number[]>([]);
 
@@ -111,16 +113,25 @@ export function EditListingForm({ listing }: EditListingFormProps) {
     ...formConfigs.listing,
     title: 'Update Listing',
     description: 'Update the details about your property. Required fields are marked with *',
-    fields: formConfigs.listing.fields.map((field) => {
-      if (field.type === 'contact-numbers') {
-        return {
-          ...field,
-          listingId: listing.id,
-          businessAccountId: listing.businessAccountId || null,
-        };
-      }
-      return field;
-    }),
+    // Hide the "Exclusive (Premium renters only)" visibility fields while paid
+    // visibility is off (perk isn't purchasable; exclusive would hide the
+    // listing from every renter). Existing `exclusive` values are preserved —
+    // PUT only changes fields present in the form data.
+    fields: formConfigs.listing.fields
+      .filter(
+        (field) =>
+          pricingEnabled || !['visibilitySection', 'exclusive'].includes(field.name)
+      )
+      .map((field) => {
+        if (field.type === 'contact-numbers') {
+          return {
+            ...field,
+            listingId: listing.id,
+            businessAccountId: listing.businessAccountId || null,
+          };
+        }
+        return field;
+      }),
     defaultValues,
     onSubmit: handleSubmit,
     onCancel: handleCancel,

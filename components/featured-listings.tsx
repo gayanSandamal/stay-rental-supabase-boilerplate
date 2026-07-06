@@ -1,5 +1,5 @@
 import { getActiveListings, getUser } from '@/lib/db/queries';
-import { isUserPremium } from '@/lib/subscription';
+import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { ListingCard } from './listing-card';
 import { ScrollReveal } from './scroll-reveal';
 import Link from 'next/link';
@@ -12,7 +12,7 @@ export async function FeaturedListings() {
     limit: 1000,
     excludeExclusive: !isPremium,
     sortExclusiveFirst: isPremium,
-    hideNewListingsHours: isPremium ? undefined : 24,
+    hideNewListingsHours: newListingHideHours(user),
   });
 
   // Ranking already: Featured > Boost > Plan > Urgent > verified > newest. Take top 6.
