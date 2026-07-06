@@ -204,7 +204,9 @@ function ProfileUrlCard() {
           </div>
         ) : (
           <p className="text-sm text-gray-500">
-            Custom URLs are a Premium feature.
+            {pricingEnabled
+              ? 'Custom URLs are a Premium feature.'
+              : 'Custom URLs aren’t available for your account yet.'}
             {pricingEnabled && (
               <>
                 {' '}

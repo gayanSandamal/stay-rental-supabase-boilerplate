@@ -160,6 +160,8 @@ const LANDLORD_STEPS: Step[] = [
     icon: Zap,
     optional: true,
     illustration: BoostVisibilityIllustration,
+    // Paid-visibility copy — hidden while enablePricingSection is off.
+    premiumOnly: true,
   },
 ];
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveListings, getUser } from '@/lib/db/queries';
-import { isUserPremium } from '@/lib/subscription';
+import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { db } from '@/lib/db/drizzle';
 import { businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     const isPremium = isUserPremium(user);
     filters.excludeExclusive = !isPremium;
     filters.sortExclusiveFirst = isPremium;
-    filters.hideNewListingsHours = isPremium ? undefined : 24;
+    filters.hideNewListingsHours = newListingHideHours(user);
 
     // Fetch listings
     const listings = await getActiveListings(filters);
