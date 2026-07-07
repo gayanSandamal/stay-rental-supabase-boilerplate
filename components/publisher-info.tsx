@@ -4,6 +4,8 @@ interface PublisherInfoProps {
   publisherName: string;
   publisherType: 'individual' | 'business';
   teamMemberName?: string | null;
+  /** Real owner's name when listed by Easy Rent Operations on their behalf. */
+  sourceContactName?: string | null;
   createdAt: Date | string;
   size?: 'sm' | 'md' | 'lg';
   showDate?: boolean;
@@ -15,6 +17,7 @@ export function PublisherInfo({
   publisherName,
   publisherType,
   teamMemberName,
+  sourceContactName,
   createdAt,
   size = 'sm',
   showDate = true,
@@ -46,6 +49,11 @@ export function PublisherInfo({
       {teamMemberName && (
         <p className={`${dateSize} text-gray-500 ml-5`}>
           by {teamMemberName}
+        </p>
+      )}
+      {sourceContactName && (
+        <p className={`${dateSize} text-gray-500 ml-5`}>
+          From {sourceContactName}
         </p>
       )}
       {showDate && (

@@ -29,6 +29,7 @@ const MIGRATIONS = [
   '0024_audit_visibility_actions.sql',
   '0025_feature_flags.sql',
   '0026_enable_rls.sql',
+  '0027_whatsapp_intake.sql',
 ];
 
 function splitStatements(sql: string): string[] {

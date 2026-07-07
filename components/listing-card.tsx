@@ -144,6 +144,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                     publisherName={listing.publisherName}
                     publisherType={listing.publisherType || 'individual'}
                     teamMemberName={listing.teamMemberName}
+                    sourceContactName={listing.sourceContactName}
                     createdAt={listing.createdAt}
                     size="sm"
                     showDate
@@ -264,6 +265,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 publisherName={listing.publisherName}
                 publisherType={listing.publisherType || 'individual'}
                 teamMemberName={listing.teamMemberName}
+                sourceContactName={listing.sourceContactName}
                 createdAt={listing.createdAt}
                 size="sm"
                 showDate

@@ -50,6 +50,16 @@ export const featureFlagDefaults = {
   // full form.
   enableQuickList: true,
 
+  // WhatsApp Business intake pipeline (webhook + processing cron). Dormant
+  // until the WHATSAPP_* env vars are configured.
+  enableWhatsAppIntake: true,
+
+  // OWNER DECISION (2026-07): intake listings that pass automated checks are
+  // published immediately — including first-time landlords — without human
+  // review. Flip OFF to route them to `pending` for one-tap ops approval
+  // instead (recommended fallback if scam/junk listings appear).
+  autoPublishWhatsAppIntakes: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
 } as const;
@@ -168,6 +178,20 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     group: 'Marketing',
     appWide: true,
     public: true,
+  },
+  enableWhatsAppIntake: {
+    label: 'WhatsApp intake pipeline',
+    description: 'Automated WhatsApp concierge: webhook receives listing submissions, the processing job parses and creates listings under Easy Rent Operations. Dormant until WHATSAPP_* env vars are set.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  autoPublishWhatsAppIntakes: {
+    label: 'Auto-publish WhatsApp intakes',
+    description: 'Publish intake listings immediately when automated checks pass — no human review, including first-time landlords. OFF routes them to pending for one-tap approval instead.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
   },
   listingExpirationDays: {
     label: 'Listing expiration (days)',

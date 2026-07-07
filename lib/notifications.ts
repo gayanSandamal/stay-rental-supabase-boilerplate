@@ -2,7 +2,12 @@ import { db } from '@/lib/db/drizzle';
 import { notifications, users } from '@/lib/db/schema';
 import { eq, and, inArray, desc, isNull } from 'drizzle-orm';
 
-export type NotificationType = 'new_lead' | 'saved_search_alert' | 'viewing_scheduled' | 'listing_approved';
+export type NotificationType =
+  | 'new_lead'
+  | 'saved_search_alert'
+  | 'viewing_scheduled'
+  | 'listing_approved'
+  | 'whatsapp_intake';
 
 export async function createNotification(params: {
   userId: number;
