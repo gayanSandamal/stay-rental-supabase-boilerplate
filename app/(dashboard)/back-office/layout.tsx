@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { 
-  Home, 
-  Building2, 
-  Users, 
-  List, 
+import {
+  Home,
+  Building2,
+  Users,
+  List,
   Settings,
-  Menu
+  Menu,
+  MessageCircle
 } from 'lucide-react';
 
 export default function BackOfficeLayout({
@@ -31,6 +32,7 @@ export default function BackOfficeLayout({
     { href: '/back-office/business-accounts', icon: Building2, label: 'Business Accounts' },
     { href: '/back-office/team-members', icon: Users, label: 'Team Members' },
     { href: '/back-office/listings', icon: List, label: 'Listings' },
+    { href: '/back-office/whatsapp-intakes', icon: MessageCircle, label: 'WhatsApp Intakes' },
     { href: '/back-office/settings', icon: Settings, label: 'Settings' },
   ];
 

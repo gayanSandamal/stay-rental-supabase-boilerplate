@@ -149,6 +149,10 @@ export const listings = pgTable('listings', {
   // Photos
   photos: text('photos'), // JSON array of photo URLs
 
+  // Concierge attribution: the real owner's display name when the listing was
+  // created by Easy Rent Operations on a landlord's behalf (WhatsApp intake).
+  sourceContactName: text('source_contact_name'),
+
   // Premium / exclusive
   exclusive: boolean('exclusive').notNull().default(false), // Premium renters only
 
@@ -296,7 +300,36 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_urgent_activated',
   'listing_bundle_activated',
   'feature_flag_updated',
+  'listing_auto_published',
+  'whatsapp_intake_updated',
 ]);
+
+// WhatsApp concierge intake statuses
+export const whatsappIntakeStatusEnum = pgEnum('whatsapp_intake_status', [
+  'received', // raw messages stored, awaiting processing
+  'needs_info', // replied asking for missing fields; new messages reopen it
+  'published', // listing created (auto-published or pending per flag)
+  'manual_review', // parser unavailable or checks failed — ops must handle
+  'rejected', // ops rejected the intake
+]);
+
+// Raw WhatsApp concierge submissions (one row per sender conversation session)
+export const whatsappIntakes = pgTable('whatsapp_intakes', {
+  id: serial('id').primaryKey(),
+  fromNumber: text('from_number').notNull(), // sender's WhatsApp number (digits)
+  profileName: text('profile_name'), // WhatsApp pushname at time of message
+  messageText: text('message_text'), // concatenated text messages
+  mediaPaths: text('media_paths'), // JSON array of stored image URLs
+  waMessageIds: text('wa_message_ids'), // JSON array (idempotency)
+  parsedPayload: text('parsed_payload'), // JSON from the LLM parser
+  status: whatsappIntakeStatusEnum('status').notNull().default('received'),
+  failureReason: text('failure_reason'),
+  listingId: integer('listing_id').references(() => listings.id),
+  lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
+  processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
 
 // Audit log table
 export const auditLogs = pgTable('audit_logs', {

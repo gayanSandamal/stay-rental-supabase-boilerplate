@@ -338,6 +338,12 @@ export default async function ListingDetailPage({
                   </span>
                 </div>
               </div>
+              {listing.sourceContactName && (
+                <p className="mt-2 text-sm text-gray-500">
+                  From {listing.sourceContactName} — listed via the Easy Rent
+                  WhatsApp concierge
+                </p>
+              )}
             </CardContent>
           </Card>
 
