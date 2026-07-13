@@ -60,6 +60,11 @@ export const featureFlagDefaults = {
   // instead (recommended fallback if scam/junk listings appear).
   autoPublishWhatsAppIntakes: true,
 
+  // LLM fallback for the deterministic intake rule parser: when required
+  // fields are still missing after rule parsing, try Claude and merge the
+  // fill-ins. No-op without ANTHROPIC_API_KEY. OFF = rules only, zero cost.
+  enableLlmParserFallback: false,
+
   // Numeric / config flags
   listingExpirationDays: 30,
 } as const;
@@ -189,6 +194,13 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   autoPublishWhatsAppIntakes: {
     label: 'Auto-publish WhatsApp intakes',
     description: 'Publish intake listings immediately when automated checks pass — no human review, including first-time landlords. OFF routes them to pending for one-tap approval instead.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableLlmParserFallback: {
+    label: 'LLM parser fallback (intake)',
+    description: 'When the rule-based intake parser leaves required listing fields missing, ask Claude to fill the gaps before replying to the sender. Requires ANTHROPIC_API_KEY (no-op without it). Off = deterministic rules only.',
     group: 'Platform',
     appWide: true,
     public: false,

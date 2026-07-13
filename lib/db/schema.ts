@@ -316,7 +316,8 @@ export const whatsappIntakeStatusEnum = pgEnum('whatsapp_intake_status', [
 // Raw WhatsApp concierge submissions (one row per sender conversation session)
 export const whatsappIntakes = pgTable('whatsapp_intakes', {
   id: serial('id').primaryKey(),
-  fromNumber: text('from_number').notNull(), // sender's WhatsApp number (digits)
+  channel: text('channel').notNull().default('whatsapp'), // intake channel (whatsapp, telegram…)
+  fromNumber: text('from_number').notNull(), // sender's channel-scoped id (WhatsApp: digits)
   profileName: text('profile_name'), // WhatsApp pushname at time of message
   messageText: text('message_text'), // concatenated text messages
   mediaPaths: text('media_paths'), // JSON array of stored image URLs

@@ -30,6 +30,7 @@ const MIGRATIONS = [
   '0025_feature_flags.sql',
   '0026_enable_rls.sql',
   '0027_whatsapp_intake.sql',
+  '0028_intake_channel.sql',
 ];
 
 function splitStatements(sql: string): string[] {
