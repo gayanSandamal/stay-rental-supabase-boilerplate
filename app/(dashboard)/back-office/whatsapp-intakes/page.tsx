@@ -57,6 +57,9 @@ export default async function WhatsAppIntakesPage() {
                   <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${STATUS_STYLES[intake.status] ?? ''}`}>
                     {intake.status.replace('_', ' ')}
                   </span>
+                  <span className="px-2 py-0.5 text-xs rounded-full font-semibold bg-slate-100 text-slate-600">
+                    {intake.channel}
+                  </span>
                   <span className="font-semibold">
                     {intake.profileName ?? 'Unknown'} · +{intake.fromNumber}
                   </span>

@@ -1,28 +1,12 @@
 /**
- * LLM extraction of listing fields from free-text WhatsApp messages
- * (English / Sinhala-English mix). Uses the Anthropic API directly via fetch —
- * no SDK dependency. Returns null when ANTHROPIC_API_KEY is unset, which
- * routes the intake to manual review in the back office.
+ * Flag-gated LLM fallback for the intake rule parser (see ./index.ts).
+ * Extracts listing fields from free text (English / Sinhala-English mix) via
+ * the Anthropic API directly — no SDK dependency. Returns null when
+ * ANTHROPIC_API_KEY is unset or the API/JSON fails; callers treat null as
+ * "no fill-ins available".
  */
 
-export interface ParsedIntake {
-  title: string | null;
-  propertyType: 'house' | 'apartment' | 'room' | null;
-  address: string | null;
-  city: string | null;
-  district: string | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  rentPerMonth: number | null;
-  description: string | null;
-  /** Required-for-publication fields the message didn't contain. */
-  missingFields: string[];
-  /** Model's own flag for content that looks off (spam/scam/not-a-rental). */
-  suspicious: boolean;
-  suspicionReason: string | null;
-}
-
-const REQUIRED_FIELDS = ['title', 'address', 'city', 'bedrooms', 'rentPerMonth'] as const;
+import { ParsedIntake, computeMissingFields } from './types';
 
 const SYSTEM_PROMPT = `You extract rental-listing data from WhatsApp messages sent to Easy Rent, a Sri Lankan house-rental marketplace. Messages may mix English and Sinhala and be informal.
 
@@ -41,7 +25,7 @@ Return ONLY a JSON object with these keys:
 
 Never invent facts not present in the message. Unknown → null.`;
 
-export async function parseIntakeText(messageText: string): Promise<ParsedIntake | null> {
+export async function parseIntakeWithLlm(messageText: string): Promise<ParsedIntake | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || !messageText.trim()) return null;
 
@@ -63,7 +47,7 @@ export async function parseIntakeText(messageText: string): Promise<ParsedIntake
   });
 
   if (!res.ok) {
-    console.error('WhatsApp intake parser: Anthropic API error', res.status, await res.text());
+    console.error('Intake LLM fallback: Anthropic API error', res.status, await res.text());
     return null;
   }
 
@@ -99,6 +83,6 @@ export async function parseIntakeText(messageText: string): Promise<ParsedIntake
     suspicionReason: typeof raw.suspicionReason === 'string' ? raw.suspicionReason : null,
   };
 
-  parsed.missingFields = REQUIRED_FIELDS.filter((f) => parsed[f] == null);
+  parsed.missingFields = computeMissingFields(parsed);
   return parsed;
 }

@@ -20,6 +20,7 @@
     "db:hard-delete-user": "npx tsx scripts/hard-delete-user.ts",
     "db:studio": "drizzle-kit studio",
     "storage:setup": "npx tsx lib/db/setup-storage.ts",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:public": "playwright test public seo security",
     "test:e2e:report": "playwright show-report e2e/.report"
@@ -56,6 +57,7 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.60.0",
+    "vitest": "^4.1.10"
   }
 }

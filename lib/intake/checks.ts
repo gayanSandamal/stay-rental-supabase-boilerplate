@@ -1,7 +1,7 @@
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
 import { and, eq, ne } from 'drizzle-orm';
-import type { ParsedIntake } from './parser';
+import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 export interface CheckResult {
   ok: boolean;
