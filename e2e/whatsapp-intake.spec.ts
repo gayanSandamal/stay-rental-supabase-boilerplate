@@ -64,6 +64,9 @@ test.describe.serial('WhatsApp intake pipeline (mutating)', () => {
   test.skip(!process.env.ALLOW_MUTATION, 'Set ALLOW_MUTATION=1');
 
   const FROM = `9477${String(Date.now()).slice(-7)}`;
+  // Unique street number per run — the duplicate check (same address+city)
+  // would otherwise park re-runs in manual_review and fail the publish assert.
+  const STREET_NO = String(Date.now()).slice(-5);
 
   test('GET webhook echoes hub.challenge on valid verify token', async ({ request }) => {
     const resp = await request.get(
@@ -97,7 +100,7 @@ test.describe.serial('WhatsApp intake pipeline (mutating)', () => {
   test('POST webhook stores a correctly signed intake', async ({ request }) => {
     const body = webhookPayload(
       FROM,
-      'Hi! 2 bedroom house at 12 E2E Lane, Nugegoda for 80000 per month. E2E intake test.',
+      `Hi! 2 bedroom house at ${STREET_NO} E2E Lane, Nugegoda for 80000 per month. E2E intake test.`,
       `wamid.e2e.${Date.now()}`
     );
     const resp = await postSigned(request, body);

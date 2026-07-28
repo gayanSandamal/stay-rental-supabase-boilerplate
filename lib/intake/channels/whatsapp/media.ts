@@ -11,15 +11,25 @@ export async function persistWhatsAppMedia(mediaId: string): Promise<string | nu
   try {
     const metaRes = await fetch(`${GRAPH_API_BASE}/${mediaId}`, {
       headers: { authorization: `Bearer ${whatsappConfig.accessToken}` },
+      signal: AbortSignal.timeout(8_000),
     });
-    if (!metaRes.ok) return null;
+    if (!metaRes.ok) {
+      // An expired/revoked access token silently dropping every photo is the
+      // failure mode ops most needs to see in the logs.
+      console.error('WhatsApp media metadata fetch failed', mediaId, metaRes.status, await metaRes.text());
+      return null;
+    }
     const meta = await metaRes.json();
     if (!meta?.url) return null;
 
     const binRes = await fetch(meta.url, {
       headers: { authorization: `Bearer ${whatsappConfig.accessToken}` },
+      signal: AbortSignal.timeout(10_000),
     });
-    if (!binRes.ok) return null;
+    if (!binRes.ok) {
+      console.error('WhatsApp media download failed', mediaId, binRes.status);
+      return null;
+    }
 
     const mime: string = meta.mime_type || 'image/jpeg';
     if (!/^image\/(jpeg|png|webp)$/.test(mime)) return null;

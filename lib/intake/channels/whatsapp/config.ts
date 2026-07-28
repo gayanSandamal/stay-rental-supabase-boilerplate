@@ -27,4 +27,6 @@ export function isIntakeConfigured(): boolean {
   );
 }
 
-export const GRAPH_API_BASE = 'https://graph.facebook.com/v21.0';
+/** Test seam (like INTAKE_SETTLE_MS): lets e2e point media/send at a mock Graph server. Never set in prod. */
+export const GRAPH_API_BASE =
+  process.env.WHATSAPP_GRAPH_API_BASE ?? 'https://graph.facebook.com/v21.0';

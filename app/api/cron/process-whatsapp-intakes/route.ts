@@ -4,6 +4,10 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { intakeChannelAdapters } from '@/lib/intake/channels/registry';
 import { processSettledIntakes } from '@/lib/intake/process';
 
+// A 20-intake batch does per-intake DB work + a sendText fetch each — the
+// plan default (10s) can kill the run mid-publish.
+export const maxDuration = 60;
+
 /**
  * Processes settled intakes across all registered channels: parse → validate
  * → create listing (see lib/intake/process.ts). Vercel Cron (see vercel.json).

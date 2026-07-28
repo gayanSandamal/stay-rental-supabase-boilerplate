@@ -106,7 +106,7 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
   - Feature is DORMANT until `WHATSAPP_*` set + Meta verification. Don't "fix" the 503/no-op.
   - `autoPublishWhatsAppIntakes` ON = strangers' listings go live unreviewed. Kill switch is the flag.
   - Media MUST be downloaded in the webhook (`adapter.persistMedia`) — provider URLs expire in minutes. Moving it to the cron silently breaks photos.
-  - The Cloud API number can't also run in the normal WhatsApp app — intake number ≠ `NEXT_PUBLIC_WHATSAPP_SUPPORT`.
+  - The Cloud API number can't also run in the normal WhatsApp app. `NEXT_PUBLIC_WHATSAPP_SUPPORT` (the number every concierge CTA and the footer point at) IS the intake number by design — which means all "support" chats hit the bot; see `docs/whatsapp-golive-runbook.md` → Known limitations.
   - Settle window: new intakes don't process instantly. Tests either backdate `last_message_at` or run the target with `INTAKE_SETTLE_MS=0`.
   - `pnpm db:migrate-all:local` targets port 54323 — that is the WRONG (unrelated) local Supabase; this repo's stack is on 54341–49.
 - **To add a parsed field:** extend `ParsedIntake` + `rule-parser.ts` (and the LLM system prompt if the fallback should fill it), then map it in the `listings` insert in `process.ts`. Add to `REQUIRED_FIELDS` only if it should block publish. Add unit cases.
@@ -123,4 +123,14 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
 - **Fail closed everywhere:** unconfigured → 503/no-op; bad signature → 401; missing cron secret → 401; processing error → `manual_review` with `failureReason` (never silently dropped).
 - **System-identity ownership:** "Easy Rent Operations" owns concierge listings; the real owner is surfaced via `listings.sourceContactName` and a verified contact number.
 
-_Updated by the rule-parser + channel-adapter refactor, 2026-07-13. Original deep-dive generated 2026-07-10._
+## 2026-07-28 go-live hardening (pre-Meta-launch review)
+
+An adversarial review before wiring the real number (+94752953202) confirmed 22 defects; all fixed:
+
+- **Parser (`rulesVersion: 2`)**: rent-keyword pass now outranks generic "X per month" (utility amounts can't become rent); daily/nightly/weekly rates, USD amounts, availability years ("from April 2026") and deposit contexts are all excluded from rent; ADDRESS_RE requires number/word separation (ordinals like "1st floor" no longer become addresses) and understands Sinhala combining marks + more street types (drive/crescent/close/පෙදෙස/පටුමග); city matching skips town-named roads ("Negombo Road" ≠ Negombo) and the address-adjacent segment overrides a city mentioned elsewhere; "house with N rooms for rent" stays a house; multi-property messages are detected and routed back to the sender (`multiProperty`) instead of publishing a chimera.
+- **Session (`session.ts`)**: all writes serialize under a per-sender `pg_advisory_xact_lock` (album fan-out races lost photos/split sessions); message-id dedup happens BEFORE media download and looks across recent closed sessions (Meta redelivery after publish no longer seeds junk); needs_info sessions reattach for 7 days (was 6h — replies the next morning lost all context); thin follow-ups ("thanks!") within 48h of publish append to the published intake + notify ops instead of spawning a needs_info loop; substantive messages still open a fresh intake (second property).
+- **Channels**: document messages with image mime are ingested as photos ("send as file"); video/voice/non-image documents create a session, set `has_unsupported_media` (migration `0029`), and replies append a resend-as-photos note — media-only senders are never met with silence.
+- **Robustness**: publish is fail-safe past the point of listing creation (reply/audit/notify failures can no longer flip a published intake to manual_review); failed sender replies notify ops; media/send fetches have AbortSignal timeouts and loud logging; duplicate screen only matches active/pending listings (relisting after expiry is legal); both routes export `maxDuration = 60`.
+- **Test seam**: `WHATSAPP_GRAPH_API_BASE` env (like `INTAKE_SETTLE_MS`) lets e2e point media/send at a mock Graph server — the full image path and outbound payloads are now assertable locally. Never set in prod.
+
+_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28. Original deep-dive generated 2026-07-10._

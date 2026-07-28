@@ -104,10 +104,19 @@ export async function processIntake(
         updatedAt: new Date(),
       })
       .where(eq(whatsappIntakes.id, intake.id));
-    await adapter.sendText(
+    const sent = await adapter.sendText(
       intake.fromNumber,
-      needsInfoMessage(intake.profileName, parsed.missingFields, check.reason)
+      needsInfoMessage(intake.profileName, parsed.missingFields, check.reason, {
+        unsupportedMedia: intake.hasUnsupportedMedia,
+      })
     );
+    if (!sent) {
+      // Undelivered ask = the sender waits forever. Ops must know.
+      await notifyOps(
+        intake.id,
+        `Could not reach WhatsApp sender for intake #${intake.id} (needs info: ${check.reason})`
+      );
+    }
     return 'needs_info';
   }
 
@@ -200,38 +209,55 @@ export async function processIntake(
     .set({
       parsedPayload: JSON.stringify(parsed),
       status: 'published',
+      // Clear any needs_info reason left from an earlier round of this session.
+      failureReason: null,
       listingId: listing.id,
       processedAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(whatsappIntakes.id, intake.id));
 
-  await logListingAction(
-    autoPublish ? 'listing_auto_published' : 'listing_created',
-    listing.id,
-    ops.userId,
-    {
-      source: `${adapter.channel}_intake`,
-      intakeId: intake.id,
-      fromNumber: intake.fromNumber,
+  // Everything past this point is best-effort: the listing exists and the
+  // intake row says published — an audit/reply/notify failure must never
+  // bubble into the outer catch and clobber the status to manual_review.
+  try {
+    await logListingAction(
+      autoPublish ? 'listing_auto_published' : 'listing_created',
+      listing.id,
+      ops.userId,
+      {
+        source: `${adapter.channel}_intake`,
+        intakeId: intake.id,
+        fromNumber: intake.fromNumber,
+      }
+    );
+
+    const listingUrl = `${baseUrl}/listings/${listing.id}`;
+    const sent = await adapter.sendText(
+      intake.fromNumber,
+      autoPublish
+        ? publishedMessage(listing.title, listingUrl, {
+            unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
+          })
+        : pendingReviewMessage(listing.title)
+    );
+    if (!sent) {
+      await notifyOps(
+        intake.id,
+        `Listing #${listing.id} published but the WhatsApp confirmation to the owner failed — contact them manually`
+      );
     }
-  );
 
-  const listingUrl = `${baseUrl}/listings/${listing.id}`;
-  await adapter.sendText(
-    intake.fromNumber,
-    autoPublish
-      ? publishedMessage(listing.title, listingUrl)
-      : pendingReviewMessage(listing.title)
-  );
-
-  await notifyOps(
-    intake.id,
-    autoPublish
-      ? `Auto-published from WhatsApp: "${listing.title}" (#${listing.id}) — spot-check it`
-      : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
-    `/dashboard/listings/${listing.id}`
-  );
+    await notifyOps(
+      intake.id,
+      autoPublish
+        ? `Auto-published from WhatsApp: "${listing.title}" (#${listing.id}) — spot-check it`
+        : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
+      `/dashboard/listings/${listing.id}`
+    );
+  } catch (err) {
+    console.error(`Post-publish follow-up failed for intake ${intake.id}`, err);
+  }
 
   return 'published';
 }

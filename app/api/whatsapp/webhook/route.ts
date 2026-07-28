@@ -3,8 +3,12 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { appendToIntake } from '@/lib/intake/session';
+import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
+// Multi-photo albums mean several 2-hop Graph downloads per POST — the plan
+// default (10s) would 504 to Meta and trigger a retry storm.
+export const maxDuration = 60;
 
 /**
  * Meta webhook verification handshake (set the same verify token in the
@@ -47,12 +51,16 @@ export async function POST(request: NextRequest) {
   }
 
   for (const message of whatsappAdapter.normalizeInbound(payload)) {
-    const mediaUrls: string[] = [];
-    for (const mediaId of message.mediaIds) {
-      const url = await whatsappAdapter.persistMedia(mediaId);
-      if (url) mediaUrls.push(url);
+    // Session write + redelivery dedup happen BEFORE media download inside
+    // appendToIntake; media resolves via this callback only for new messages.
+    const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
+    if (outcome.action === 'after_publish') {
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `Sender replied after publish on intake #${outcome.intakeId} — may want changes`,
+        link: '/back-office/whatsapp-intakes',
+      });
     }
-    await appendToIntake(message, mediaUrls);
   }
 
   return NextResponse.json({ ok: true });

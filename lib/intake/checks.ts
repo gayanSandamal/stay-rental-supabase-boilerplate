@@ -1,6 +1,6 @@
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 export interface CheckResult {
@@ -27,6 +27,15 @@ export async function runIntakeChecks(parsed: ParsedIntake): Promise<CheckResult
     };
   }
 
+  if (parsed.multiProperty) {
+    return {
+      ok: false,
+      retriable: true,
+      reason:
+        'That looks like more than one property — please send each property as a separate message',
+    };
+  }
+
   if (parsed.missingFields.length > 0) {
     return {
       ok: false,
@@ -43,12 +52,14 @@ export async function runIntakeChecks(parsed: ParsedIntake): Promise<CheckResult
     };
   }
 
-  // Duplicate screen — mirrors the API's duplicate detection.
+  // Duplicate screen — mirrors the API's duplicate detection. Only live and
+  // in-review listings count: relisting after expiry/rented/archive is the
+  // normal lifecycle, not fraud.
   const dupe = await db.query.listings.findFirst({
     where: and(
       eq(listings.address, parsed.address!),
       eq(listings.city, parsed.city!),
-      ne(listings.status, 'rejected')
+      inArray(listings.status, ['active', 'pending'])
     ),
   });
   if (dupe) {
