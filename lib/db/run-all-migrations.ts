@@ -31,6 +31,7 @@ const MIGRATIONS = [
   '0026_enable_rls.sql',
   '0027_whatsapp_intake.sql',
   '0028_intake_channel.sql',
+  '0029_intake_unsupported_media.sql',
 ];
 
 function splitStatements(sql: string): string[] {

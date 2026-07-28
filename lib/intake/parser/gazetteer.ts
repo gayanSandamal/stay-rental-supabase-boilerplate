@@ -166,8 +166,21 @@ const CANDIDATES: Candidate[] = CITIES.flatMap((c) => [
 const CANDIDATE_RES = CANDIDATES.map((c) => ({
   ...c,
   // Unicode-safe word boundaries (JS \b is ASCII-only, breaks on Sinhala).
-  re: new RegExp(`(?:^|[^\\p{L}\\d])${escapeRegExp(c.key)}(?=$|[^\\p{L}\\d])`, 'u'),
+  re: new RegExp(`(?:^|[^\\p{L}\\d])${escapeRegExp(c.key)}(?=$|[^\\p{L}\\d])`, 'gu'),
 }));
+
+/**
+ * Sri Lankan roads are routinely named after the town they lead to ("Negombo
+ * Road" in Ja-Ela, "Kurunegala Road" in Kandy). A city mention immediately
+ * followed by a street word is the road's name, not the listing's city.
+ */
+const ROAD_NAME_AFTER_RE =
+  // NB: "junction" deliberately absent — "Borella Junction" names the locality.
+  /^\s*(?:road|rd|street|st|mawatha|mw|lane|ln|para|පාර|මාවත)\b/iu;
+
+function isRoadNameMention(lowerText: string, matchEnd: number): boolean {
+  return ROAD_NAME_AFTER_RE.test(lowerText.slice(matchEnd, matchEnd + 12));
+}
 
 /** "colombo 5", "Colombo-07" → ward city. Wards run 1–15. */
 const COLOMBO_WARD_RE = /(?:^|[^\p{L}\d])colombo\s*-?\s*0?(1[0-5]|[1-9])(?=$|[^\p{L}\d])/u;
@@ -182,9 +195,36 @@ export function matchCity(lowerText: string): { city: string; district: District
     return { city: `Colombo ${Number(ward[1])}`, district: 'Colombo' };
   }
   for (const c of CANDIDATE_RES) {
-    if (c.re.test(lowerText)) return { city: c.city, district: c.district };
+    c.re.lastIndex = 0;
+    for (const m of lowerText.matchAll(c.re)) {
+      const end = (m.index ?? 0) + m[0].length;
+      if (isRoadNameMention(lowerText, end)) continue; // "Negombo Road" ≠ Negombo
+      return { city: c.city, district: c.district };
+    }
   }
   return null;
+}
+
+/**
+ * All distinct cities mentioned (road names excluded). Used only to detect
+ * multi-property messages — matchCity stays the authority on THE city.
+ */
+export function matchAllCities(lowerText: string): string[] {
+  const found = new Set<string>();
+  const ward = lowerText.match(COLOMBO_WARD_RE);
+  if (ward) found.add(`Colombo ${Number(ward[1])}`);
+  for (const c of CANDIDATE_RES) {
+    if (found.has(c.city)) continue;
+    if (ward && c.city === 'Colombo') continue; // "Colombo 5" already counted
+    c.re.lastIndex = 0;
+    for (const m of lowerText.matchAll(c.re)) {
+      const end = (m.index ?? 0) + m[0].length;
+      if (isRoadNameMention(lowerText, end)) continue;
+      found.add(c.city);
+      break;
+    }
+  }
+  return [...found];
 }
 
 /**

@@ -7,10 +7,10 @@
  */
 
 import { ParsedIntake, computeMissingFields } from './types';
-import { matchCity, matchDistrict } from './gazetteer';
+import { matchCity, matchAllCities, matchDistrict } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 
 /** Sanity clamp at extraction time; checks.ts enforces the market window. */
 const RENT_FLOOR = 1_000;
@@ -25,6 +25,24 @@ const PHONE_RES = [
 /** Deposit/advance amounts must never be read as rent. */
 const DEPOSIT_BEFORE_RE = /(?:deposit|advance|key\s*money)\s*(?:[:\-]|of|is)?\s*(?:lkr|rs\.?|rupees)?\s*$/i;
 const DEPOSIT_AFTER_RE = /^\s*(?:\/[-=])?\s*(?:as\s+|for\s+)?(?:deposit|advance|key\s*money)/i;
+
+/** Utility/service amounts ("electricity 5k per month") must never be read as rent. */
+const UTILITY_BEFORE_RE =
+  /(?:electricity|current|water|service\s*charge|maintenance|internet|wifi|broadband|cable|garbage|parking|bills?)\b[^\d]{0,20}$/i;
+const UTILITY_AFTER_RE =
+  /^\s*(?:\/[-=])?\s*(?:for\s+)?(?:electricity|water|service\s*charge|maintenance|internet|wifi|parking)/i;
+
+/** Daily/weekly short-stay rates are not monthly rent — leave rent unset instead. */
+const NON_MONTHLY_NEAR_RE =
+  /(?:\b(?:per|a|each)\s*(?:day|night|week)\b|\/\s*(?:day|night|week)\b|\b(?:daily|nightly|weekly)\b)/i;
+
+/** "April 2026" / "from 2026": availability dates, not amounts. */
+const MONTH_OR_FROM_BEFORE_RE =
+  /(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec|from|until|till)\.?\s*$/i;
+
+/** USD/dollar amounts must never publish at LKR face value. */
+const USD_BEFORE_RE = /(?:usd|us\s*\$|\$|dollars?)\s*$/i;
+const USD_AFTER_RE = /^\s*(?:usd|dollars?)\b/i;
 
 function normalize(text: string): string {
   return text
@@ -49,6 +67,33 @@ function isDepositContext(text: string, start: number, end: number): boolean {
   );
 }
 
+/**
+ * True when the amount at [start,end) is not this listing's monthly rent.
+ * `numStart` is where the digits themselves begin — keyword passes match from
+ * the keyword ("rent from april 2026"), so currency/date context must be
+ * checked against the number, not the match.
+ */
+function isExcludedRentContext(
+  text: string,
+  start: number,
+  end: number,
+  value: number,
+  numStart: number
+): boolean {
+  const before = text.slice(Math.max(0, start - 30), start);
+  const beforeNum = text.slice(Math.max(0, numStart - 25), numStart);
+  // Rate qualifiers sit tight against the amount ("daily rent 7,000", "7000/day").
+  const around = text.slice(Math.max(0, start - 18), Math.min(text.length, end + 12));
+  if (UTILITY_BEFORE_RE.test(before) || UTILITY_AFTER_RE.test(text.slice(end, end + 30))) {
+    return true;
+  }
+  if (NON_MONTHLY_NEAR_RE.test(around)) return true;
+  if (USD_BEFORE_RE.test(beforeNum) || USD_AFTER_RE.test(text.slice(end, end + 15))) return true;
+  // A year-like bare number right after a month name / "from" is a date.
+  if (value >= 1900 && value <= 2100 && MONTH_OR_FROM_BEFORE_RE.test(beforeNum)) return true;
+  return false;
+}
+
 function toAmount(numText: string, thousands: boolean): number {
   const n = Number(numText.replace(/,/g, ''));
   return thousands ? n * 1_000 : n;
@@ -62,52 +107,82 @@ function firstRentMatch(
 ): number | null {
   for (const m of text.matchAll(re)) {
     const start = m.index ?? 0;
-    if (isDepositContext(text, start, start + m[0].length)) continue;
+    const end = start + m[0].length;
+    if (isDepositContext(text, start, end)) continue;
     const value = amount(m);
-    if (Number.isFinite(value) && value >= RENT_FLOOR && value <= RENT_CEIL) {
-      return Math.round(value);
-    }
+    if (!Number.isFinite(value) || value < RENT_FLOOR || value > RENT_CEIL) continue;
+    const numStart = start + Math.max(0, m[0].lastIndexOf(m[1]));
+    if (isExcludedRentContext(text, start, end, value, numStart)) continue;
+    return Math.round(value);
   }
   return null;
 }
 
+// Ordered specific → loose; the first pass that yields a plausible amount wins.
+// The explicit rent-keyword pass outranks the generic "X per month" pass so
+// "Electricity 5k per month extra. Rent 50k" reads 50k, not 5k.
+const RENT_PASSES: Array<{ re: RegExp; amount: (m: RegExpMatchArray) => number }> = [
+  // "1.2 lakh", "2 lakhs"
+  { re: /(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|laks)\b/g, amount: (m) => Number(m[1]) * 100_000 },
+  // "Rs. 85,000", "LKR 85000", "rs 85k"
+  {
+    re: /\b(?:lkr|rs\.?|rupees|slr)\s*:?\s*([\d,]+(?:\.\d+)?)\s*(k\b)?/g,
+    amount: (m) => toAmount(m[1], Boolean(m[2])),
+  },
+  // "monthly rent 85,000", "rent is 85000", "rent 50k", "kuliya 45,000"
+  {
+    re: /(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)(?:\s+\p{L}+){0,2}?\s*(?:[:\-]|is|of)?\s*([\d,]{2,}(?:\.\d+)?)\s*(k\b)?/gu,
+    amount: (m) => toAmount(m[1], Boolean(m[2])),
+  },
+  // "85,000/month", "85000 per month", "85k pm", "85000 monthly"
+  {
+    re: /([\d,]+(?:\.\d+)?)\s*(k\b)?\s*(?:\/|per\s*)?(?:monthly|month\b|mnth\b|mo\b|pm\b)/g,
+    amount: (m) => toAmount(m[1], Boolean(m[2])),
+  },
+  // "85,000/-", "85000/=" (common SL classified style)
+  { re: /([\d,]{4,})\s*\/[-=]/g, amount: (m) => toAmount(m[1], false) },
+  // bare "85k"
+  { re: /(\d+(?:\.\d+)?)\s*k\b/g, amount: (m) => toAmount(m[1], true) },
+  // bare amount near a rent keyword: "80000 rent"
+  {
+    re: /([\d,]{4,})[^\d]{0,30}(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)/gu,
+    amount: (m) => toAmount(m[1], false),
+  },
+];
+
 function extractRent(lower: string): number | null {
-  // Ordered specific → loose; the first pass that yields a plausible amount wins.
-  return (
-    // "1.2 lakh", "2 lakhs"
-    firstRentMatch(lower, /(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|laks)\b/g, (m) =>
-      Number(m[1]) * 100_000
-    ) ??
-    // "Rs. 85,000", "LKR 85000", "rs 85k"
-    firstRentMatch(
-      lower,
-      /\b(?:lkr|rs\.?|rupees|slr)\s*:?\s*([\d,]+(?:\.\d+)?)\s*(k\b)?/g,
-      (m) => toAmount(m[1], Boolean(m[2]))
-    ) ??
-    // "85,000/month", "85000 per month", "85k pm", "85000 monthly"
-    firstRentMatch(
-      lower,
-      /([\d,]+(?:\.\d+)?)\s*(k\b)?\s*(?:\/|per\s*)?(?:monthly|month\b|mnth\b|mo\b|pm\b)/g,
-      (m) => toAmount(m[1], Boolean(m[2]))
-    ) ??
-    // "monthly rent 85,000", "rent is 85000", "kuliya 45,000"
-    firstRentMatch(
-      lower,
-      /(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)(?:\s+\p{L}+){0,2}?\s*(?:[:\-]|is|of)?\s*([\d,]{4,}(?:\.\d+)?)\s*(k\b)?/gu,
-      (m) => toAmount(m[1], Boolean(m[2]))
-    ) ??
-    // "85,000/-", "85000/=" (common SL classified style)
-    firstRentMatch(lower, /([\d,]{4,})\s*\/[-=]/g, (m) => toAmount(m[1], false)) ??
-    // bare "85k"
-    firstRentMatch(lower, /(\d+(?:\.\d+)?)\s*k\b/g, (m) => toAmount(m[1], true)) ??
-    // bare amount near a rent keyword: "80000 rent"
-    firstRentMatch(
-      lower,
-      /([\d,]{4,})[^\d]{0,30}(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)/gu,
-      (m) => toAmount(m[1], false)
-    )
-  );
+  for (const pass of RENT_PASSES) {
+    pass.re.lastIndex = 0;
+    const value = firstRentMatch(lower, pass.re, pass.amount);
+    if (value != null) return value;
+  }
+  return null;
 }
+
+/**
+ * Distinct plausible rent amounts across all passes — ≥2 alongside ≥2 cities
+ * signals a multi-property message.
+ */
+function countRentCandidates(lower: string): number {
+  const values = new Set<number>();
+  for (const pass of RENT_PASSES) {
+    pass.re.lastIndex = 0;
+    for (const m of lower.matchAll(pass.re)) {
+      const start = m.index ?? 0;
+      const end = start + m[0].length;
+      if (isDepositContext(lower, start, end)) continue;
+      const value = pass.amount(m);
+      if (!Number.isFinite(value) || value < RENT_FLOOR || value > RENT_CEIL) continue;
+      const numStart = start + Math.max(0, m[0].lastIndexOf(m[1]));
+      if (isExcludedRentContext(lower, start, end, value, numStart)) continue;
+      values.add(Math.round(value));
+    }
+  }
+  return values.size;
+}
+
+const MULTI_PROPERTY_PHRASE_RE =
+  /\b(?:two|three|four|2|3|4)\s+(?:houses|homes|properties|apartments|flats|annexe?s|units)\b|\banother\s+(?:house|home|property|apartment|flat|annexe?|unit|one)?\s*in\b/iu;
 
 function extractCount(lower: string, res: RegExp[]): number | null {
   for (const re of res) {
@@ -146,9 +221,11 @@ function extractPropertyType(lower: string): {
   if (/\b(?:apartments?|flats?|condos?|penthouses?)\b/.test(lower) || lower.includes('මහල්')) {
     return { propertyType: 'apartment', annex: false };
   }
-  // "room" only in a renting context — "2 bedrooms" must never classify as room.
+  // "room" only in a renting context — "2 bedrooms" must never classify as
+  // room, and "house with 2 rooms for rent" describes the house's capacity,
+  // not a room rental (hence the lookbehind).
   if (
-    /\b(?:single|sharing|boarding)\s+rooms?\b|\brooms?\s+(?:for|to)\s+(?:rent|let)\b|\bboarding\b/.test(
+    /\b(?:single|sharing|boarding)\s+rooms?\b|(?<!\bwith\s{1,3}\d{0,2}\s{0,3})\brooms?\s+(?:for|to)\s+(?:rent|let)\b|\bboarding\b/.test(
       lower
     )
   ) {
@@ -164,23 +241,43 @@ function extractPropertyType(lower: string): {
 }
 
 const ADDRESS_RE =
-  /(?:no\.?\s*)?\d+[\p{L}\d/-]*\s*,?\s*(?:[\p{L}][\p{L}\d'.]*\s+){0,4}(?:road|rd|lane|ln|mawatha|mw|place|pl|avenue|ave|street|st|gardens?|terrace|watt[ae]|para|පාර|මාවත)\.?(?=[\s,.]|$)/iu;
+  // \p{M} alongside \p{L}: Sinhala vowel signs (ා ි ෙ …) are combining marks,
+  // not letters — without it no Sinhala street name can ever match.
+  // The number token must be separated from what follows by a comma or space —
+  // otherwise ordinals self-match ("1st" = "1" + the bare "st" suffix).
+  /(?:no\.?\s*)?\d+[\p{L}\p{M}\d/-]*(?:\s*,\s*|\s+)(?:[\p{L}][\p{L}\p{M}\d'.]*\s+){0,4}(?:road|rd|lane|ln|mawatha|mw|place|pl|avenue|ave|street|st|drive|crescent|close|gardens?|terrace|watt[ae]|para|pedesa|patumaga|පාර|මාවත|පෙදෙස|පටුමග)\.?(?=[\s,.]|$)/iu;
 
-function extractAddress(maskedOriginalCase: string, city: string | null): string | null {
+interface AddressResult {
+  address: string;
+  /**
+   * City resolved from the comma segment right after the street ("…Temple
+   * Road, Kohuwala"). Address-adjacent beats a city name mentioned anywhere
+   * else in the message ("I live in Colombo, house at 10 Temple Road, Ella").
+   */
+  cityOverride: { city: string; district: string } | null;
+}
+
+function extractAddress(maskedOriginalCase: string, city: string | null): AddressResult | null {
   const m = maskedOriginalCase.match(ADDRESS_RE);
   if (!m) return null;
   let address = m[0].replace(/[.,\s]+$/, '');
+  let cityOverride: AddressResult['cityOverride'] = null;
 
-  // Extend to the following comma segment unless it just repeats the city.
+  // The following comma segment is either the area/city (resolve through the
+  // gazetteer — any alias/script) or an unknown area kept as address detail.
   const rest = maskedOriginalCase.slice((m.index ?? 0) + m[0].length);
-  const segment = rest.match(/^\s*,\s*([\p{L}][\p{L}\s'.-]{1,40}?)(?=[,.]|$)/u);
+  const segment = rest.match(/^\s*,\s*([\p{L}][\p{L}\p{M}\s'.-]{1,40}?)(?=[,.]|$)/u);
   if (segment) {
     const seg = segment[1].trim();
-    if (!city || seg.toLowerCase() !== city.toLowerCase()) {
+    const segMatch = matchCity(seg.toLowerCase());
+    if (segMatch && segMatch.city !== city) {
+      cityOverride = segMatch;
+    }
+    if (!segMatch && (!city || seg.toLowerCase() !== city.toLowerCase())) {
       address += `, ${seg}`;
     }
   }
-  return address;
+  return { address, cityOverride };
 }
 
 function composeTitle(args: {
@@ -222,9 +319,17 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
   const bathrooms = extractBathrooms(lower);
   const { propertyType, annex } = extractPropertyType(lower);
   const cityMatch = matchCity(lower);
-  const city = cityMatch?.city ?? null;
-  const district = cityMatch?.district ?? matchDistrict(lower);
-  const address = extractAddress(masked, city);
+  let city = cityMatch?.city ?? null;
+  let district: string | null = cityMatch?.district ?? matchDistrict(lower);
+  const addressResult = extractAddress(masked, city);
+  if (addressResult?.cityOverride) {
+    city = addressResult.cityOverride.city;
+    district = addressResult.cityOverride.district;
+  }
+  const address = addressResult?.address ?? null;
+  const multiProperty =
+    MULTI_PROPERTY_PHRASE_RE.test(lower) ||
+    (matchAllCities(lower).length >= 2 && countRentCandidates(lower) >= 2);
   const title = composeTitle({ bedrooms, propertyType, annex, city });
   const description = composeDescription(original);
   const suspicion = scoreSuspicion(original, { rentPerMonth, bedrooms, city, address });
@@ -242,6 +347,7 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
     missingFields: [],
     suspicious: suspicion.suspicious,
     suspicionReason: suspicion.reason,
+    multiProperty,
     parserMeta: { engine: 'rules', rulesVersion: RULES_VERSION },
   };
   parsed.missingFields = computeMissingFields(parsed);

@@ -208,6 +208,106 @@ const CASES: Array<{
     input: '*2BR house* in _Kadawatha_ ~old price~ 58k',
     expected: { bedrooms: 2, city: 'Kadawatha', rentPerMonth: 58000 },
   },
+  {
+    name: 'drive street suffix',
+    input: '4 bedroom house at 78 Lake Drive, Kandy. Rent 120000 per month.',
+    expected: { address: '78 Lake Drive', city: 'Kandy', rentPerMonth: 120000 },
+  },
+  {
+    name: 'marine drive apartment',
+    input: '2BR apartment 130/5 Marine Drive Dehiwala 95k monthly',
+    expected: { address: '130/5 Marine Drive', city: 'Dehiwala' },
+  },
+  {
+    name: 'crescent street suffix',
+    input: 'House at 12 Palm Crescent, Wattala, 3 beds, 75000 per month',
+    expected: { address: '12 Palm Crescent', city: 'Wattala' },
+  },
+  {
+    name: 'close street suffix',
+    input: '5 Rose Close, Battaramulla — 3 bedroom house, rent 110,000',
+    expected: { address: '5 Rose Close', city: 'Battaramulla' },
+  },
+  {
+    name: 'sinhala pedesa suffix',
+    input: 'නිවස 34 සමගි පෙදෙස, මහරගම. කාමර 3. කුලිය 65000',
+    expected: { address: '34 සමගි පෙදෙස', city: 'Maharagama' },
+  },
+  {
+    name: 'utility per-month amount never beats the labelled rent',
+    input: 'Electricity around 5k per month extra. Rent 50k. Nugegoda 2BR house at 10 Temple Road',
+    expected: { rentPerMonth: 50000, city: 'Nugegoda' },
+  },
+  {
+    name: 'service charge excluded from rent',
+    input: '2BR apartment Colombo 5, rent 95k, service charge 15k per month, 12 Ward Place',
+    expected: { rentPerMonth: 95000, city: 'Colombo 5' },
+  },
+  {
+    name: 'daily short-stay rate is not monthly rent',
+    input: 'Daily rent 7,000. Room in Bentota near beach, 1 bed',
+    expected: { rentPerMonth: null },
+  },
+  {
+    name: 'per night rate is not monthly rent',
+    input: 'Villa in Hikkaduwa 15,000 per night, 3 bedrooms',
+    expected: { rentPerMonth: null },
+  },
+  {
+    name: 'availability year is not rent',
+    input: 'House available for rent from April 2026, Matara, 3BR, 70k',
+    expected: { rentPerMonth: 70000, city: 'Matara' },
+  },
+  {
+    name: 'USD amount never publishes at LKR face value',
+    input: 'Luxury apartment Colombo 3, 3BR, USD 1,500 per month',
+    expected: { rentPerMonth: null, city: 'Colombo 3' },
+  },
+  {
+    name: 'road named after a town is not the city',
+    input: '2BR house, 45 Negombo Road, Ja-Ela, 60000 per month',
+    expected: { city: 'Ja-Ela', address: '45 Negombo Road' },
+  },
+  {
+    name: 'road name skipped, real city and district win',
+    input: 'House on 22 Kurunegala Road, Kandy. 3BR rent 80k',
+    expected: { city: 'Kandy', district: 'Kandy' },
+  },
+  {
+    name: 'ordinal 1st is not a street address',
+    input: '2BR 1st floor apartment in Dehiwala, 55,000 monthly',
+    expected: { address: null, rentPerMonth: 55000 },
+  },
+  {
+    name: 'available from 1st August is not an address',
+    input: '2BR house in Nugegoda 55k per month, available from 1st August',
+    expected: { address: null, rentPerMonth: 55000 },
+  },
+  {
+    name: 'house with N rooms stays a house',
+    input: 'House with 2 rooms for rent in Kandy, 35,000 per month',
+    expected: { propertyType: 'house' },
+  },
+  {
+    name: 'plain rooms-for-rent still classifies as room',
+    input: 'Rooms for rent near campus Malabe 20k per month',
+    expected: { propertyType: 'room' },
+  },
+  {
+    name: 'multi-property message flagged',
+    input: 'I have two houses for rent. One in Nugegoda 3BR 80k, another in Maharagama 2BR 55k',
+    expected: { multiProperty: true },
+  },
+  {
+    name: 'single property with deposit is not multi-property',
+    input: '2BR house Nugegoda 80k per month, deposit 160k, at 12 Lake Lane',
+    expected: { multiProperty: false, rentPerMonth: 80000 },
+  },
+  {
+    name: 'address-adjacent city beats a city mentioned elsewhere',
+    input: 'I stay in Nugegoda. House at 10 Temple Road, Kandy. 2BR 45k',
+    expected: { city: 'Kandy', address: '10 Temple Road' },
+  },
 ];
 
 describe('parseIntakeRules', () => {
@@ -235,6 +335,6 @@ describe('parseIntakeRules', () => {
   });
 
   it('tags parserMeta with the rules engine', () => {
-    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 1 });
+    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 2 });
   });
 });

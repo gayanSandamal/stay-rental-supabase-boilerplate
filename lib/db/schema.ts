@@ -325,6 +325,9 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   parsedPayload: text('parsed_payload'), // JSON from the LLM parser
   status: whatsappIntakeStatusEnum('status').notNull().default('received'),
   failureReason: text('failure_reason'),
+  // Sender attached media we can't ingest (video/voice/non-image documents) —
+  // replies tell them to resend as photos.
+  hasUnsupportedMedia: boolean('has_unsupported_media').notNull().default(false),
   listingId: integer('listing_id').references(() => listings.id),
   lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
   processedAt: timestamp('processed_at'),

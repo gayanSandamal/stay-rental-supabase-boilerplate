@@ -58,14 +58,32 @@ export const whatsappAdapter: ChannelAdapter = {
 
           let text: string | null = null;
           const mediaIds: string[] = [];
+          let unsupportedMedia = false;
 
           if (message.type === 'text') {
             text = message.text?.body ?? null;
           } else if (message.type === 'image') {
             if (message.image?.id) mediaIds.push(String(message.image.id));
             text = message.image?.caption ?? null;
+          } else if (message.type === 'document') {
+            // "Send as file" photos (common, preserves quality) are still
+            // images — same Graph media id, same download path.
+            text = message.document?.caption ?? null;
+            if (
+              message.document?.id &&
+              /^image\//.test(String(message.document?.mime_type ?? ''))
+            ) {
+              mediaIds.push(String(message.document.id));
+            } else {
+              unsupportedMedia = true;
+            }
+          } else if (message.type === 'video' || message.type === 'audio') {
+            // Keep the caption (video captions often hold the whole listing),
+            // flag the media so the sender is told to resend as photos.
+            text = message.video?.caption ?? null;
+            unsupportedMedia = true;
           } else {
-            continue; // ignore other types (audio, stickers, reactions…)
+            continue; // stickers, reactions, locations, system events…
           }
 
           out.push({
@@ -75,6 +93,7 @@ export const whatsappAdapter: ChannelAdapter = {
             messageId: String(message.id ?? ''),
             text,
             mediaIds,
+            unsupportedMedia,
             timestamp: message.timestamp
               ? new Date(Number(message.timestamp) * 1000)
               : new Date(),

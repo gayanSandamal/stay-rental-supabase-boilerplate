@@ -2,15 +2,12 @@
 
 import { FormBuilder } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
-import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
-import { getConciergeWhatsAppLink } from '@/lib/site-config';
 import { CheckCircle2, MessageCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
 export function QuickListForm({ landlordId }: { landlordId: number }) {
   const [submittedTitle, setSubmittedTitle] = useState<string | null>(null);
-  const conciergeEnabled = useFeatureFlag('enableWhatsAppConcierge');
 
   const handleSubmit = async (data: Record<string, any>) => {
     const response = await fetch('/api/listings', {
@@ -26,7 +23,7 @@ export function QuickListForm({ landlordId }: { landlordId: number }) {
     if (!response.ok) {
       if (response.status === 409) {
         throw new Error(
-          'Looks like this address is already listed — check your dashboard, or WhatsApp us and we\'ll sort it out.'
+          'Looks like this address is already listed — check your dashboard for the existing listing.'
         );
       }
       const errorData = await response.json();
@@ -39,29 +36,24 @@ export function QuickListForm({ landlordId }: { landlordId: number }) {
   };
 
   if (submittedTitle) {
-    const conciergeLink = conciergeEnabled
-      ? getConciergeWhatsAppLink(`photos for: ${submittedTitle}`)
-      : null;
-
+    // NB: no WhatsApp photo follow-up here — the concierge number feeds the
+    // automated intake pipeline, which has no attach-photos-to-existing-listing
+    // path; photos for a form-created listing go in via the dashboard.
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center space-y-5">
         <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto" />
         <h2 className="text-2xl font-extrabold text-slate-900">Submitted!</h2>
         <p className="text-slate-600 max-w-md mx-auto">
-          <strong>{submittedTitle}</strong> is in — our team will call or WhatsApp
-          you to confirm the details and collect photos before it goes live.
+          <strong>{submittedTitle}</strong> is in — add photos now so it goes
+          live faster. Our team reviews it shortly.
         </p>
-        {conciergeLink && (
-          <a
-            href={conciergeLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md transition-colors"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Speed it up — WhatsApp us your photos now
-          </a>
-        )}
+        <Link
+          href="/dashboard/listings"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md transition-colors"
+        >
+          <MessageCircle className="h-4 w-4" />
+          Add photos to your listing
+        </Link>
         <div>
           <Link
             href="/dashboard/listings"

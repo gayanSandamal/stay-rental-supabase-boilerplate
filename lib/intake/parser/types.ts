@@ -19,6 +19,12 @@ export interface ParsedIntake {
   /** Flag for content that looks off (spam/scam/not-a-rental). */
   suspicious: boolean;
   suspicionReason: string | null;
+  /**
+   * Message appears to describe more than one property (two cities + two
+   * amounts, or an explicit "I have two houses…"). One intake = one listing,
+   * so checks route this back to the sender to split.
+   */
+  multiProperty?: boolean;
   /** Diagnostics: which engine produced the payload (persisted in parsedPayload). */
   parserMeta?: { engine: 'rules' | 'rules+llm'; rulesVersion: number };
 }

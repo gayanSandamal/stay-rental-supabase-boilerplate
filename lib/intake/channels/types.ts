@@ -18,6 +18,12 @@ export interface NormalizedInboundMessage {
   text: string | null;
   /** Provider media ids; resolve via persistMedia at webhook time. */
   mediaIds: string[];
+  /**
+   * The message carried media the pipeline can't ingest (video, voice note,
+   * non-image document). A session must still exist so the sender can be told
+   * to resend as photos — silence is never acceptable.
+   */
+  unsupportedMedia?: boolean;
   timestamp: Date;
 }
 
