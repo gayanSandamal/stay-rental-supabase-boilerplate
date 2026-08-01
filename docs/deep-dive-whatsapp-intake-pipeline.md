@@ -125,7 +125,7 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
 
 ## 2026-07-28 go-live hardening (pre-Meta-launch review)
 
-An adversarial review before wiring the real number (+94752953202) confirmed 22 defects; all fixed:
+An adversarial review before wiring the real number (+94770711939) confirmed 22 defects; all fixed:
 
 - **Parser (`rulesVersion: 2`)**: rent-keyword pass now outranks generic "X per month" (utility amounts can't become rent); daily/nightly/weekly rates, USD amounts, availability years ("from April 2026") and deposit contexts are all excluded from rent; ADDRESS_RE requires number/word separation (ordinals like "1st floor" no longer become addresses) and understands Sinhala combining marks + more street types (drive/crescent/close/පෙදෙස/පටුමග); city matching skips town-named roads ("Negombo Road" ≠ Negombo) and the address-adjacent segment overrides a city mentioned elsewhere; "house with N rooms for rent" stays a house; multi-property messages are detected and routed back to the sender (`multiProperty`) instead of publishing a chimera.
 - **Session (`session.ts`)**: all writes serialize under a per-sender `pg_advisory_xact_lock` (album fan-out races lost photos/split sessions); message-id dedup happens BEFORE media download and looks across recent closed sessions (Meta redelivery after publish no longer seeds junk); needs_info sessions reattach for 7 days (was 6h — replies the next morning lost all context); thin follow-ups ("thanks!") within 48h of publish append to the published intake + notify ops instead of spawning a needs_info loop; substantive messages still open a fresh intake (second property).

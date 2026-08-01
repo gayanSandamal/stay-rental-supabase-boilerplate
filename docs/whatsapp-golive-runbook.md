@@ -1,4 +1,4 @@
-# WhatsApp Intake — Go-Live Runbook for +94 75 295 3202
+# WhatsApp Intake — Go-Live Runbook for +94 77 071 1939
 
 **Status:** the pipeline is fully built, merged (PR #14), deployed, and verified end-to-end against a local stack (2026-07-28). Production is dormant by design — the webhook returns 503 until the four `WHATSAPP_*` env vars exist. This runbook is the *only* remaining work, and most of it happens in Meta's dashboards, so it must be done by a human with access to the business's Facebook account.
 
@@ -6,7 +6,7 @@ The app-side pieces (env var names, webhook URL, verify token) are pre-decided b
 
 ---
 
-## ⚠️ Read first: what happens to +94 75 295 3202
+## ⚠️ Read first: what happens to +94 77 071 1939
 
 Registering a number with the WhatsApp Business **Cloud API** is a one-way door for day-to-day use:
 
@@ -17,7 +17,7 @@ Registering a number with the WhatsApp Business **Cloud API** is a one-way door 
 ## Prerequisites
 
 - A Facebook account with admin access to (or ability to create) a **Meta Business Portfolio** for Easy Rent — https://business.facebook.com
-- The +94 75 295 3202 SIM available to receive an SMS or voice call once, for number verification.
+- The +94 77 071 1939 SIM available to receive an SMS or voice call once, for number verification.
 - Access to the Vercel project for easyrent.lk.
 
 ## Step 1 — Meta app + WhatsApp product (developers.facebook.com)
@@ -26,7 +26,7 @@ Registering a number with the WhatsApp Business **Cloud API** is a one-way door 
 2. In the app dashboard, **Add Product → WhatsApp → Set up**. This creates a WhatsApp Business Account (WABA) with a free Meta **test number**.
 3. (Optional but recommended) Do a sandbox smoke test with the test number first — see Step 6; it works before business verification.
 
-## Step 2 — Register +94 75 295 3202
+## Step 2 — Register +94 77 071 1939
 
 1. WhatsApp → **API Setup** → "Add phone number".
 2. Display name: `Easy Rent` (Meta reviews this against their display-name policy — avoid punctuation gimmicks). Category: real estate.
@@ -56,12 +56,12 @@ Vercel → easyrent.lk project → Settings → Environment Variables (Productio
 | `WHATSAPP_APP_SECRET` | from Step 3.1 |
 | `WHATSAPP_ACCESS_TOKEN` | system-user token from Step 3.2 |
 | `WHATSAPP_PHONE_NUMBER_ID` | from Step 2.4 |
-| `NEXT_PUBLIC_WHATSAPP_SUPPORT` | `94752953202` |
+| `NEXT_PUBLIC_WHATSAPP_SUPPORT` | `94770711939` |
 
 Then **redeploy** (`NEXT_PUBLIC_*` vars are baked in at build time — a plain env change without a new deployment will not surface the concierge CTAs). After the deploy:
 
 - `POST https://easyrent.lk/api/whatsapp/webhook` should return **401** (was 503) — it now wants a signature.
-- The homepage landlord section shows the "WhatsApp us" CTAs pointing at wa.me/94752953202.
+- The homepage landlord section shows the "WhatsApp us" CTAs pointing at wa.me/94770711939.
 
 ## Step 5 — Register the webhook with Meta
 
