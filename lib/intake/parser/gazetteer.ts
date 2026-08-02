@@ -206,6 +206,23 @@ export function matchCity(lowerText: string): { city: string; district: District
 }
 
 /**
+ * True only when the WHOLE string is a known city name/alias (or ward form) —
+ * unlike matchCity, which searches. "kandana estate" is NOT a city name even
+ * though it contains one.
+ */
+export function isCityName(lowerText: string): { city: string; district: District } | null {
+  const t = lowerText.trim();
+  const ward = t.match(COLOMBO_WARD_RE);
+  if (ward && ward[0].trim() === t) {
+    return { city: `Colombo ${Number(ward[1])}`, district: 'Colombo' };
+  }
+  for (const c of CANDIDATES) {
+    if (c.key === t) return { city: c.city, district: c.district };
+  }
+  return null;
+}
+
+/**
  * All distinct cities mentioned (road names excluded). Used only to detect
  * multi-property messages — matchCity stays the authority on THE city.
  */

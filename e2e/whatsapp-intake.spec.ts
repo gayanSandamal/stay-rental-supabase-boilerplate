@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
  *
  * Parsing is rule-based and in-process (lib/intake/parser) — no API key
  * needed. The full parse→publish path is asserted when the target runs with
- * INTAKE_SETTLE_MS=0 (test seam that disables the 10-min settle window);
+ * INTAKE_SETTLE_MS=0 (test seam that disables the settle window);
  * otherwise the settle window keeps fresh intakes queued and only the
  * plumbing is asserted.
  */
@@ -114,7 +114,7 @@ test.describe.serial('WhatsApp intake pipeline (mutating)', () => {
   });
 
   test('cron processes the intake into the expected state', async ({ request }) => {
-    // Without INTAKE_SETTLE_MS=0 on the target, the 10-min settle window keeps
+    // Without INTAKE_SETTLE_MS=0 on the target, the settle window keeps
     // the fresh intake queued — this then only asserts the endpoint runs
     // cleanly and reports counts. With the seam active, the complete message
     // stored above must rule-parse and publish.

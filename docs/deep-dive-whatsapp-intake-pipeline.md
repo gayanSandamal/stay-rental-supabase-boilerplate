@@ -29,7 +29,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 
 | File | Purpose |
 | --- | --- |
-| `process.ts` | The "brain": `processSettledIntakes(adapters)` + `processIntake(intake, adapter)`. Parse → checks → publish/needs_info/manual_review state machine. `SETTLE_MS` (10 min; `INTAKE_SETTLE_MS` env is a test seam) batches multi-message bursts. |
+| `process.ts` | The "brain": `processSettledIntakes(adapters)` + `processIntake(intake, adapter)`. Parse → checks → publish/needs_info/manual_review state machine. `SETTLE_MS` (4 min; `INTAKE_SETTLE_MS` env is a test seam) batches multi-message bursts. |
 | `session.ts` | `appendToIntake(msg, mediaUrls)` — per-sender session append, channel-scoped, 6h `SESSION_WINDOW_MS`, idempotent via message ids, `needs_info` → `received` reopen. |
 | `checks.ts` | `runIntakeChecks(parsed)` — suspicious → non-retriable; missing fields / rent outside 5k–3M LKR → retriable (ask sender); duplicate address+city → non-retriable. |
 | `messages.ts` | Pure sender-reply string builders (needs-info / published / pending-review). |
@@ -60,7 +60,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 ### Routes (thin delegates)
 
 - `app/api/whatsapp/webhook/route.ts` — GET = adapter handshake; POST = 503 unconfigured → flag-off ack → 401 bad signature → 400 bad JSON → normalize → persist media → `appendToIntake`. No parsing/decisions here.
-- `app/api/cron/process-whatsapp-intakes/route.ts` — Vercel Cron every 10 min (`vercel.json`), `CRON_SECRET` bearer, fail-closed. Delegates to `processSettledIntakes(intakeChannelAdapters)`; returns `{ ok, processed, published, needsInfo, manual }`. URL kept for cron-config stability even though the logic is channel-generic.
+- `app/api/cron/process-whatsapp-intakes/route.ts` — Vercel Cron every 2 min (`vercel.json`), `CRON_SECRET` bearer, fail-closed. Delegates to `processSettledIntakes(intakeChannelAdapters)`; returns `{ ok, processed, published, needsInfo, manual }`. URL kept for cron-config stability even though the logic is channel-generic.
 
 ### Back office
 
@@ -84,8 +84,8 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
                                  │  adapter: verify signature → normalize → download media
                                  ▼
                         whatsapp_intakes row (channel, status=received)
-                                 │  (settle 10 min)
-                        /api/cron/process-whatsapp-intakes (every 10 min)
+                                 │  (settle 4 min)
+                        /api/cron/process-whatsapp-intakes (every 2 min)
                                  │  parseIntake: rules (+LLM fill-ins if flagged) → runIntakeChecks
               ┌──────────────────┼──────────────────────┐
        checks pass          retriable fail          hard fail (scam/dupe)
@@ -125,7 +125,7 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
 
 ## 2026-07-28 go-live hardening (pre-Meta-launch review)
 
-An adversarial review before wiring the real number (+94752953202) confirmed 22 defects; all fixed:
+An adversarial review before wiring the real number (+94770711939) confirmed 22 defects; all fixed:
 
 - **Parser (`rulesVersion: 2`)**: rent-keyword pass now outranks generic "X per month" (utility amounts can't become rent); daily/nightly/weekly rates, USD amounts, availability years ("from April 2026") and deposit contexts are all excluded from rent; ADDRESS_RE requires number/word separation (ordinals like "1st floor" no longer become addresses) and understands Sinhala combining marks + more street types (drive/crescent/close/පෙදෙස/පටුමග); city matching skips town-named roads ("Negombo Road" ≠ Negombo) and the address-adjacent segment overrides a city mentioned elsewhere; "house with N rooms for rent" stays a house; multi-property messages are detected and routed back to the sender (`multiProperty`) instead of publishing a chimera.
 - **Session (`session.ts`)**: all writes serialize under a per-sender `pg_advisory_xact_lock` (album fan-out races lost photos/split sessions); message-id dedup happens BEFORE media download and looks across recent closed sessions (Meta redelivery after publish no longer seeds junk); needs_info sessions reattach for 7 days (was 6h — replies the next morning lost all context); thin follow-ups ("thanks!") within 48h of publish append to the published intake + notify ops instead of spawning a needs_info loop; substantive messages still open a fresh intake (second property).
@@ -133,4 +133,8 @@ An adversarial review before wiring the real number (+94752953202) confirmed 22 
 - **Robustness**: publish is fail-safe past the point of listing creation (reply/audit/notify failures can no longer flip a published intake to manual_review); failed sender replies notify ops; media/send fetches have AbortSignal timeouts and loud logging; duplicate screen only matches active/pending listings (relisting after expiry is legal); both routes export `maxDuration = 60`.
 - **Test seam**: `WHATSAPP_GRAPH_API_BASE` env (like `INTAKE_SETTLE_MS`) lets e2e point media/send at a mock Graph server — the full image path and outbound payloads are now assertable locally. Never set in prod.
 
-_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28. Original deep-dive generated 2026-07-10._
+## 2026-08-02 live-launch follow-up (`rulesVersion: 3`)
+
+First real production intake exposed a parser gap: a large share of Sri Lankan addresses have **no street-type word at all** ("220/A, Mackwatte, Asgiriya") and ADDRESS_RE demanded one, trapping the sender in a needs-info loop. `extractAddressFallback` (rule-parser.ts) now accepts *house-number, Place, Place* patterns, guarded so amounts ("rent 4,500, negotiable"), years, five-digit numbers, money-keyword contexts, lone digits, and lowercase chat filler can never fabricate an address; a segment exactly equal to a gazetteer city (new `isCityName`) is treated as the city, and "Asgiriya Gampaha"-style tails keep their local part.
+
+_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-up 2026-08-02. Original deep-dive generated 2026-07-10._
