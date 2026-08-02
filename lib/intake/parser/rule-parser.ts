@@ -7,10 +7,10 @@
  */
 
 import { ParsedIntake, computeMissingFields } from './types';
-import { matchCity, matchAllCities, matchDistrict } from './gazetteer';
+import { matchCity, matchAllCities, matchDistrict, isCityName } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
-export const RULES_VERSION = 2;
+export const RULES_VERSION = 3;
 
 /** Sanity clamp at extraction time; checks.ts enforces the market window. */
 const RENT_FLOOR = 1_000;
@@ -259,7 +259,7 @@ interface AddressResult {
 
 function extractAddress(maskedOriginalCase: string, city: string | null): AddressResult | null {
   const m = maskedOriginalCase.match(ADDRESS_RE);
-  if (!m) return null;
+  if (!m) return extractAddressFallback(maskedOriginalCase, city);
   let address = m[0].replace(/[.,\s]+$/, '');
   let cityOverride: AddressResult['cityOverride'] = null;
 
@@ -278,6 +278,75 @@ function extractAddress(maskedOriginalCase: string, city: string | null): Addres
     }
   }
   return { address, cityOverride };
+}
+
+/**
+ * Fallback for the extremely common Sri Lankan address with NO street type:
+ * "220/A, Mackwatte, Asgiriya" — house number, then comma-separated place
+ * names. Requires the comma and capitalized (or Sinhala) segments so prices
+ * ("rent 4,500, negotiable") and chat filler ("after 7, thanks") never match.
+ */
+const ADDRESS_FALLBACK_RE =
+  // NB: no `i` flag — case-insensitivity would let \p{Lu} match lowercase and
+  // destroy the capitalization guard; the No-prefix is spelled out instead.
+  /(?<![\d,])((?:[Nn][Oo]\.?\s*)?\d{1,4}[\p{L}\p{M}\d/-]*)\s*,\s*([\p{Lu}\p{Lo}][\p{L}\p{M}\d'-]*(?:\s+[\p{Lu}\p{Lo}\d][\p{L}\p{M}\d'-]*){0,3}(?:\s*,\s*[\p{Lu}\p{Lo}][\p{L}\p{M}\d'\s-]{0,30}){0,2})/u;
+
+const MONEY_CONTEXT_BEFORE_RE =
+  /(?:rent|rental|monthly|kuliya|කුලිය|rs\.?|lkr|slr|rupees|deposit|advance|key\s*money)[\s:.\-]*$/i;
+
+function extractAddressFallback(
+  maskedOriginalCase: string,
+  city: string | null
+): AddressResult | null {
+  const m = maskedOriginalCase.match(ADDRESS_FALLBACK_RE);
+  if (!m) return null;
+  const start = m.index ?? 0;
+  const lower = maskedOriginalCase.toLowerCase();
+  const numberPart = m[1].trim();
+  const digits = numberPart.replace(/^no\.?\s*/i, '');
+
+  // Amounts and years must never become house numbers.
+  if (/^\d+(?:\.\d+)?k$/i.test(digits)) return null;
+  if (/^\d+$/.test(digits) && (digits.length >= 5 || /^(19|20)\d{2}$/.test(digits))) return null;
+  // A lone bare digit ("after 7, thanks") is only plausible with a "No" prefix.
+  if (/^\d$/.test(digits) && digits === numberPart) return null;
+  const numStart = start + m[0].indexOf(digits);
+  if (MONEY_CONTEXT_BEFORE_RE.test(lower.slice(Math.max(0, numStart - 14), numStart))) {
+    return null;
+  }
+
+  let cityOverride: AddressResult['cityOverride'] = null;
+  const segments: string[] = [];
+  for (const rawSeg of m[2].split(',')) {
+    // Keep only the leading run of capitalized/Sinhala/numeric words —
+    // trailing prose ("Kandana Watta for rent") is not part of the address.
+    const words: string[] = [];
+    for (const w of rawSeg.trim().split(/\s+/)) {
+      if (!/^[\p{Lu}\p{Lo}\d]/u.test(w)) break;
+      words.push(w);
+    }
+    let seg = words.join(' ');
+    if (!seg) continue;
+    // Segment ENDING in the city name ("Asgiriya Gampaha") keeps its local part.
+    if (city && seg.toLowerCase().endsWith(city.toLowerCase())) {
+      seg = seg.slice(0, seg.length - city.length).trim();
+      if (!seg) continue;
+    }
+    // Segment that IS exactly a known city ("…, Kelaniya"): the city, not
+    // address detail. Exact match only — "Kandana Estate" contains a city
+    // name but is a place in its own right.
+    const segMatch = isCityName(seg.toLowerCase());
+    if (segMatch) {
+      if (segMatch.city !== city) cityOverride = segMatch;
+      continue;
+    }
+    segments.push(seg);
+    if (segments.length === 3) break;
+  }
+
+  // Without at least one real place segment ("12, Colombo") this is not an address.
+  if (segments.length === 0) return null;
+  return { address: [numberPart, ...segments].join(', '), cityOverride };
 }
 
 function composeTitle(args: {

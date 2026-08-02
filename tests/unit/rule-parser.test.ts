@@ -308,6 +308,62 @@ const CASES: Array<{
     input: 'I stay in Nugegoda. House at 10 Temple Road, Kandy. 2BR 45k',
     expected: { city: 'Kandy', address: '10 Temple Road' },
   },
+  {
+    name: 'suffix-less address: number + village names (live-found case)',
+    input:
+      '2 bedroom house at 3102 Gamapaha, Gampaha for 20000 per month. 3 bedrooms.\n220/A, Mackwatte, Asgiriya Gampaha',
+    expected: {
+      address: '220/A, Mackwatte, Asgiriya',
+      city: 'Gampaha',
+      rentPerMonth: 20000,
+      bedrooms: 2,
+    },
+  },
+  {
+    name: 'suffix-less address with No prefix',
+    input: 'Annex for rent. No. 45/2, Wewelduwa, Kelaniya. 1 bedroom, 30000 per month',
+    expected: { address: 'No. 45/2, Wewelduwa', city: 'Kelaniya' },
+  },
+  {
+    name: 'rent amount before comma never becomes a house number',
+    input: 'House in Wattala, 2BR, rent 4500, Wattala side',
+    expected: { address: null },
+  },
+  {
+    name: 'deposit amount before comma never becomes a house number',
+    input: 'deposit 160k, Negombo area, 2BR annex 35000 per month',
+    expected: { address: null, rentPerMonth: 35000 },
+  },
+  {
+    name: 'year before comma never becomes a house number',
+    input: 'Available from 2026, Colombo apartment, 2BR 95k',
+    expected: { address: null },
+  },
+  {
+    name: 'five-digit amount before comma never becomes a house number',
+    input: 'Price 20000, Ragama, negotiable, 2 bedrooms',
+    expected: { address: null },
+  },
+  {
+    name: 'lowercase chat filler never becomes an address',
+    input: 'call me after 7, thanks, bye. 2BR house Kadawatha 55k',
+    expected: { address: null, city: 'Kadawatha' },
+  },
+  {
+    name: 'number + city alone is not an address',
+    input: 'Apartment at 3102, Gampaha for 20000 per month, 2 bedrooms',
+    expected: { address: null, city: 'Gampaha' },
+  },
+  {
+    name: 'sinhala suffix-less address',
+    input: 'නිවස කුලියට. 34/1, පල්ලෙගම, මහරගම. කාමර 3. කුලිය 45000',
+    expected: { address: '34/1, පල්ලෙගම', city: 'Maharagama' },
+  },
+  {
+    name: 'fallback segment trims trailing prose',
+    input: '12/B, Kandana Estate for rent, Ja-Ela, 3 bedrooms, 60000 per month',
+    expected: { address: '12/B, Kandana Estate' },
+  },
 ];
 
 describe('parseIntakeRules', () => {
@@ -335,6 +391,6 @@ describe('parseIntakeRules', () => {
   });
 
   it('tags parserMeta with the rules engine', () => {
-    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 2 });
+    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 3 });
   });
 });

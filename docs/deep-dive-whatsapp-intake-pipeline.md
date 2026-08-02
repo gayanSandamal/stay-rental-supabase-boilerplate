@@ -133,4 +133,8 @@ An adversarial review before wiring the real number (+94770711939) confirmed 22 
 - **Robustness**: publish is fail-safe past the point of listing creation (reply/audit/notify failures can no longer flip a published intake to manual_review); failed sender replies notify ops; media/send fetches have AbortSignal timeouts and loud logging; duplicate screen only matches active/pending listings (relisting after expiry is legal); both routes export `maxDuration = 60`.
 - **Test seam**: `WHATSAPP_GRAPH_API_BASE` env (like `INTAKE_SETTLE_MS`) lets e2e point media/send at a mock Graph server — the full image path and outbound payloads are now assertable locally. Never set in prod.
 
-_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28. Original deep-dive generated 2026-07-10._
+## 2026-08-02 live-launch follow-up (`rulesVersion: 3`)
+
+First real production intake exposed a parser gap: a large share of Sri Lankan addresses have **no street-type word at all** ("220/A, Mackwatte, Asgiriya") and ADDRESS_RE demanded one, trapping the sender in a needs-info loop. `extractAddressFallback` (rule-parser.ts) now accepts *house-number, Place, Place* patterns, guarded so amounts ("rent 4,500, negotiable"), years, five-digit numbers, money-keyword contexts, lone digits, and lowercase chat filler can never fabricate an address; a segment exactly equal to a gazetteer city (new `isCityName`) is treated as the city, and "Asgiriya Gampaha"-style tails keep their local part.
+
+_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-up 2026-08-02. Original deep-dive generated 2026-07-10._
