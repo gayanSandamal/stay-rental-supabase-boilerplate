@@ -19,11 +19,12 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
 /**
  * Intakes settle for SETTLE_MS after the last message so multi-message
- * submissions (text, then photos) batch into one listing. INTAKE_SETTLE_MS is
- * a test seam (set 0 on a local/staging target to process immediately) — do
- * not set it in production.
+ * submissions (text, then photos) batch into one listing. 4 min balances
+ * batching against sender wait time (cron runs every 2 min — see
+ * vercel.json). INTAKE_SETTLE_MS is a test seam (set 0 on a local/staging
+ * target to process immediately) — do not set it in production.
  */
-export const SETTLE_MS = Number(process.env.INTAKE_SETTLE_MS ?? 10 * 60 * 1000);
+export const SETTLE_MS = Number(process.env.INTAKE_SETTLE_MS ?? 4 * 60 * 1000);
 
 export type IntakeOutcome = 'published' | 'needs_info' | 'manual_review';
 

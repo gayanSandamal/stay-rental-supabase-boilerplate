@@ -29,7 +29,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 
 | File | Purpose |
 | --- | --- |
-| `process.ts` | The "brain": `processSettledIntakes(adapters)` + `processIntake(intake, adapter)`. Parse → checks → publish/needs_info/manual_review state machine. `SETTLE_MS` (10 min; `INTAKE_SETTLE_MS` env is a test seam) batches multi-message bursts. |
+| `process.ts` | The "brain": `processSettledIntakes(adapters)` + `processIntake(intake, adapter)`. Parse → checks → publish/needs_info/manual_review state machine. `SETTLE_MS` (4 min; `INTAKE_SETTLE_MS` env is a test seam) batches multi-message bursts. |
 | `session.ts` | `appendToIntake(msg, mediaUrls)` — per-sender session append, channel-scoped, 6h `SESSION_WINDOW_MS`, idempotent via message ids, `needs_info` → `received` reopen. |
 | `checks.ts` | `runIntakeChecks(parsed)` — suspicious → non-retriable; missing fields / rent outside 5k–3M LKR → retriable (ask sender); duplicate address+city → non-retriable. |
 | `messages.ts` | Pure sender-reply string builders (needs-info / published / pending-review). |
@@ -60,7 +60,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 ### Routes (thin delegates)
 
 - `app/api/whatsapp/webhook/route.ts` — GET = adapter handshake; POST = 503 unconfigured → flag-off ack → 401 bad signature → 400 bad JSON → normalize → persist media → `appendToIntake`. No parsing/decisions here.
-- `app/api/cron/process-whatsapp-intakes/route.ts` — Vercel Cron every 10 min (`vercel.json`), `CRON_SECRET` bearer, fail-closed. Delegates to `processSettledIntakes(intakeChannelAdapters)`; returns `{ ok, processed, published, needsInfo, manual }`. URL kept for cron-config stability even though the logic is channel-generic.
+- `app/api/cron/process-whatsapp-intakes/route.ts` — Vercel Cron every 2 min (`vercel.json`), `CRON_SECRET` bearer, fail-closed. Delegates to `processSettledIntakes(intakeChannelAdapters)`; returns `{ ok, processed, published, needsInfo, manual }`. URL kept for cron-config stability even though the logic is channel-generic.
 
 ### Back office
 
@@ -84,8 +84,8 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
                                  │  adapter: verify signature → normalize → download media
                                  ▼
                         whatsapp_intakes row (channel, status=received)
-                                 │  (settle 10 min)
-                        /api/cron/process-whatsapp-intakes (every 10 min)
+                                 │  (settle 4 min)
+                        /api/cron/process-whatsapp-intakes (every 2 min)
                                  │  parseIntake: rules (+LLM fill-ins if flagged) → runIntakeChecks
               ┌──────────────────┼──────────────────────┐
        checks pass          retriable fail          hard fail (scam/dupe)

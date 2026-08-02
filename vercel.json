@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/process-whatsapp-intakes",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/2 * * * *"
     }
   ]
 }

@@ -1,0 +1,27 @@
+{
+  "installation": { "generator": "bmad document-project (deep-dive)", "version": "6.10.0" },
+  "mode": "deep_dive",
+  "scan_level": "exhaustive",
+  "last_updated": "2026-07-10",
+  "current_step": "13g",
+  "completed_steps": ["13a", "13b", "13c", "13d", "13e", "13f"],
+  "project_classification": {
+    "project_name": "stay-rental-supabase",
+    "primary_stack": "Next.js 15 App Router, React 19, TypeScript, Drizzle ORM, Supabase, Vercel"
+  },
+  "deep_dive_targets": [
+    {
+      "target_name": "WhatsApp → Listing Intake Pipeline",
+      "target_type": "feature",
+      "target_path": "app/api/whatsapp, app/api/cron/process-whatsapp-intakes, lib/whatsapp, app/(dashboard)/back-office/whatsapp-intakes",
+      "files_analyzed": 12,
+      "total_loc": 1080,
+      "output_file": "deep-dive-whatsapp-intake-pipeline.md",
+      "timestamp": "2026-07-10"
+    }
+  ],
+  "outputs_generated": [
+    "docs/index.md",
+    "docs/deep-dive-whatsapp-intake-pipeline.md"
+  ]
+}

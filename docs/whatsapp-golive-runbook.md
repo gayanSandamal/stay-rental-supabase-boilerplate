@@ -78,7 +78,7 @@ App dashboard → WhatsApp → **Configuration** → Webhook → Edit:
    > 2 bedroom house at 25 Galle Road, Dehiwala for 85000 per month. 2 bathrooms.
    and attach 1–2 photos.
 2. Within ~10 s: **Back Office → WhatsApp Intakes** shows a `received` row with your number, text, and photo thumbnails.
-3. Within ~10–20 min (10-min settle window + 10-min cron): the row flips to `published`, the listing is live on /listings under "Easy Rent Operations" with your number as the verified contact, and you receive a WhatsApp confirmation reply.
+3. Within ~4–6 min (4-min settle window + 2-min cron): the row flips to `published`, the listing is live on /listings under "Easy Rent Operations" with your number as the verified contact, and you receive a WhatsApp confirmation reply.
 4. Also send a deliberately incomplete message ("house for rent, 2 rooms") from another phone → expect a reply asking for the missing fields (`needs_info`).
 
 ## Step 7 — App Review / going fully live
@@ -92,7 +92,7 @@ While the app is in **Development mode**, only numbers added as test recipients 
 
 - **Back Office → Settings**: `enableWhatsAppIntake` OFF = webhook acks but stores nothing. `autoPublishWhatsAppIntakes` OFF = intakes go to `pending` for one-tap approval instead of publishing live.
 - Triage queue: **Back Office → WhatsApp Intakes** (reject / reprocess).
-- Cron `/api/cron/process-whatsapp-intakes` runs every 10 min (Vercel cron, `CRON_SECRET` bearer).
+- Cron `/api/cron/process-whatsapp-intakes` runs every 2 min (Vercel cron, `CRON_SECRET` bearer).
 - Docs: `docs/deep-dive-whatsapp-intake-pipeline.md` for architecture; `e2e/whatsapp-intake.spec.ts` for the simulated-payload test suite.
 
 ## Known limitations to keep in mind
