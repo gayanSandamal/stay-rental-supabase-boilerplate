@@ -72,27 +72,31 @@ export function BundleActivationButtons({
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium text-gray-500">Bundles</p>
-      <div className="flex flex-wrap gap-2">
+      {/* Full-width rows carrying their own description — the old ragged pills
+          overflowed narrow cards and needed a separate summary paragraph. */}
+      <div className="space-y-2">
         {BUNDLES.map((bundle) => {
           const isLoading = loadingBundle === bundle.id;
           return (
-            <Button
-              key={bundle.id}
-              size="sm"
-              variant="outline"
-              onClick={() => handleActivate(bundle.id)}
-              disabled={!!loadingBundle}
-              className="border-slate-300 text-slate-700 hover:bg-slate-50"
-            >
-              <Package className="h-3.5 w-3.5 mr-1.5" />
-              {isLoading ? 'Activating...' : `${bundle.label} (${bundle.price})`}
-            </Button>
+            <div key={bundle.id}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleActivate(bundle.id)}
+                disabled={!!loadingBundle}
+                className="w-full justify-between border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5" />
+                  {isLoading ? 'Activating…' : bundle.label}
+                </span>
+                <span className="text-xs font-normal text-slate-500">{bundle.price}</span>
+              </Button>
+              <p className="mt-1 text-xs text-gray-500">{bundle.description}</p>
+            </div>
           );
         })}
       </div>
-      <p className="text-xs text-gray-500">
-        Quick Results: Boost + Urgent. Priority Exposure: Featured + Urgent. Starter: 30-day plan + Boost.
-      </p>
     </div>
   );
 }

@@ -44,8 +44,8 @@ export function UrgentListingButton({
 
   if (isUrgent) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-rose-100 text-rose-800 border border-rose-200">
-        <Clock className="h-3.5 w-3.5" />
+      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-rose-100 text-rose-800 border border-rose-200">
+        <Clock className="h-3.5 w-3.5 shrink-0" />
         Urgent until {new Date(urgentUntilState!).toLocaleDateString('en-US')}
       </span>
     );
@@ -58,10 +58,13 @@ export function UrgentListingButton({
         variant="outline"
         onClick={handleActivate}
         disabled={loading}
-        className="border-rose-300 text-rose-800 hover:bg-rose-50"
+        className="w-full justify-between border-rose-300 text-rose-800 hover:bg-rose-50"
       >
-        <Clock className="h-4 w-4 mr-1.5" />
-        {loading ? 'Activating...' : 'Activate Urgent (LKR 150/7d)'}
+        <span className="flex items-center gap-1.5">
+          <Clock className="h-4 w-4" />
+          {loading ? 'Activating…' : 'Urgent'}
+        </span>
+        <span className="text-xs font-normal text-rose-700/80">LKR 150 · 7d</span>
       </Button>
     );
   }

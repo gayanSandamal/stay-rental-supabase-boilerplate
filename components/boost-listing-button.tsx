@@ -49,8 +49,8 @@ export function BoostListingButton({
 
   if (isBoosted) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
-        <Zap className="h-3.5 w-3.5" />
+      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
+        <Zap className="h-3.5 w-3.5 shrink-0" />
         Boosted until {new Date(boostedUntilState!).toLocaleDateString('en-US')}
       </span>
     );
@@ -59,15 +59,21 @@ export function BoostListingButton({
   if (isAdminOrOps) {
     return (
       <div className="space-y-1.5">
+        {/* Full-width row (name left, price right): the Button base is
+            whitespace-nowrap + shrink-0, so a single-string label overflows
+            narrow cards instead of fitting them. */}
         <Button
           size="sm"
           variant="outline"
           onClick={handleActivate}
           disabled={loading}
-          className="border-amber-300 text-amber-800 hover:bg-amber-50"
+          className="w-full justify-between border-amber-300 text-amber-800 hover:bg-amber-50"
         >
-          <Zap className="h-4 w-4 mr-1.5" />
-          {loading ? 'Activating...' : 'Activate Boost (LKR 250/7d)'}
+          <span className="flex items-center gap-1.5">
+            <Zap className="h-4 w-4" />
+            {loading ? 'Activating…' : 'Boost'}
+          </span>
+          <span className="text-xs font-normal text-amber-700/80">LKR 250 · 7d</span>
         </Button>
         {includedBoostsRemaining > 0 && (
           <p className="text-xs text-amber-700">
