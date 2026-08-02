@@ -284,7 +284,8 @@ export default async function ListingDetailPage({
             <div className="flex items-center text-gray-600 mb-4">
               <MapPin className="h-5 w-5 mr-2" />
               {listing.address}, {listing.city}
-              {listing.district && `, ${listing.district}`}
+              {/* district repeats the city for district capitals ("Gampaha, Gampaha") */}
+              {listing.district && listing.district !== listing.city && `, ${listing.district}`}
             </div>
           </div>
 
@@ -399,6 +400,14 @@ export default async function ListingDetailPage({
             </CardContent>
           </Card>
 
+          {/* WhatsApp-intake listings carry none of these fields — an empty
+              card with a bare heading reads as broken UI. */}
+          {(listing.powerBackup ||
+            listing.waterSource ||
+            listing.hasFiber ||
+            listing.acUnits ||
+            listing.fans ||
+            listing.ventilation) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Sri Lanka-Specific Features</CardTitle>
@@ -447,7 +456,9 @@ export default async function ListingDetailPage({
               </div>
             </CardContent>
           </Card>
+          )}
 
+          {(listing.isGated || listing.hasGuard || listing.hasCCTV || listing.hasBurglarBars) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Safety & Security</CardTitle>
@@ -469,6 +480,7 @@ export default async function ListingDetailPage({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {listing.verified && (
             <Card className="mb-6 border-green-200 bg-green-50">
