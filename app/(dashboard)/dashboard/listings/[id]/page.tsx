@@ -332,33 +332,25 @@ export default async function ListingEditPage({
                 <CardTitle>Paid Visibility</CardTitle>
                 <p className="text-sm text-gray-500">Activate after payment confirmation</p>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Boost</p>
-                  <BoostListingButton
-                    listingId={listing.id}
-                    boostedUntil={listing.boostedUntil}
-                    isAdminOrOps={isAdminOrOps}
-                    includedBoostsRemaining={listing.landlord ? getIncludedBoostsRemaining(listing.landlord) : 0}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Featured</p>
-                  <FeatureListingButton
-                    listingId={listing.id}
-                    featuredUntil={listing.featuredUntil}
-                    isAdminOrOps={isAdminOrOps}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Urgent</p>
-                  <UrgentListingButton
-                    listingId={listing.id}
-                    urgentUntil={listing.urgentUntil}
-                    isAdminOrOps={isAdminOrOps}
-                  />
-                </div>
-                <div className="border-t pt-4">
+              <CardContent className="space-y-2">
+                {/* No per-product labels: each button names its own product. */}
+                <BoostListingButton
+                  listingId={listing.id}
+                  boostedUntil={listing.boostedUntil}
+                  isAdminOrOps={isAdminOrOps}
+                  includedBoostsRemaining={listing.landlord ? getIncludedBoostsRemaining(listing.landlord) : 0}
+                />
+                <FeatureListingButton
+                  listingId={listing.id}
+                  featuredUntil={listing.featuredUntil}
+                  isAdminOrOps={isAdminOrOps}
+                />
+                <UrgentListingButton
+                  listingId={listing.id}
+                  urgentUntil={listing.urgentUntil}
+                  isAdminOrOps={isAdminOrOps}
+                />
+                <div className="border-t pt-4 !mt-4">
                   <BundleActivationButtons listingId={listing.id} isAdminOrOps={isAdminOrOps} />
                 </div>
               </CardContent>

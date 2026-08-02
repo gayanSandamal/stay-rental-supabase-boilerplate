@@ -44,8 +44,8 @@ export function FeatureListingButton({
 
   if (isFeatured) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
-        <Star className="h-3.5 w-3.5" />
+      <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
+        <Star className="h-3.5 w-3.5 shrink-0" />
         Featured until {new Date(featuredUntilState!).toLocaleDateString('en-US')}
       </span>
     );
@@ -58,10 +58,13 @@ export function FeatureListingButton({
         variant="outline"
         onClick={handleActivate}
         disabled={loading}
-        className="border-amber-300 text-amber-800 hover:bg-amber-50"
+        className="w-full justify-between border-amber-300 text-amber-800 hover:bg-amber-50"
       >
-        <Star className="h-4 w-4 mr-1.5" />
-        {loading ? 'Activating...' : 'Activate Featured (LKR 500/7d)'}
+        <span className="flex items-center gap-1.5">
+          <Star className="h-4 w-4" />
+          {loading ? 'Activating…' : 'Featured'}
+        </span>
+        <span className="text-xs font-normal text-amber-700/80">LKR 500 · 7d</span>
       </Button>
     );
   }
