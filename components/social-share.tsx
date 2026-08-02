@@ -55,7 +55,9 @@ export function SocialShare({ url, title }: SocialShareProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 py-4">
+    // flex-wrap: five children ≈ 418px min-content — without wrapping this
+    // single row forces horizontal overflow on every phone-width viewport.
+    <div className="flex flex-wrap items-center gap-3 py-4">
       <span className="text-sm font-medium text-gray-600">Share:</span>
       <Button
         variant="outline"
