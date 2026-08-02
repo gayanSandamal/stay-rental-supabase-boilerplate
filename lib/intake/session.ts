@@ -1,6 +1,7 @@
 import { db } from '@/lib/db/drizzle';
 import { whatsappIntakes, listings } from '@/lib/db/schema';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
+import { detectUpdateIntent } from './parser/rule-parser';
 import type { NormalizedInboundMessage } from './channels/types';
 
 /** Messages from the same sender within this window append to one intake. */
@@ -13,6 +14,8 @@ export const SESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const NEEDS_INFO_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** "Thanks!" after publish should not spawn a fresh junk intake. */
 export const AFTER_PUBLISH_WINDOW_MS = 48 * 60 * 60 * 1000;
+/** Explicit "change/remove/update …" requests target a listing this old. */
+export const UPDATE_REQUEST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 /** How far back message-id redelivery dedup looks (any status). */
 const DEDUP_LOOKBACK_MS = NEEDS_INFO_WINDOW_MS;
 
@@ -30,10 +33,16 @@ export interface AppendOutcome {
      * must actually work.
      */
     | 'attach_media'
+    /**
+     * Explicit edit request ("change the rent to…") for a recent published
+     * listing: acked to the sender, applied by ops. Attached photos still go
+     * onto the listing.
+     */
+    | 'update_request'
     /** Appended context onto a manual_review intake — stays with ops. */
     | 'appended_manual';
   intakeId?: number;
-  /** attach_media only: the live listing that received the photos. */
+  /** attach_media / update_request: the live listing being changed. */
   listingId?: number | null;
   listingTitle?: string | null;
   /** Photos persisted / photo downloads that failed (all actions). */
@@ -139,6 +148,37 @@ export async function appendToIntake(
       return { action: 'appended', intakeId: open.id } as const;
     }
 
+    // Explicit edit request ("change the rent to 95,000", "remove the last
+    // photo") from a sender with a recent published listing: never re-enter
+    // the submission parser — ack the sender, hand the change to ops. Checked
+    // AFTER open sessions (mid-flight messages belong to the in-flight
+    // submission) and BEFORE the ambient after-publish branches (explicit
+    // intent wins over heuristics).
+    if (msg.text && detectUpdateIntent(msg.text)) {
+      const target = await tx.query.whatsappIntakes.findFirst({
+        where: and(
+          eq(whatsappIntakes.channel, msg.channel),
+          eq(whatsappIntakes.fromNumber, msg.senderId),
+          eq(whatsappIntakes.status, 'published'),
+          gte(whatsappIntakes.lastMessageAt, new Date(Date.now() - UPDATE_REQUEST_WINDOW_MS))
+        ),
+        orderBy: [desc(whatsappIntakes.lastMessageAt)],
+      });
+      if (target?.listingId) {
+        await appendTo(target, { lastMessageAt: new Date() });
+        const listing = await tx.query.listings.findFirst({
+          where: eq(listings.id, target.listingId),
+        });
+        return {
+          action: 'update_request',
+          intakeId: target.id,
+          listingId: target.listingId,
+          listingTitle: listing?.title ?? null,
+        } as const;
+      }
+      // No listing to target — fall through to the normal submission flow.
+    }
+
     // Follow-up shortly after publish without new-property text: photos are a
     // gallery update for the published listing ("Reply here anytime to update
     // it"); thin text stays on the intake for ops context. Never a fresh
@@ -209,7 +249,7 @@ export async function appendToIntake(
       })
       .where(eq(whatsappIntakes.id, row.id));
 
-    if (base.action === 'attach_media' && base.listingId) {
+    if ((base.action === 'attach_media' || base.action === 'update_request') && base.listingId) {
       const listing = await tx.query.listings.findFirst({
         where: eq(listings.id, base.listingId),
       });

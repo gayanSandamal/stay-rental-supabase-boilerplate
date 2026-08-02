@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
+import { parseIntakeRules, detectUpdateIntent } from '@/lib/intake/parser/rule-parser';
 
 // Table-driven corpus. `expected` is a partial — only listed keys are asserted.
 const CASES: Array<{
@@ -413,4 +413,38 @@ describe('parseIntakeRules', () => {
   it('tags parserMeta with the rules engine', () => {
     expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 3 });
   });
+});
+
+describe('detectUpdateIntent', () => {
+  const UPDATES = [
+    'Please change the rent to 95,000',
+    'update the description to mention the new kitchen',
+    'Can you remove the last photo?',
+    'delete the 2nd picture',
+    'replace the photos with these',
+    'add parking is available to the ad',
+    'correct the number of bedrooms to 3',
+    'කරුණාකර කුලිය වෙනස් කරන්න 95000 ට',
+    'අන්තිම පින්තූරය මකන්න',
+  ];
+  for (const text of UPDATES) {
+    it(`update: "${text.slice(0, 40)}"`, () => {
+      expect(detectUpdateIntent(text)).toBe(true);
+    });
+  }
+
+  const NOT_UPDATES = [
+    // Full submissions keep their street address — never routed as updates.
+    'Newly renovated 2BR house at 12 Palm Lane, Kandy. Rent 50000. We can remove old furniture.',
+    'House with 3 bedrooms at 45/2, Wewelduwa, Kelaniya for 60000 per month',
+    // No edit verb at all.
+    '2 bedroom house in Nugegoda 80k per month',
+    'Thank you so much!',
+    'Is the listing live yet?',
+  ];
+  for (const text of NOT_UPDATES) {
+    it(`not update: "${text.slice(0, 40)}"`, () => {
+      expect(detectUpdateIntent(text)).toBe(false);
+    });
+  }
 });

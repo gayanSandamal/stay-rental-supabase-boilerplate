@@ -390,6 +390,27 @@ function composeDescription(original: string): string | null {
   return lastSentence > 200 ? cut.slice(0, lastSentence + 1) : cut.trimEnd() + '…';
 }
 
+/**
+ * Edit verbs that signal "change my existing listing" rather than a new
+ * submission. "fix" is deliberately absent — landlords write "we fix minor
+ * issues" in fresh ads.
+ */
+const UPDATE_INTENT_RE =
+  /\b(?:update|change|edit|modify|correct|remove|delete|replace|add)\b|වෙනස්|මකන්න|අයින්|යාවත්කාලීන/iu;
+
+/**
+ * True when a message reads as an update to an existing listing: it contains
+ * an edit verb AND does not carry a street address (the strongest new-listing
+ * signal — update requests rarely restate the address, fresh ads almost
+ * always do). The caller still requires the sender to have a published
+ * listing to target.
+ */
+export function detectUpdateIntent(messageText: string): boolean {
+  const text = messageText ?? '';
+  if (!UPDATE_INTENT_RE.test(text)) return false;
+  return parseIntakeRules(text).address == null;
+}
+
 export function parseIntakeRules(messageText: string): ParsedIntake {
   const original = normalize(messageText ?? '');
   const masked = maskPhones(original);

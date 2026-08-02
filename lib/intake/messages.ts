@@ -60,3 +60,22 @@ export function photosAddedMessage(title: string, added: number, failed: number)
 export function photosFailedMessage(): string {
   return `Sorry — we couldn't receive your photos just now. Please try sending them again in a moment.`;
 }
+
+/** Explicit edit request acknowledged; ops applies it manually. */
+export function updateRequestMessage(
+  title: string,
+  photosAdded: number,
+  photosFailed: number
+): string {
+  const parts = [`✏️ Got it — our team will update "${title}" as requested.`];
+  if (photosAdded > 0) {
+    parts.push(`📸 ${photosAdded} photo${photosAdded === 1 ? '' : 's'} already added.`);
+  }
+  if (photosFailed > 0) {
+    parts.push(
+      `${photosFailed} photo${photosFailed === 1 ? '' : 's'} didn't come through — please send ${photosFailed === 1 ? 'it' : 'them'} again.`
+    );
+  }
+  parts.push(`If you meant a different listing, reply here with its link.`);
+  return parts.join('\n');
+}
