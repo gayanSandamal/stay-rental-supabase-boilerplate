@@ -137,4 +137,11 @@ An adversarial review before wiring the real number (+94770711939) confirmed 22 
 
 First real production intake exposed a parser gap: a large share of Sri Lankan addresses have **no street-type word at all** ("220/A, Mackwatte, Asgiriya") and ADDRESS_RE demanded one, trapping the sender in a needs-info loop. `extractAddressFallback` (rule-parser.ts) now accepts *house-number, Place, Place* patterns, guarded so amounts ("rent 4,500, negotiable"), years, five-digit numbers, money-keyword contexts, lone digits, and lowercase chat filler can never fabricate an address; a segment exactly equal to a gazetteer city (new `isCityName`) is treated as the city, and "Asgiriya Gampaha"-style tails keep their local part.
 
-_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-up 2026-08-02. Original deep-dive generated 2026-07-10._
+## 2026-08-02 (later) — photo follow-ups + download resilience
+
+Live usage exposed two photo problems:
+
+1. **Photos after publish spawned a junk intake.** The publish reply says "Reply here anytime to update it", but a photo album sent after the 🎉 counted as "substantive" → new intake → "we still need: everything". Now: a message with photos but NO new-property text, within 48h of the sender's published intake, **appends the photos to that live listing's gallery** (`attach_media` outcome; session phase 3 also updates `listings.photos` under the sender lock) and replies "📸 Added N photos to <title>". Photos WITH substantive text (caption-style) still open a new intake — that's a second property.
+2. **Album downloads failed silently for the sender** (live: 2 of 5 lost). `persistWhatsAppMedia` now retries each Graph hop once (fresh AbortSignal per attempt, 15s/20s timeouts), `appendToIntake` reports `mediaStored`/`mediaFailed`, and the webhook notifies ops on any failure — plus tells the sender when attach-path photos didn't come through (never silent loss).
+
+_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-ups 2026-08-02. Original deep-dive generated 2026-07-10._

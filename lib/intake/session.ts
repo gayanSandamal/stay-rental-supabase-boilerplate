@@ -1,5 +1,5 @@
 import { db } from '@/lib/db/drizzle';
-import { whatsappIntakes } from '@/lib/db/schema';
+import { whatsappIntakes, listings } from '@/lib/db/schema';
 import { and, eq, gte, desc, sql } from 'drizzle-orm';
 import type { NormalizedInboundMessage } from './channels/types';
 
@@ -16,13 +16,30 @@ export const AFTER_PUBLISH_WINDOW_MS = 48 * 60 * 60 * 1000;
 /** How far back message-id redelivery dedup looks (any status). */
 const DEDUP_LOOKBACK_MS = NEEDS_INFO_WINDOW_MS;
 
-export type AppendOutcome =
-  | { action: 'duplicate' }
-  | { action: 'appended' | 'created'; intakeId: number }
-  /** Thin follow-up on a published intake — surfaced to ops, not re-parsed. */
-  | { action: 'after_publish'; intakeId: number }
-  /** Appended context onto a manual_review intake — stays with ops. */
-  | { action: 'appended_manual'; intakeId: number };
+export interface AppendOutcome {
+  action:
+    | 'duplicate'
+    /** Appended to an open session (received/needs_info) and reopened. */
+    | 'appended'
+    | 'created'
+    /** Thin text after publish — surfaced to ops, not re-parsed. */
+    | 'after_publish'
+    /**
+     * Photos (without new-property text) after publish: appended straight to
+     * the published listing's gallery — "Reply here anytime to update it"
+     * must actually work.
+     */
+    | 'attach_media'
+    /** Appended context onto a manual_review intake — stays with ops. */
+    | 'appended_manual';
+  intakeId?: number;
+  /** attach_media only: the live listing that received the photos. */
+  listingId?: number | null;
+  listingTitle?: string | null;
+  /** Photos persisted / photo downloads that failed (all actions). */
+  mediaStored: number;
+  mediaFailed: number;
+}
 
 const parseArr = (s: string | null | undefined): string[] => {
   try {
@@ -34,11 +51,12 @@ const parseArr = (s: string | null | undefined): string[] => {
 };
 
 /**
- * A substantive message looks like a fresh property submission (photos, an
- * amount, or a long description) rather than a "thanks!" follow-up.
+ * Text that reads like a fresh property submission (an amount or a long
+ * description). Deliberately ignores attached media: photos WITHOUT such text
+ * shortly after a publish are gallery updates for that listing, while photos
+ * WITH it are a new property (caption-style submissions).
  */
-function isSubstantive(msg: NormalizedInboundMessage): boolean {
-  if (msg.mediaIds.length > 0) return true;
+function hasSubstantiveText(msg: NormalizedInboundMessage): boolean {
   const text = msg.text ?? '';
   return /\d{4,}|\d+(?:\.\d+)?\s*k\b|lakh/i.test(text) || text.length > 80;
 }
@@ -121,15 +139,21 @@ export async function appendToIntake(
       return { action: 'appended', intakeId: open.id } as const;
     }
 
-    // Thin follow-up ("thanks!", a question) shortly after publish: keep it on
-    // the published intake for ops context — never a fresh needs_info loop.
+    // Follow-up shortly after publish without new-property text: photos are a
+    // gallery update for the published listing ("Reply here anytime to update
+    // it"); thin text stays on the intake for ops context. Never a fresh
+    // needs_info loop. Substantive text (± photos) falls through to a new
+    // intake — that's a second property.
     if (
       latest &&
       latest.status === 'published' &&
       age <= AFTER_PUBLISH_WINDOW_MS &&
-      !isSubstantive(msg)
+      !hasSubstantiveText(msg)
     ) {
       await appendTo(latest, {});
+      if (msg.mediaIds.length > 0) {
+        return { action: 'attach_media', intakeId: latest.id, listingId: latest.listingId } as const;
+      }
       return { action: 'after_publish', intakeId: latest.id } as const;
     }
 
@@ -155,7 +179,8 @@ export async function appendToIntake(
     return { action: 'created', intakeId: created.id } as const;
   });
 
-  if (outcome.action === 'duplicate' || msg.mediaIds.length === 0) return outcome;
+  const base: AppendOutcome = { ...outcome, mediaStored: 0, mediaFailed: 0 };
+  if (base.action === 'duplicate' || msg.mediaIds.length === 0) return base;
 
   // Phase 2 — download media OUTSIDE any transaction (Graph fetches take
   // seconds; a held row lock or pooled connection would serialize the world).
@@ -164,13 +189,16 @@ export async function appendToIntake(
     const url = await persistMedia(mediaId);
     if (url) mediaUrls.push(url);
   }
-  if (mediaUrls.length === 0) return outcome;
+  base.mediaStored = mediaUrls.length;
+  base.mediaFailed = msg.mediaIds.length - mediaUrls.length;
+  if (mediaUrls.length === 0) return base;
 
   // Phase 3 — attach URLs under the lock (concurrent album siblings each
-  // append their own URLs without clobbering).
+  // append their own URLs without clobbering). For attach_media the photos
+  // ALSO go onto the live listing's gallery.
   await withSenderLock(msg.channel, msg.senderId, async (tx) => {
     const row = await tx.query.whatsappIntakes.findFirst({
-      where: eq(whatsappIntakes.id, outcome.intakeId),
+      where: eq(whatsappIntakes.id, base.intakeId!),
     });
     if (!row) return;
     await tx
@@ -180,7 +208,23 @@ export async function appendToIntake(
         updatedAt: new Date(),
       })
       .where(eq(whatsappIntakes.id, row.id));
+
+    if (base.action === 'attach_media' && base.listingId) {
+      const listing = await tx.query.listings.findFirst({
+        where: eq(listings.id, base.listingId),
+      });
+      if (!listing) return;
+      const existing = parseArr(typeof listing.photos === 'string' ? listing.photos : null);
+      await tx
+        .update(listings)
+        .set({
+          photos: JSON.stringify([...existing, ...mediaUrls]),
+          updatedAt: new Date(),
+        })
+        .where(eq(listings.id, listing.id));
+      base.listingTitle = listing.title;
+    }
   });
 
-  return outcome;
+  return base;
 }

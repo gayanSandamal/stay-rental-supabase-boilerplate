@@ -45,3 +45,18 @@ export function publishedMessage(
 export function pendingReviewMessage(title: string): string {
   return `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
 }
+
+/** Photos sent after publish were added straight to the live listing. */
+export function photosAddedMessage(title: string, added: number, failed: number): string {
+  const base = `📸 Added ${added} photo${added === 1 ? '' : 's'} to "${title}".`;
+  const fail =
+    failed > 0
+      ? ` ${failed} photo${failed === 1 ? '' : 's'} didn't come through — please send ${failed === 1 ? 'it' : 'them'} again.`
+      : '';
+  return `${base}${fail}\nIf they were meant for a different listing, reply here and our team will sort it out.`;
+}
+
+/** Every photo download failed — never leave the sender thinking it worked. */
+export function photosFailedMessage(): string {
+  return `Sorry — we couldn't receive your photos just now. Please try sending them again in a moment.`;
+}

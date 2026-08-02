@@ -3,6 +3,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { appendToIntake } from '@/lib/intake/session';
+import { photosAddedMessage, photosFailedMessage } from '@/lib/intake/messages';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
@@ -54,10 +55,37 @@ export async function POST(request: NextRequest) {
     // Session write + redelivery dedup happen BEFORE media download inside
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
-    if (outcome.action === 'after_publish') {
+
+    if (outcome.action === 'attach_media') {
+      // Photos after publish went straight onto the live listing — confirm to
+      // the sender, and never stay silent when downloads failed.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        outcome.mediaStored > 0
+          ? photosAddedMessage(outcome.listingTitle ?? 'your listing', outcome.mediaStored, outcome.mediaFailed)
+          : photosFailedMessage()
+      );
+      if (outcome.mediaStored > 0) {
+        await createNotificationsForOpsAndAdmin({
+          type: 'whatsapp_intake',
+          title: `${outcome.mediaStored} photo(s) added to listing #${outcome.listingId} via WhatsApp — spot-check`,
+          link: `/dashboard/listings/${outcome.listingId}`,
+        });
+      }
+    } else if (outcome.action === 'after_publish') {
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
         title: `Sender replied after publish on intake #${outcome.intakeId} — may want changes`,
+        link: '/back-office/whatsapp-intakes',
+      });
+    }
+
+    // Failed downloads on ANY path are actionable: the sender believes those
+    // photos were delivered.
+    if (outcome.mediaFailed > 0 && outcome.action !== 'attach_media') {
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `${outcome.mediaFailed} photo download(s) failed for intake #${outcome.intakeId} — check logs`,
         link: '/back-office/whatsapp-intakes',
       });
     }
