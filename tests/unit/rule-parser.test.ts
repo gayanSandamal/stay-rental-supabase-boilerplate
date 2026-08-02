@@ -364,6 +364,26 @@ const CASES: Array<{
     input: '12/B, Kandana Estate for rent, Ja-Ela, 3 bedrooms, 60000 per month',
     expected: { address: '12/B, Kandana Estate' },
   },
+  {
+    name: 'address after "for rent." sentence boundary still parses',
+    input: 'House for rent. 220/A, Mackwatte, Asgiriya Gampaha. 2BR 20000 per month',
+    expected: { address: '220/A, Mackwatte, Asgiriya', city: 'Gampaha' },
+  },
+  {
+    name: 'sinhala fallback stops at field words without a period',
+    input: '34/1, පල්ලෙගම, මහරගම කාමර 3 කුලිය 45000',
+    expected: { address: '34/1, පල්ලෙගම', city: 'Maharagama', rentPerMonth: 45000 },
+  },
+  {
+    name: 'area/sqft numbers never become addresses',
+    input: 'area 1200, Sqft Modern, Galle house 80k',
+    expected: { address: null, city: 'Galle' },
+  },
+  {
+    name: 'dimension + room words never become addresses',
+    input: 'size 20/25, Kitchen And Hall, Matara house 40k pm',
+    expected: { address: null, city: 'Matara' },
+  },
 ];
 
 describe('parseIntakeRules', () => {

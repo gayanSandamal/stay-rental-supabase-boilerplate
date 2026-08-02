@@ -291,8 +291,16 @@ const ADDRESS_FALLBACK_RE =
   // destroy the capitalization guard; the No-prefix is spelled out instead.
   /(?<![\d,])((?:[Nn][Oo]\.?\s*)?\d{1,4}[\p{L}\p{M}\d/-]*)\s*,\s*([\p{Lu}\p{Lo}][\p{L}\p{M}\d'-]*(?:\s+[\p{Lu}\p{Lo}\d][\p{L}\p{M}\d'-]*){0,3}(?:\s*,\s*[\p{Lu}\p{Lo}][\p{L}\p{M}\d'\s-]{0,30}){0,2})/u;
 
+// No '.' in the trailing filler: "for rent. 220/A, …" is a sentence boundary
+// before an address, not a rent amount ("rent: 4500," still guarded).
 const MONEY_CONTEXT_BEFORE_RE =
-  /(?:rent|rental|monthly|kuliya|කුලිය|rs\.?|lkr|slr|rupees|deposit|advance|key\s*money)[\s:.\-]*$/i;
+  /(?:rent|rental|monthly|kuliya|කුලිය|rs\.?|lkr|slr|rupees|deposit|advance|key\s*money|area|size|extent|sq\.?\s*ft|sqft|perch(?:es)?)[\s:\-]*$/i;
+
+// Words that never START an address segment: room/feature/unit vocabulary in
+// either script. Critical for Sinhala, which has no capitalization for the
+// caps guard to lean on.
+const SEGMENT_STOP_WORD_RE =
+  /^(?:kitchen|hall|bathrooms?|bedrooms?|beds?|baths?|rooms?|living|dining|pantry|garage|parking|rent|rental|monthly|available|modern|spacious|fully|furnished|sqft|perch(?:es)?|acres?|කාමර|කුලිය|නිවස|ගෙදර|මහල්|මාසික)$/iu;
 
 function extractAddressFallback(
   maskedOriginalCase: string,
@@ -320,9 +328,13 @@ function extractAddressFallback(
   for (const rawSeg of m[2].split(',')) {
     // Keep only the leading run of capitalized/Sinhala/numeric words —
     // trailing prose ("Kandana Watta for rent") is not part of the address.
+    // Stop-words and long numbers end the run in BOTH scripts (Sinhala has no
+    // capitalization, so "මහරගම කාමර 3 කුලිය 45000" must stop at කාමර).
     const words: string[] = [];
     for (const w of rawSeg.trim().split(/\s+/)) {
       if (!/^[\p{Lu}\p{Lo}\d]/u.test(w)) break;
+      if (SEGMENT_STOP_WORD_RE.test(w)) break;
+      if (/^\d{4,}$/.test(w)) break;
       words.push(w);
     }
     let seg = words.join(' ');
