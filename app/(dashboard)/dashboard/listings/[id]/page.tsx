@@ -178,9 +178,12 @@ export default async function ListingEditPage({
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center text-gray-600">
-                  <MapPin className="h-5 w-5 mr-2" />
-                  {listing.address}, {listing.city}
-                  {listing.district && `, ${listing.district}`}
+                  <MapPin className="h-5 w-5 mr-2 shrink-0" />
+                  <span className="min-w-0">
+                    {listing.address}, {listing.city}
+                    {/* district repeats the city for district capitals */}
+                    {listing.district && listing.district !== listing.city && `, ${listing.district}`}
+                  </span>
                 </div>
                 <div className="border-t pt-3">
                   <p className="text-xs text-gray-500 mb-1">Publisher</p>
@@ -208,7 +211,7 @@ export default async function ListingEditPage({
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-gray-600">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-gray-600">
                   <div className="flex items-center">
                     <Home className="h-5 w-5 mr-2" />
                     {listing.propertyType || 'N/A'}
@@ -223,32 +226,6 @@ export default async function ListingEditPage({
                       {listing.bathrooms} Bathroom{listing.bathrooms > 1 ? 's' : ''}
                     </div>
                   )}
-                </div>
-                <div className="border-t pt-3">
-                  <p className="text-xs text-gray-500 mb-2">Publisher</p>
-                  <div className="flex items-center gap-2 mb-1">
-                    {publisherType === 'business' ? (
-                      <Building2 className="h-4 w-4 text-teal-800" />
-                    ) : (
-                      <User className="h-4 w-4 text-gray-600" />
-                    )}
-                    <span className="text-sm font-medium text-gray-900">{publisherName}</span>
-                  </div>
-                  {teamMemberName && (
-                    <p className="text-xs text-gray-500 ml-6">
-                      by {teamMemberName}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-1 mt-2">
-                    <Calendar className="h-3 w-3 text-gray-400" />
-                    <span className="text-xs text-gray-500">
-                      {new Date(listing.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </span>
-                  </div>
                 </div>
                 {listing.description && (
                   <div>
@@ -287,11 +264,14 @@ export default async function ListingEditPage({
                                 : 'border-gray-200'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 flex-1">
-                                <Phone className="h-5 w-5 text-gray-500" />
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
+                            {/* flex-wrap + min-w-0 throughout: phone + badges +
+                                WhatsApp chip on one forced line is wider than any
+                                phone viewport and stretched the whole page. */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <Phone className="h-5 w-5 text-gray-500 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <span className="font-medium">{contact.phoneNumber}</span>
                                     {isVerified && (
                                       <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">
