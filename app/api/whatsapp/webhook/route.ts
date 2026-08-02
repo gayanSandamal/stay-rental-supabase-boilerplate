@@ -3,7 +3,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { appendToIntake } from '@/lib/intake/session';
-import { photosAddedMessage, photosFailedMessage } from '@/lib/intake/messages';
+import { photosAddedMessage, photosFailedMessage, updateRequestMessage } from '@/lib/intake/messages';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
@@ -56,7 +56,20 @@ export async function POST(request: NextRequest) {
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
 
-    if (outcome.action === 'attach_media') {
+    if (outcome.action === 'update_request') {
+      // Explicit edit request: ack the sender, hand the change to ops with
+      // the verbatim ask. Photos (if any) are already on the listing.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        updateRequestMessage(outcome.listingTitle ?? 'your listing', outcome.mediaStored, outcome.mediaFailed)
+      );
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `Update request for listing #${outcome.listingId} via WhatsApp — apply manually`,
+        body: (message.text ?? '').slice(0, 300),
+        link: `/dashboard/listings/${outcome.listingId}`,
+      });
+    } else if (outcome.action === 'attach_media') {
       // Photos after publish went straight onto the live listing — confirm to
       // the sender, and never stay silent when downloads failed.
       await whatsappAdapter.sendText(
