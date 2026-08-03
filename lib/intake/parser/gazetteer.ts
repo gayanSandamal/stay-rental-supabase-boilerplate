@@ -45,7 +45,7 @@ export interface GazetteerCity {
 
 export const CITIES: GazetteerCity[] = [
   // Colombo district
-  { name: 'Colombo', district: 'Colombo', aliases: ['කොළඹ'] },
+  { name: 'Colombo', district: 'Colombo', aliases: ['කොළඹ', 'கொழும்பு'] },
   { name: 'Nugegoda', district: 'Colombo', aliases: ['නුගේගොඩ'] },
   { name: 'Mount Lavinia', district: 'Colombo', aliases: ['mt lavinia', 'mt. lavinia'] },
   { name: 'Dehiwala', district: 'Colombo', aliases: ['dehiwela', 'දෙහිවල'] },
@@ -77,7 +77,7 @@ export const CITIES: GazetteerCity[] = [
   { name: 'Colombo 11', district: 'Colombo', aliases: ['pettah'] },
   // Gampaha district
   { name: 'Gampaha', district: 'Gampaha', aliases: ['ගම්පහ'] },
-  { name: 'Negombo', district: 'Gampaha', aliases: ['negambo', 'මීගමුව'] },
+  { name: 'Negombo', district: 'Gampaha', aliases: ['negambo', 'මීගමුව', 'நீர்கொழும்பு'] },
   { name: 'Wattala', district: 'Gampaha' },
   { name: 'Kelaniya', district: 'Gampaha' },
   { name: 'Kiribathgoda', district: 'Gampaha' },
@@ -95,7 +95,7 @@ export const CITIES: GazetteerCity[] = [
   { name: 'Wadduwa', district: 'Kalutara' },
   { name: 'Beruwala', district: 'Kalutara' },
   // Kandy district
-  { name: 'Kandy', district: 'Kandy', aliases: ['මහනුවර'] },
+  { name: 'Kandy', district: 'Kandy', aliases: ['මහනුවර', 'கண்டி'] },
   { name: 'Peradeniya', district: 'Kandy' },
   { name: 'Katugastota', district: 'Kandy' },
   { name: 'Gampola', district: 'Kandy' },
@@ -103,30 +103,40 @@ export const CITIES: GazetteerCity[] = [
   { name: 'Matale', district: 'Matale' },
   { name: 'Dambulla', district: 'Matale' },
   // Nuwara Eliya district
-  { name: 'Nuwara Eliya', district: 'Nuwara Eliya' },
-  { name: 'Hatton', district: 'Nuwara Eliya' },
+  { name: 'Nuwara Eliya', district: 'Nuwara Eliya', aliases: ['நுவரெலியா'] },
+  { name: 'Hatton', district: 'Nuwara Eliya', aliases: ['ஹட்டன்'] },
   // Galle district
-  { name: 'Galle', district: 'Galle', aliases: ['ගාල්ල'] },
+  { name: 'Galle', district: 'Galle', aliases: ['ගාල්ල', 'காலி'] },
   { name: 'Hikkaduwa', district: 'Galle' },
   { name: 'Ambalangoda', district: 'Galle' },
   { name: 'Bentota', district: 'Galle' },
   { name: 'Unawatuna', district: 'Galle' },
   // Matara district
-  { name: 'Matara', district: 'Matara', aliases: ['මාතර'] },
+  { name: 'Matara', district: 'Matara', aliases: ['මාතර', 'மாத்தறை'] },
   { name: 'Weligama', district: 'Matara' },
   // Hambantota district
   { name: 'Hambantota', district: 'Hambantota' },
   { name: 'Tangalle', district: 'Hambantota' },
-  // North & East
-  { name: 'Jaffna', district: 'Jaffna', aliases: ['යාපනය'] },
-  { name: 'Kilinochchi', district: 'Kilinochchi' },
-  { name: 'Mannar', district: 'Mannar' },
-  { name: 'Vavuniya', district: 'Vavuniya' },
-  { name: 'Mullaitivu', district: 'Mullaitivu', aliases: ['mullativu'] },
-  { name: 'Batticaloa', district: 'Batticaloa' },
-  { name: 'Kalmunai', district: 'Ampara' },
-  { name: 'Ampara', district: 'Ampara' },
-  { name: 'Trincomalee', district: 'Trincomalee', aliases: ['trinco'] },
+  // North & East — Tamil-script aliases matter here: these are Tamil-majority
+  // areas and a fully Tamil listing has no other way to resolve its city.
+  { name: 'Jaffna', district: 'Jaffna', aliases: ['යාපනය', 'யாழ்ப்பாணம்', 'யாழ்'] },
+  { name: 'Kilinochchi', district: 'Kilinochchi', aliases: ['கிளிநொச்சி'] },
+  { name: 'Mannar', district: 'Mannar', aliases: ['மன்னார்'] },
+  { name: 'Vavuniya', district: 'Vavuniya', aliases: ['வவுனியா'] },
+  { name: 'Mullaitivu', district: 'Mullaitivu', aliases: ['mullativu', 'முல்லைத்தீவு'] },
+  { name: 'Batticaloa', district: 'Batticaloa', aliases: ['மட்டக்களப்பு'] },
+  { name: 'Kalmunai', district: 'Ampara', aliases: ['கல்முனை'] },
+  { name: 'Ampara', district: 'Ampara', aliases: ['அம்பாறை'] },
+  { name: 'Trincomalee', district: 'Trincomalee', aliases: ['trinco', 'திருகோணமலை'] },
+  { name: 'Chavakachcheri', district: 'Jaffna', aliases: ['சாவகச்சேரி'] },
+  { name: 'Point Pedro', district: 'Jaffna', aliases: ['புங்குடுதீவு', 'பருத்திதுறை'] },
+  { name: 'Nallur', district: 'Jaffna', aliases: ['நல்லூர்'] },
+  { name: 'Chunnakam', district: 'Jaffna', aliases: ['சுன்னாகம்'] },
+  { name: 'Kattankudy', district: 'Batticaloa', aliases: ['காத்தான்குடி'] },
+  { name: 'Eravur', district: 'Batticaloa', aliases: ['ஏறாவூர்'] },
+  { name: 'Akkaraipattu', district: 'Ampara', aliases: ['அக்கரைப்பற்று'] },
+  { name: 'Sammanthurai', district: 'Ampara', aliases: ['சம்மாந்துறை'] },
+  { name: 'Kinniya', district: 'Trincomalee', aliases: ['கிண்ணியா'] },
   // North-western / North-central
   { name: 'Kurunegala', district: 'Kurunegala', aliases: ['කුරුණෑගල'] },
   { name: 'Kuliyapitiya', district: 'Kurunegala' },
@@ -136,7 +146,7 @@ export const CITIES: GazetteerCity[] = [
   { name: 'Anuradhapura', district: 'Anuradhapura' },
   { name: 'Polonnaruwa', district: 'Polonnaruwa' },
   // Uva / Sabaragamuwa
-  { name: 'Badulla', district: 'Badulla' },
+  { name: 'Badulla', district: 'Badulla', aliases: ['பதுளை'] },
   { name: 'Bandarawela', district: 'Badulla' },
   { name: 'Ella', district: 'Badulla' },
   { name: 'Monaragala', district: 'Monaragala' },
