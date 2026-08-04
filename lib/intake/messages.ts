@@ -18,19 +18,92 @@ const FIELD_LABELS: Record<string, string> = {
 
 const label = (f: string) => FIELD_LABELS[f] ?? f;
 
+/** "a, b and c" — a field ask should read like a sentence, not a CSV row. */
+const naturalJoin = (items: string[]): string =>
+  items.length <= 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
+/**
+ * One-line echo of what the parser understood, e.g. "a 5-bedroom house in
+ * Kolonnawa for LKR 85,000/month". Null when nothing useful was extracted.
+ * Without this echo a landlord can't tell a partial parse from being ignored —
+ * the single most-reported UX failure of the original flow.
+ */
+export function summarizeUnderstood(parsed: {
+  propertyType?: string | null;
+  bedrooms?: number | null;
+  city?: string | null;
+  rentPerMonth?: number | null;
+}): string | null {
+  const type = parsed.propertyType && parsed.propertyType !== 'unknown' ? parsed.propertyType : null;
+  if (!type && !parsed.city && !parsed.rentPerMonth) return null;
+  const noun = type ?? 'property';
+  const thing = parsed.bedrooms ? `a ${parsed.bedrooms}-bedroom ${noun}` : `a ${noun}`;
+  const where = parsed.city ? ` in ${parsed.city}` : '';
+  const rent = parsed.rentPerMonth ? ` for LKR ${parsed.rentPerMonth.toLocaleString('en-US')}/month` : '';
+  return `${thing}${where}${rent}`;
+}
+
 export function needsInfoMessage(
   profileName: string | null,
   missingFields: string[],
   fallbackReason: string | null,
-  opts: { unsupportedMedia?: boolean } = {}
+  opts: { unsupportedMedia?: boolean; understood?: string | null } = {}
 ): string {
   const greeting = `Thanks${profileName ? ' ' + profileName : ''}!`;
+  // Acknowledge what WAS understood before asking for more — the ask alone
+  // reads as "the bot ignored my message".
+  const echo = opts.understood ? ` Got it — ${opts.understood}.` : '';
   // Field asks read as a list; other retriable reasons (multi-property, odd
-  // rent) are already full sentences.
+  // rent) are complete sentences that carry their own instruction.
   const base = missingFields.length
-    ? `${greeting} To publish your listing we still need: ${missingFields.map(label).join(', ')}. Just reply here with the details.`
-    : `${greeting} ${fallbackReason ?? 'We need a bit more information'}. Just reply here with the details.`;
+    ? `${greeting}${echo} To publish we still need: ${naturalJoin(missingFields.map(label))}. Just reply here with the details.`
+    : `${greeting} ${fallbackReason ?? 'We need a bit more information — just reply here with the details'}.`;
   return opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
+}
+
+/**
+ * Instant acknowledgment sent from the webhook the moment a new submission
+ * arrives. The parse reply follows minutes later from the cron — without this,
+ * a first-time landlord stares at grey ticks wondering if the number is dead.
+ */
+export function receivedAckMessage(profileName: string | null): string {
+  return `Got it${profileName ? ', ' + profileName : ''}! We're putting your listing together — you'll hear from us here in a few minutes.`;
+}
+
+/** Ack for a reply that answers a "we still need…" ask. Sent once per round. */
+export function updateAckMessage(): string {
+  return `Thanks — got it! Updating your listing now, give us a few minutes.`;
+}
+
+/**
+ * Sent when an intake lands in manual review (suspected duplicate, flagged
+ * content, processing error). Deliberately vague about the cause, but never
+ * silent — the sender must know a human has it, or they wait forever.
+ */
+export function manualReviewMessage(profileName: string | null): string {
+  return `Thanks${profileName ? ' ' + profileName : ''}! Our team is taking a quick look at your listing and will get back to you here soon.`;
+}
+
+/** Some photos from the submission never made it — say so immediately. */
+export function photosMissedMessage(failed: number): string {
+  return `⚠️ ${failed} photo${failed === 1 ? '' : 's'} didn't come through — please send ${failed === 1 ? 'it' : 'them'} again.`;
+}
+
+/** A shared location pin was stored against the in-flight submission. */
+export function locationReceivedMessage(): string {
+  return `📍 Got your location — thanks!`;
+}
+
+/** A pin sent shortly after publish was saved onto that listing. */
+export function locationSavedMessage(title: string): string {
+  return `📍 Location added to "${title}".`;
+}
+
+/** Body for the interactive share-location request. */
+export function locationRequestPrompt(): string {
+  return `Or tap below to share the property's location instead of typing the address.`;
 }
 
 export interface ListingLinks {
@@ -55,6 +128,9 @@ export function publishedMessage(
   if (links.deleteUrl) {
     parts.push('', '🗑️ Remove it:', links.deleteUrl);
   }
+  // The 48h photo-append window has always existed but was never announced,
+  // which made a genuinely useful feature undiscoverable.
+  parts.push('', '📷 Want to add photos? Just send them here within 2 days.');
   parts.push('', 'Tenants will call or WhatsApp you directly.');
   const base = parts.join('\n');
   return opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
@@ -144,7 +220,12 @@ export function deleteConfirmMessage(title: string): string {
 }
 
 export function deleteDoneMessage(title: string): string {
-  return `🗑️ Removed "${title}". It's no longer visible to tenants.\n\nSend us the details any time to list a property again.`;
+  return `🗑️ Removed "${title}". It's no longer visible to tenants.\n\nChanged your mind? Reply RESTORE within 30 days and we'll put it back. Or send new details any time to list again.`;
+}
+
+/** RESTORE matched a recently archived listing — ops take it from here. */
+export function restoreRequestedMessage(title: string): string {
+  return `Got it — our team will restore "${title}" shortly and message you here when it's back up.`;
 }
 
 export function deleteCancelledMessage(): string {
@@ -153,6 +234,28 @@ export function deleteCancelledMessage(): string {
 
 export function noListingsMessage(): string {
   return `You don't have any live listings with us right now. Send the property details (address, town, bedrooms and monthly rent) and we'll create one.`;
+}
+
+/**
+ * LINK asked for, the listing exists, but self-service links can't be minted
+ * (legacy listing with no landlord account). Telling them "you have no
+ * listings" — the old behavior — was factually wrong and alarming.
+ */
+export function listingLiveNoLinksMessage(title: string | null, viewUrl: string): string {
+  return [
+    `Your listing${title ? ` "${title}"` : ''} is live here:`,
+    viewUrl,
+    '',
+    `Self-service links aren't available for this listing yet — reply here with what you'd like to change and our team will help.`,
+  ].join('\n');
+}
+
+/**
+ * Same no-links situation but the listing is still pending — "is live" plus a
+ * URL that 404s for an unauthenticated visitor would be a double lie.
+ */
+export function listingPendingNoLinksMessage(title: string | null): string {
+  return `Your listing${title ? ` "${title}"` : ''} is with our team for a quick review — we'll message you when it's live. Reply here if you'd like to change anything meanwhile.`;
 }
 
 /** Reply to "HELP" / "MENU". */

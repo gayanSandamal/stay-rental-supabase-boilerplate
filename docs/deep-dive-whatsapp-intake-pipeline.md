@@ -9,7 +9,7 @@ The intake pipeline turns inbound messenger messages ("Hi, I want to list my 2BR
 
 Since 2026-07-13 the pipeline is **channel-agnostic**: a core (session batching, parsing, checks, publishing) that knows nothing about Meta, plus per-channel adapters. WhatsApp is the first adapter; Telegram/iMessage later means one adapter module + one thin webhook route + a registry entry.
 
-Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic regex + a Sri Lanka gazetteer + scam heuristics, unit-tested, zero external calls. An optional LLM fallback (Claude) can fill fields the rules miss, but only behind the `enableLlmParserFallback` flag (default OFF) and only with `ANTHROPIC_API_KEY` set.
+Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic regex + a Sri Lanka gazetteer + scam heuristics, unit-tested, zero external calls. An optional LLM fallback can fill fields the rules miss, but only behind the `enableLlmParserFallback` flag (default OFF). Provider is SiliconFlow-first (`SILICONFLOW_API_KEY` — already deployed for moderation, model `Qwen/Qwen3-8B`, `INTAKE_LLM_MODEL` overrides), with Anthropic (`ANTHROPIC_API_KEY`) as the secondary path; no key at all → rules only. Validate with `pnpm parser:probe`.
 
 **Key responsibilities:**
 - Receive channel webhook events (verify + store) — thin and fast, no decisions.
@@ -19,7 +19,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 - Create the listing under the "Easy Rent Operations" identity with the sender's number as a verified contact (auto-publish or pending, per flag).
 - Reply to the sender and notify ops; expose a back-office triage queue.
 
-> ⚠️ **STATUS: LIVE BUT DORMANT.** Deployed but inert until all `WHATSAPP_*` env vars are set and Meta Business verification completes. Webhook 503s and cron no-ops while unconfigured (`lib/intake/channels/whatsapp/config.ts::isIntakeConfigured`). `ANTHROPIC_API_KEY` is NOT required — parsing is in-process.
+> ⚠️ **STATUS: LIVE BUT DORMANT.** Deployed but inert until all `WHATSAPP_*` env vars are set and Meta Business verification completes. Webhook 503s and cron no-ops while unconfigured (`lib/intake/channels/whatsapp/config.ts::isIntakeConfigured`). No AI key is required — parsing is in-process (the flag-gated LLM fallback uses `SILICONFLOW_API_KEY` when enabled).
 >
 > ⚠️ **OWNER DECISION:** `autoPublishWhatsAppIntakes` defaults **ON** — intakes passing automated checks go live immediately, no human review. Flip OFF in Back Office → Settings to route intakes to `pending` for one-tap approval (fully built fallback).
 
@@ -39,7 +39,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 
 | File | Purpose |
 | --- | --- |
-| `index.ts` | `parseIntake(text)` orchestrator: rules first; if fields missing AND `enableLlmParserFallback` AND `ANTHROPIC_API_KEY` → LLM fills nulls only (rule values always win). **Never returns null.** |
+| `index.ts` | `parseIntake(text)` orchestrator: rules first; if fields missing AND `enableLlmParserFallback` AND a provider key (SiliconFlow preferred, Anthropic fallback) → LLM fills nulls only (rule values always win). **Never returns null.** |
 | `rule-parser.ts` | `parseIntakeRules(text)` — pure, deterministic passes: phone masking → rent (lakh/Rs/k//month//-) → beds/baths → property type (annex→house, titled "Annex") → gazetteer city/district → address heuristic → title composition → description → suspicion. |
 | `gazetteer.ts` | 25 districts + ~90 cities/aliases (incl. Sinhala script, Colombo ward numbers). `matchCity` / `matchDistrict`. |
 | `scam.ts` | `scoreSuspicion` — additive keyword/heuristic scoring (threshold 3). Replaces the LLM's self-flag; suspicious → manual_review, never auto-replied. |
@@ -70,7 +70,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 
 - `lib/db/schema.ts`: `whatsappIntakes` table (+ `channel` column, default `'whatsapp'`), `whatsappIntakeStatusEnum` (`received|needs_info|published|manual_review|rejected`), `listings.sourceContactName`, audit actions `listing_auto_published` + `whatsapp_intake_updated`.
 - Migrations: `0027_whatsapp_intake.sql` (table, applied to prod), `0028_intake_channel.sql` (channel column). Both registered in `run-all-migrations.ts`.
-- `lib/feature-flags.ts`: `enableWhatsAppIntake` (default ON), `autoPublishWhatsAppIntakes` (default ON — owner decision), `enableLlmParserFallback` (default OFF).
+- `lib/feature-flags.ts`: `enableWhatsAppIntake` (default ON), `autoPublishWhatsAppIntakes` (default ON — owner decision), `enableLlmParserFallback` (default OFF), `enableWhatsAppRichReplies` (default OFF — read receipts, instant ack, tappable delete menu/confirm, share-location button).
 
 ### Tests
 

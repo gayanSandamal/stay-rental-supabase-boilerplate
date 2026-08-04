@@ -45,10 +45,12 @@ export async function runIntakeChecks(parsed: ParsedIntake): Promise<CheckResult
   }
 
   if (parsed.rentPerMonth! < RENT_MIN || parsed.rentPerMonth! > RENT_MAX) {
+    // This string goes VERBATIM to the sender via needsInfoMessage — it must
+    // read like a sentence and say what to do, not like a log line.
     return {
       ok: false,
       retriable: true,
-      reason: `Rent LKR ${parsed.rentPerMonth} outside plausible range`,
+      reason: `The monthly rent of LKR ${parsed.rentPerMonth!.toLocaleString('en-US')} looks unusual — rents on Easy Rent are between LKR 5,000 and LKR 3,000,000. Please reply with the correct monthly rent`,
     };
   }
 

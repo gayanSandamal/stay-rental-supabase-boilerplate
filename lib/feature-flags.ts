@@ -69,6 +69,12 @@ export const featureFlagDefaults = {
   // OFF keeps today's behaviour: listings owned by Easy Rent Operations.
   enableWhatsAppLandlordAccounts: false,
 
+  // Richer WhatsApp conversation UX: read receipts + typing indicator, an
+  // instant "got it" ack (the parse reply still takes ~5 min on the cron),
+  // tappable delete menu/confirm buttons, and a share-location button when the
+  // address is missing. OFF keeps replies plain-text and ack-free as before.
+  enableWhatsAppRichReplies: false,
+
   // Automated approval (intake v2). Master switch OFF until the prompts have
   // been calibrated against real listings — with it off, publishing behaves
   // exactly as it does today.
@@ -227,6 +233,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'WhatsApp landlord accounts',
     description:
       'Create a real landlord account for each WhatsApp sender and give them view/edit/delete links so they can manage their own listing. OFF keeps intake listings under the Easy Rent Operations identity with no self-service.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableWhatsAppRichReplies: {
+    label: 'WhatsApp rich replies',
+    description:
+      'Blue-tick incoming messages, send an instant "got it" acknowledgment, use tappable buttons and list menus for the delete flow, and offer a share-location button when the address is missing. OFF keeps the plain-text conversation exactly as before.',
     group: 'Platform',
     appWide: true,
     public: false,

@@ -128,9 +128,24 @@ watching each step before the next.
    `MODERATION_API_BASE=https://api.siliconflow.cn/v1` if you use the China
    platform. Cost is ~$0.002 per 6-photo listing — about $1/month at 500
    listings — so a $5 top-up lasts months.
-3. **DNS**: `wa.easyrent.lk` should exist with **no MX record**. Landlord
-   accounts use placeholder addresses on that subdomain; the absent MX means a
-   stray send dies in DNS rather than reaching a third party.
+3. **DNS** — done 2026-08-04, `wa.easyrent.lk. IN MX 0 .` in Cloudflare.
+   Landlord accounts use placeholder addresses on that subdomain and nothing
+   ever sends to them (`createUser` passes `email_confirm: true`;
+   `admin.generateLink` mints links without sending). This is defence in depth
+   against a future accidental send.
+
+   What matters is **no MX *and* no A/AAAA/CNAME** on `wa`: with no MX, senders
+   fall back to the address record as an *implicit MX*, so a subdomain that
+   resolves to the web server is not protected. Hence the explicit null MX
+   (RFC 7505) rather than just leaving the name absent — it survives someone
+   later adding a wildcard `*.easyrent.lk`, which would otherwise make `wa`
+   resolve. **When adding new subdomains, use explicit CNAMEs, never a
+   wildcard.** Verify with:
+
+   ```bash
+   dig +short MX wa.easyrent.lk   # expect: 0 .
+   dig +short A  wa.easyrent.lk   # expect: empty
+   ```
 4. **Validate before enabling anything:**
 
    ```bash
@@ -182,6 +197,30 @@ started the session:
 4. Send `delete` → reply with the number → reply `DELETE`. The listing should
    disappear from the site. Reply `yes` instead of `DELETE` on a later attempt
    and confirm it does **not** delete.
+
+## 5. Conversation UX flags (added 2026-08-04)
+
+Two further flags, independent of the four above:
+
+- **WhatsApp rich replies** (`enableWhatsAppRichReplies`): blue-ticks incoming
+  messages, sends an instant "got it" ack (the parse reply still takes ~5 min
+  on the cron), swaps the delete flow to a native list picker + Delete/Cancel
+  buttons, offers a share-location button when the address is missing, and
+  renders the publish confirmation's view link as a preview card. Typed
+  commands (`DELETE`, numbers, `CANCEL`) keep working as a fallback. OFF =
+  plain-text conversation exactly as before.
+- **LLM parser fallback (intake)** (`enableLlmParserFallback`): when the rules
+  leave required fields empty, SiliconFlow (`Qwen/Qwen3-8B`, same key as
+  moderation) fills only the gaps — recovers unknown towns ("Kolonnawa") and
+  odd phrasings in all three languages. Validate first:
+
+  ```bash
+  pnpm parser:probe
+  ```
+
+Location pins work regardless of these flags: a pin shared mid-session fills
+the listing's address/coordinates; a pin within 48h of publish attaches
+coordinates to that listing.
 
 ## Ops notes
 

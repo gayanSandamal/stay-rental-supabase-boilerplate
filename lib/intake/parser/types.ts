@@ -26,7 +26,7 @@ export interface ParsedIntake {
    */
   multiProperty?: boolean;
   /** Diagnostics: which engine produced the payload (persisted in parsedPayload). */
-  parserMeta?: { engine: 'rules' | 'rules+llm'; rulesVersion: number };
+  parserMeta?: { engine: 'rules' | 'rules+llm'; rulesVersion: number; llmFailed?: boolean };
 }
 
 export const REQUIRED_FIELDS = [

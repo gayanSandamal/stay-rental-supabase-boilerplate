@@ -10,11 +10,21 @@ import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { parseIntake } from './parser';
+import { matchCity } from './parser/gazetteer';
+import { computeMissingFields, type ParsedIntake } from './parser/types';
 import { runIntakeChecks } from './checks';
 import { getOrCreateOpsIdentity } from './ops-identity';
 import { getOrCreateWhatsAppLandlord } from './landlord-identity';
 import { mintAccessLink } from '@/lib/auth/access-links';
-import { needsInfoMessage, publishedMessage, pendingReviewMessage } from './messages';
+import {
+  locationRequestPrompt,
+  manualReviewMessage,
+  needsInfoMessage,
+  pendingReviewMessage,
+  publishedMessage,
+  summarizeUnderstood,
+} from './messages';
+import { sendWhatsAppLocationRequest, sendWhatsAppText } from './channels/whatsapp/send';
 import type { ChannelAdapter } from './channels/types';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
@@ -30,6 +40,50 @@ export const SETTLE_MS = Number(process.env.INTAKE_SETTLE_MS ?? 4 * 60 * 1000);
 
 export type IntakeOutcome = 'published' | 'needs_info' | 'manual_review';
 
+interface LocationPin {
+  latitude: number;
+  longitude: number;
+  name?: string;
+  address?: string;
+}
+
+function parsePin(raw: string | null): LocationPin | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return v && Number.isFinite(v.latitude) && Number.isFinite(v.longitude) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A shared location pin stands in for fields the text never contained: the
+ * pin's place strings become the address, and the gazetteer can often resolve
+ * the town from them. Typed text always wins — the pin only fills gaps.
+ */
+function applyLocationPin(parsed: ParsedIntake, pin: LocationPin | null): void {
+  if (!pin) return;
+  const place = pin.address ?? pin.name ?? null;
+  if (!parsed.address) {
+    parsed.address =
+      place ?? `Pinned location (${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)})`;
+  }
+  if (!parsed.city && place) {
+    const m = matchCity(place.normalize('NFC').toLowerCase());
+    if (m) {
+      parsed.city = m.city;
+      parsed.district = parsed.district ?? m.district;
+    }
+  }
+  // The rules composed the title before the pin resolved the town — retrofit
+  // the city so "5BR House" becomes "5BR House in Kolonnawa".
+  if (parsed.title && parsed.city && !/\bin\b/i.test(parsed.title)) {
+    parsed.title = `${parsed.title} in ${parsed.city}`;
+  }
+  parsed.missingFields = computeMissingFields(parsed);
+}
+
 export interface ProcessCounts {
   processed: number;
   published: number;
@@ -42,12 +96,21 @@ export interface ProcessCounts {
  * create listing. One intake failing routes that row to manual_review and the
  * loop continues — a landlord's submission is never silently dropped.
  */
+/**
+ * Per-run wall-clock budget. Each intake can now spend up to ~24s on sends and
+ * the LLM fallback (3 × 8s timeouts); without a budget a 20-row backlog burst
+ * would blow the route's maxDuration=60 and get killed mid-intake. Unclaimed
+ * rows simply wait for the next 2-minute tick.
+ */
+const RUN_BUDGET_MS = Number(process.env.INTAKE_RUN_BUDGET_MS ?? 45_000);
+
 export async function processSettledIntakes(
   adapters: ChannelAdapter[],
   opts: { limit?: number } = {}
 ): Promise<ProcessCounts> {
   const settled = new Date(Date.now() - SETTLE_MS);
   const counts: ProcessCounts = { processed: 0, published: 0, needsInfo: 0, manual: 0 };
+  const startedAt = Date.now();
 
   for (const adapter of adapters) {
     const queue = await db.query.whatsappIntakes.findMany({
@@ -59,9 +122,9 @@ export async function processSettledIntakes(
       limit: opts.limit ?? 20,
     });
 
-    counts.processed += queue.length;
-
     for (const intake of queue) {
+      if (Date.now() - startedAt > RUN_BUDGET_MS) break;
+      counts.processed++;
       try {
         const outcome = await processIntake(intake, adapter);
         if (outcome === 'published') counts.published++;
@@ -79,6 +142,10 @@ export async function processSettledIntakes(
           })
           .where(eq(whatsappIntakes.id, intake.id));
         counts.manual++;
+        // Same rule as the flagged path: the sender must hear something.
+        await adapter
+          .sendText(intake.fromNumber, manualReviewMessage(intake.profileName))
+          .catch(() => {});
       }
     }
   }
@@ -93,6 +160,8 @@ export async function processIntake(
   // Rule-based parse (LLM fallback only when flagged on) — never null; an
   // unparseable message surfaces as missingFields → needs_info.
   const parsed = await parseIntake(intake.messageText ?? '');
+  const pin = parsePin(intake.locationPin);
+  applyLocationPin(parsed, pin);
 
   const check = await runIntakeChecks(parsed);
 
@@ -111,6 +180,7 @@ export async function processIntake(
       intake.fromNumber,
       needsInfoMessage(intake.profileName, parsed.missingFields, check.reason, {
         unsupportedMedia: intake.hasUnsupportedMedia,
+        understood: summarizeUnderstood(parsed),
       })
     );
     if (!sent) {
@@ -119,6 +189,14 @@ export async function processIntake(
         intake.id,
         `Could not reach WhatsApp sender for intake #${intake.id} (needs info: ${check.reason})`
       );
+    } else if (
+      isFeatureEnabled('enableWhatsAppRichReplies') &&
+      adapter.channel === 'whatsapp' &&
+      !pin &&
+      parsed.missingFields.some((f) => f === 'address' || f === 'city')
+    ) {
+      // A native pin answers the hardest field to type — offer the button.
+      await sendWhatsAppLocationRequest(intake.fromNumber, locationRequestPrompt());
     }
     return 'needs_info';
   }
@@ -135,6 +213,9 @@ export async function processIntake(
       })
       .where(eq(whatsappIntakes.id, intake.id));
     await notifyOps(intake.id, `WhatsApp intake #${intake.id} flagged: ${check.reason}`);
+    // Never a silent dead end: the sender can't see our review queue, and
+    // "no reply ever" was the worst path in the original flow.
+    await adapter.sendText(intake.fromNumber, manualReviewMessage(intake.profileName));
     return 'manual_review';
   }
 
@@ -223,6 +304,7 @@ export async function processIntake(
       bedrooms: parsed.bedrooms!,
       bathrooms: parsed.bathrooms,
       rentPerMonth: String(parsed.rentPerMonth!),
+      ...(pin ? { latitude: String(pin.latitude), longitude: String(pin.longitude) } : {}),
       photos: media.length ? JSON.stringify(media) : null,
       sourceContactName: intake.profileName,
       status: autoPublish ? 'active' : 'pending',
@@ -283,14 +365,18 @@ export async function processIntake(
       }
     }
 
-    const sent = await adapter.sendText(
-      intake.fromNumber,
-      autoPublish
-        ? publishedMessage(listing.title, links, {
-            unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
-          })
-        : pendingReviewMessage(listing.title, links.editUrl)
-    );
+    const confirmation = autoPublish
+      ? publishedMessage(listing.title, links, {
+          unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
+        })
+      : pendingReviewMessage(listing.title, links.editUrl);
+    // Rich replies render the view link as a preview card (the copy already
+    // puts it first for exactly this) — plain text otherwise, byte-identical
+    // to the pre-flag behavior.
+    const sent =
+      adapter.channel === 'whatsapp' && isFeatureEnabled('enableWhatsAppRichReplies')
+        ? await sendWhatsAppText(intake.fromNumber, confirmation, { previewUrl: true })
+        : await adapter.sendText(intake.fromNumber, confirmation);
     if (!sent) {
       await notifyOps(
         intake.id,

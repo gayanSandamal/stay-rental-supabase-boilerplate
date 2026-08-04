@@ -42,7 +42,7 @@ export const whatsappAdapter: ChannelAdapter = {
     return sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
   },
 
-  /** Walk the Cloud API envelope; only text and image messages become intakes. */
+  /** Walk the Cloud API envelope; text, image, interactive-reply and location messages survive. */
   normalizeInbound(payload: unknown): NormalizedInboundMessage[] {
     const out: NormalizedInboundMessage[] = [];
     const body = payload as any;
@@ -59,6 +59,8 @@ export const whatsappAdapter: ChannelAdapter = {
           let text: string | null = null;
           const mediaIds: string[] = [];
           let unsupportedMedia = false;
+          let interactiveReplyId: string | undefined;
+          let location: NormalizedInboundMessage['location'];
 
           if (message.type === 'text') {
             text = message.text?.body ?? null;
@@ -82,8 +84,43 @@ export const whatsappAdapter: ChannelAdapter = {
             // flag the media so the sender is told to resend as photos.
             text = message.video?.caption ?? null;
             unsupportedMedia = true;
+          } else if (message.type === 'interactive') {
+            // Button tap or list pick. text = the title the sender saw on
+            // screen (so text-based parsing still reads naturally), the id is
+            // what flows branch on.
+            const reply =
+              message.interactive?.button_reply ?? message.interactive?.list_reply;
+            if (!reply?.id) continue; // flow/nfm replies — nothing the pipeline understands
+            interactiveReplyId = String(reply.id);
+            text = reply.title != null ? String(reply.title) : null;
+          } else if (message.type === 'location') {
+            const latitude = Number(message.location?.latitude);
+            const longitude = Number(message.location?.longitude);
+            // Range-check, not just finiteness: coordinates land in
+            // numeric(10,8)/numeric(11,8) columns, and an out-of-range value
+            // from a non-official client would overflow → 500 → Meta retry
+            // storm. Strings are capped — they end up in listing addresses.
+            if (
+              !Number.isFinite(latitude) ||
+              !Number.isFinite(longitude) ||
+              Math.abs(latitude) > 90 ||
+              Math.abs(longitude) > 180
+            ) {
+              continue;
+            }
+            location = {
+              latitude,
+              longitude,
+              ...(message.location?.name
+                ? { name: String(message.location.name).slice(0, 300) }
+                : {}),
+              ...(message.location?.address
+                ? { address: String(message.location.address).slice(0, 300) }
+                : {}),
+            };
+            text = ''; // empty, not null — a pin is content, just not prose
           } else {
-            continue; // stickers, reactions, locations, system events…
+            continue; // stickers, reactions, system events…
           }
 
           out.push({
@@ -94,6 +131,8 @@ export const whatsappAdapter: ChannelAdapter = {
             text,
             mediaIds,
             unsupportedMedia,
+            interactiveReplyId,
+            location,
             timestamp: message.timestamp
               ? new Date(Number(message.timestamp) * 1000)
               : new Date(),

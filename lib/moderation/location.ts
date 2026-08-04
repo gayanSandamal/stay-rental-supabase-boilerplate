@@ -2,7 +2,7 @@
  * Deterministic location coherence, reusing the intake gazetteer. Pure.
  *
  * DESIGN RULE, do not "tighten" this: an unknown city is a SOFT note, never a
- * failure. The gazetteer holds ~110 towns against thousands in Sri Lanka, so
+ * failure. The gazetteer holds ~165 towns against thousands in Sri Lanka, so
  * hard-failing an unmatched city would auto-hold nearly every rural listing.
  * Only genuine contradictions fail.
  */

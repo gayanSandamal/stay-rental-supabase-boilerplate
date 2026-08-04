@@ -15,7 +15,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { intakeConversations } from '@/lib/db/schema';
 
-export type Command = 'delete' | 'link' | 'help';
+export type Command = 'delete' | 'link' | 'help' | 'restore';
 
 /** Pending confirmations expire, so a stale reply can never delete something. */
 export const PENDING_TTL_MS = 15 * 60 * 1000;
@@ -25,6 +25,8 @@ const HANDLED_HISTORY = 20;
 const DELETE_RE = /^(?:delete|remove|unlist|take\s+down|delete\s+(?:my\s+)?listing|remove\s+(?:my\s+)?listing|මකන්න|අයින්\s*කරන්න|நீக்கு|அழி)[.!]?$/i;
 const LINK_RE = /^(?:link|links|my\s+link|my\s+links|edit\s+link|edit|sign\s*in|login)[.!]?$/i;
 const HELP_RE = /^(?:help|menu|options|\?|උදව්|உதவி)[.!]?$/i;
+/** Undo a chat delete — deleteDoneMessage advertises this word explicitly. */
+const RESTORE_RE = /^(?:restore|undo|undelete|restore\s+(?:my\s+)?listing)[.!]?$/i;
 const CANCEL_RE = /^(?:cancel|stop|no|nevermind|never\s*mind|අවලංගු|ரத்து)[.!]?$/i;
 /** The one word that actually deletes. Case-insensitive, nothing else counts. */
 const CONFIRM_RE = /^delete[.!]?$/i;
@@ -40,6 +42,7 @@ export function detectCommand(text: string | null | undefined): Command | null {
   if (DELETE_RE.test(t)) return 'delete';
   if (LINK_RE.test(t)) return 'link';
   if (HELP_RE.test(t)) return 'help';
+  if (RESTORE_RE.test(t)) return 'restore';
   return null;
 }
 

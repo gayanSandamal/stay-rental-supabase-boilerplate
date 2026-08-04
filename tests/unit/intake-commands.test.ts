@@ -34,6 +34,11 @@ describe('detectCommand — recognised commands', () => {
     ['menu', 'help'],
     ['?', 'help'],
     ['උදව්', 'help'],
+    ['restore', 'restore'],
+    ['RESTORE', 'restore'],
+    ['undo', 'restore'],
+    ['undelete', 'restore'],
+    ['restore my listing', 'restore'],
   ];
   for (const [text, expected] of cases) {
     it(`"${text}" → ${expected}`, () => {
@@ -49,6 +54,7 @@ describe('detectCommand — must NOT fire on listing content', () => {
     '3 bedroom house at 25 Galle Road, Dehiwala for 85000 per month',
     'please delete the last photo and change the rent to 95000',
     'Can you remove the second picture?',
+    'please restore my listing from last week, the house in Kandy',
     'House for rent. 220/A, Mackwatte, Asgiriya Gampaha. 2BR 20000 per month',
     // Long text is never a command even without digits.
     'delete this listing because the tenant has already moved in and we no longer need it',

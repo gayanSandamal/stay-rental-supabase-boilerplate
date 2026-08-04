@@ -403,6 +403,7 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   profileName: text('profile_name'), // WhatsApp pushname at time of message
   messageText: text('message_text'), // concatenated text messages
   mediaPaths: text('media_paths'), // JSON array of stored image URLs
+  locationPin: text('location_pin'), // JSON {latitude, longitude, name?, address?} from a shared pin
   waMessageIds: text('wa_message_ids'), // JSON array (idempotency)
   parsedPayload: text('parsed_payload'), // JSON from the LLM parser
   status: whatsappIntakeStatusEnum('status').notNull().default('received'),
