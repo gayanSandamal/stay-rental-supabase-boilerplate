@@ -12,6 +12,8 @@ import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { parseIntake } from './parser';
 import { runIntakeChecks } from './checks';
 import { getOrCreateOpsIdentity } from './ops-identity';
+import { getOrCreateWhatsAppLandlord } from './landlord-identity';
+import { mintAccessLink } from '@/lib/auth/access-links';
 import { needsInfoMessage, publishedMessage, pendingReviewMessage } from './messages';
 import type { ChannelAdapter } from './channels/types';
 
@@ -136,15 +138,40 @@ export async function processIntake(
     return 'manual_review';
   }
 
-  // All checks green — create the listing under Easy Rent Operations.
+  // All checks green — create the listing.
   const ops = await getOrCreateOpsIdentity();
   const autoPublish = isFeatureEnabled('autoPublishWhatsAppIntakes');
 
-  // The sender's own number becomes the listing contact. WhatsApp possession
-  // is verified by the platform itself, so mark it verified.
+  // Give the sender their own account so they can manage the listing
+  // themselves. Falls back to the Ops identity when that isn't possible — a
+  // landlord's submission must never be lost to an auth hiccup.
+  const owner = isFeatureEnabled('enableWhatsAppLandlordAccounts')
+    ? await getOrCreateWhatsAppLandlord({
+        senderId: intake.fromNumber,
+        profileName: intake.profileName,
+      })
+    : null;
+  if (isFeatureEnabled('enableWhatsAppLandlordAccounts') && !owner) {
+    await notifyOps(
+      intake.id,
+      `Could not create a landlord account for ${intake.fromNumber} — listing published under Easy Rent Operations`
+    );
+  }
+
+  // The sender's own number becomes the listing contact. WhatsApp possession is
+  // verified by the platform itself, so mark it verified. Scope matters: the
+  // contact must belong to whoever owns the listing, or the landlord's edit form
+  // loads zero contact numbers and PUT rejects the save.
+  // user_contact_numbers has a CHECK that exactly ONE of user_id /
+  // business_account_id is set.
+  const contactScope = owner
+    ? { userId: owner.userId }
+    : { businessAccountId: ops.businessAccountId };
   let contact = await db.query.userContactNumbers.findFirst({
     where: and(
-      eq(userContactNumbers.businessAccountId, ops.businessAccountId),
+      owner
+        ? eq(userContactNumbers.userId, owner.userId)
+        : eq(userContactNumbers.businessAccountId, ops.businessAccountId),
       eq(userContactNumbers.phoneNumber, '+' + intake.fromNumber)
     ),
   });
@@ -152,12 +179,13 @@ export async function processIntake(
     [contact] = await db
       .insert(userContactNumbers)
       .values({
-        businessAccountId: ops.businessAccountId,
+        ...contactScope,
         phoneNumber: '+' + intake.fromNumber,
         isWhatsApp: true,
         label: intake.profileName ?? 'Owner',
         verified: true,
         verifiedAt: new Date(),
+        // "Platform support verified this" — still the ops identity.
         verifiedBy: ops.userId,
       })
       .returning();
@@ -178,9 +206,11 @@ export async function processIntake(
   const [listing] = await db
     .insert(listings)
     .values({
-      landlordId: ops.landlordId,
-      businessAccountId: ops.businessAccountId,
-      createdBy: ops.userId,
+      landlordId: owner?.landlordId ?? ops.landlordId,
+      // Own account → no business account, so the publisher line is the
+      // landlord rather than "Easy Rent Operations".
+      ...(owner ? {} : { businessAccountId: ops.businessAccountId }),
+      createdBy: owner?.userId ?? ops.userId,
       title: parsed.title!,
       description:
         parsed.description ??
@@ -225,22 +255,40 @@ export async function processIntake(
     await logListingAction(
       autoPublish ? 'listing_auto_published' : 'listing_created',
       listing.id,
-      ops.userId,
+      owner?.userId ?? ops.userId,
       {
         source: `${adapter.channel}_intake`,
         intakeId: intake.id,
         fromNumber: intake.fromNumber,
+        newAccount: owner?.isNew ?? false,
       }
     );
 
-    const listingUrl = `${baseUrl}/listings/${listing.id}`;
+    // Self-service links, only for landlords who actually own the listing.
+    // A minting failure must not stop the confirmation going out.
+    let links: { viewUrl: string; editUrl?: string | null; deleteUrl?: string | null } = {
+      viewUrl: `${baseUrl}/listings/${listing.id}`,
+    };
+    if (owner) {
+      try {
+        const minted = await mintAccessLink({
+          userId: owner.userId,
+          listingId: listing.id,
+          channel: adapter.channel,
+        });
+        links = { viewUrl: minted.viewUrl, editUrl: minted.editUrl, deleteUrl: minted.deleteUrl };
+      } catch (err) {
+        console.error('[intake] access link minting failed', err);
+      }
+    }
+
     const sent = await adapter.sendText(
       intake.fromNumber,
       autoPublish
-        ? publishedMessage(listing.title, listingUrl, {
+        ? publishedMessage(listing.title, links, {
             unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
           })
-        : pendingReviewMessage(listing.title)
+        : pendingReviewMessage(listing.title, links.editUrl)
     );
     if (!sent) {
       await notifyOps(

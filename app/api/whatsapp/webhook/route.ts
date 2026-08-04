@@ -3,7 +3,22 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { appendToIntake } from '@/lib/intake/session';
-import { photosAddedMessage, photosFailedMessage, updateRequestMessage } from '@/lib/intake/messages';
+import {
+  deleteCancelledMessage,
+  deleteConfirmMessage,
+  deleteDoneMessage,
+  deleteMenuMessage,
+  editLinkMessage,
+  helpMessage,
+  linkReissuedMessage,
+  noListingsMessage,
+  photosAddedMessage,
+  photosFailedMessage,
+} from '@/lib/intake/messages';
+import { mintAccessLink } from '@/lib/auth/access-links';
+import { db } from '@/lib/db/drizzle';
+import { landlords, users } from '@/lib/db/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
@@ -56,19 +71,58 @@ export async function POST(request: NextRequest) {
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
 
-    if (outcome.action === 'update_request') {
-      // Explicit edit request: ack the sender, hand the change to ops with
-      // the verbatim ask. Photos (if any) are already on the listing.
+    if (outcome.action === 'edit_link') {
+      // Edit requests are self-service now: hand back a link that signs them in.
+      const links = await linksFor(message.senderId, outcome.listingId ?? null);
       await whatsappAdapter.sendText(
         message.senderId,
-        updateRequestMessage(outcome.listingTitle ?? 'your listing', outcome.mediaStored, outcome.mediaFailed)
+        editLinkMessage(
+          outcome.listingTitle ?? 'your listing',
+          links?.editUrl ?? null,
+          outcome.mediaStored,
+          outcome.mediaFailed
+        )
+      );
+      // Only bother ops when we could NOT give them a link.
+      if (!links) {
+        await createNotificationsForOpsAndAdmin({
+          type: 'whatsapp_intake',
+          title: `Update request for listing #${outcome.listingId} via WhatsApp — apply manually`,
+          body: (message.text ?? '').slice(0, 300),
+          link: `/dashboard/listings/${outcome.listingId}`,
+        });
+      }
+    } else if (outcome.action === 'delete_menu' || outcome.action === 'delete_menu_reprompt') {
+      await whatsappAdapter.sendText(message.senderId, deleteMenuMessage(outcome.menu ?? []));
+    } else if (outcome.action === 'delete_confirm_prompt') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        deleteConfirmMessage(outcome.listingTitle ?? 'your listing')
+      );
+    } else if (outcome.action === 'listing_deleted') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        deleteDoneMessage(outcome.listingTitle ?? 'your listing')
       );
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
-        title: `Update request for listing #${outcome.listingId} via WhatsApp — apply manually`,
-        body: (message.text ?? '').slice(0, 300),
+        title: `Landlord removed listing #${outcome.listingId} via WhatsApp — archived, purges in 30 days`,
         link: `/dashboard/listings/${outcome.listingId}`,
       });
+    } else if (outcome.action === 'command_cancelled') {
+      await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage());
+    } else if (outcome.action === 'no_listings') {
+      await whatsappAdapter.sendText(message.senderId, noListingsMessage());
+    } else if (outcome.action === 'help') {
+      await whatsappAdapter.sendText(message.senderId, helpMessage());
+    } else if (outcome.action === 'link_reissue') {
+      const links = await linksFor(message.senderId, outcome.listingId ?? null);
+      await whatsappAdapter.sendText(
+        message.senderId,
+        links
+          ? linkReissuedMessage({ ...links, title: outcome.listingTitle })
+          : noListingsMessage()
+      );
     } else if (outcome.action === 'attach_media') {
       // Photos after publish went straight onto the live listing — confirm to
       // the sender, and never stay silent when downloads failed.
@@ -105,4 +159,29 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Mint fresh links for a sender, if they have an account. Returns null when
+ * they don't (legacy Ops-owned listings), so the caller can fall back to the
+ * manual ops path.
+ */
+async function linksFor(
+  senderId: string,
+  listingId: number | null
+): Promise<{ viewUrl: string; editUrl: string; deleteUrl: string } | null> {
+  try {
+    const e164 = senderId.startsWith('+') ? senderId : `+${senderId}`;
+    const user = await db.query.users.findFirst({
+      where: and(eq(users.waPhone, e164), isNull(users.deletedAt)),
+    });
+    if (!user) return null;
+    const landlord = await db.query.landlords.findFirst({ where: eq(landlords.userId, user.id) });
+    if (!landlord) return null;
+    const minted = await mintAccessLink({ userId: user.id, listingId, channel: 'whatsapp' });
+    return { viewUrl: minted.viewUrl, editUrl: minted.editUrl, deleteUrl: minted.deleteUrl };
+  } catch (err) {
+    console.error('[webhook] link minting failed', err);
+    return null;
+  }
 }

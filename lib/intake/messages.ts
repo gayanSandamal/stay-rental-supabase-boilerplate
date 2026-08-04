@@ -33,17 +33,36 @@ export function needsInfoMessage(
   return opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
 }
 
+export interface ListingLinks {
+  viewUrl: string;
+  editUrl?: string | null;
+  deleteUrl?: string | null;
+}
+
+/**
+ * The publish confirmation. The view URL goes FIRST because WhatsApp previews
+ * only the first link in a message.
+ */
 export function publishedMessage(
   title: string,
-  listingUrl: string,
+  links: ListingLinks,
   opts: { unsupportedMedia?: boolean } = {}
 ): string {
-  const base = `🎉 Your listing "${title}" is now LIVE on Easy Rent: ${listingUrl}\nTenants will call or WhatsApp you directly. Reply here anytime to update it.`;
+  const parts = [`🎉 Your listing "${title}" is now LIVE on Easy Rent:`, links.viewUrl];
+  if (links.editUrl) {
+    parts.push('', '✏️ Edit it yourself (opens instantly, no password):', links.editUrl);
+  }
+  if (links.deleteUrl) {
+    parts.push('', '🗑️ Remove it:', links.deleteUrl);
+  }
+  parts.push('', 'Tenants will call or WhatsApp you directly.');
+  const base = parts.join('\n');
   return opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
 }
 
-export function pendingReviewMessage(title: string): string {
-  return `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
+export function pendingReviewMessage(title: string, editUrl?: string | null): string {
+  const base = `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
+  return editUrl ? `${base}\n\n✏️ You can change the details meanwhile:\n${editUrl}` : base;
 }
 
 /** Photos sent after publish were added straight to the live listing. */
@@ -61,13 +80,22 @@ export function photosFailedMessage(): string {
   return `Sorry — we couldn't receive your photos just now. Please try sending them again in a moment.`;
 }
 
-/** Explicit edit request acknowledged; ops applies it manually. */
-export function updateRequestMessage(
+/**
+ * Edit requests are no longer applied by ops — the landlord edits it themselves
+ * through their own link.
+ */
+export function editLinkMessage(
   title: string,
-  photosAdded: number,
-  photosFailed: number
+  editUrl: string | null,
+  photosAdded = 0,
+  photosFailed = 0
 ): string {
-  const parts = [`✏️ Got it — our team will update "${title}" as requested.`];
+  const parts: string[] = [];
+  parts.push(
+    editUrl
+      ? `✏️ You can change "${title}" yourself here — the link signs you in, no password needed:\n${editUrl}`
+      : `✏️ Got it — our team will update "${title}" as requested.`
+  );
   if (photosAdded > 0) {
     parts.push(`📸 ${photosAdded} photo${photosAdded === 1 ? '' : 's'} already added.`);
   }
@@ -76,6 +104,64 @@ export function updateRequestMessage(
       `${photosFailed} photo${photosFailed === 1 ? '' : 's'} didn't come through — please send ${photosFailed === 1 ? 'it' : 'them'} again.`
     );
   }
-  parts.push(`If you meant a different listing, reply here with its link.`);
   return parts.join('\n');
+}
+
+/** Reply to "LINK": hand back working links for their latest listing. */
+export function linkReissuedMessage(links: ListingLinks & { title?: string | null }): string {
+  const parts = [
+    links.title ? `Here are your links for "${links.title}":` : 'Here are your links:',
+    `👀 View: ${links.viewUrl}`,
+  ];
+  if (links.editUrl) parts.push(`✏️ Edit: ${links.editUrl}`);
+  if (links.deleteUrl) parts.push(`🗑️ Remove: ${links.deleteUrl}`);
+  parts.push('', 'These sign you in automatically — keep them private.');
+  return parts.join('\n');
+}
+
+export interface DeleteMenuItem {
+  index: number;
+  title: string;
+  city: string | null;
+  status: string;
+}
+
+/** Step 1 of delete: a numbered list, so a pick is unambiguous. */
+export function deleteMenuMessage(items: DeleteMenuItem[]): string {
+  const lines = ['Which listing would you like to remove?', ''];
+  for (const i of items) {
+    const where = i.city ? `, ${i.city}` : '';
+    const pending = i.status === 'pending' ? ' (awaiting review)' : '';
+    lines.push(`${i.index}. ${i.title}${where}${pending}`);
+  }
+  lines.push('', 'Reply with the number, or CANCEL to stop.');
+  return lines.join('\n');
+}
+
+/** Step 2 of delete: an exact typed word. Anything else cancels. */
+export function deleteConfirmMessage(title: string): string {
+  return `You're about to remove "${title}" from Easy Rent.\n\nReply DELETE to confirm, or anything else to cancel.`;
+}
+
+export function deleteDoneMessage(title: string): string {
+  return `🗑️ Removed "${title}". It's no longer visible to tenants.\n\nSend us the details any time to list a property again.`;
+}
+
+export function deleteCancelledMessage(): string {
+  return `No changes made. Send DELETE again if you'd like to remove a listing.`;
+}
+
+export function noListingsMessage(): string {
+  return `You don't have any live listings with us right now. Send the property details (address, town, bedrooms and monthly rent) and we'll create one.`;
+}
+
+/** Reply to "HELP" / "MENU". */
+export function helpMessage(): string {
+  return [
+    'Here’s what you can do:',
+    '',
+    '🏠 Send the details (address, town, bedrooms, monthly rent) plus photos — we’ll create the listing.',
+    '✏️ Send LINK — we’ll reply with links to view, edit or remove your listings.',
+    '🗑️ Send DELETE — we’ll help you take a listing down.',
+  ].join('\n');
 }

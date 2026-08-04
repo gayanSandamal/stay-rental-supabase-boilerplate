@@ -513,6 +513,15 @@ export async function DELETE(
       .delete(listingContactNumbers)
       .where(eq(listingContactNumbers.listingId, listingId));
 
+    // Audit BEFORE the row disappears — afterwards there is nothing to describe.
+    // This handler previously wrote no audit entry at all, so the platform's only
+    // hard-delete path left no trace.
+    await logListingAction('listing_deleted', listingId, user.id, {
+      title: listing.title,
+      city: listing.city,
+      previousStatus: listing.status,
+    }).catch(() => {});
+
     // Delete the listing
     await db.delete(listings).where(eq(listings.id, listingId));
 

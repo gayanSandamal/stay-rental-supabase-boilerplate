@@ -65,6 +65,10 @@ export const featureFlagDefaults = {
   // fill-ins. No-op without ANTHROPIC_API_KEY. OFF = rules only, zero cost.
   enableLlmParserFallback: false,
 
+  // WhatsApp landlords get their own account and self-service edit links.
+  // OFF keeps today's behaviour: listings owned by Easy Rent Operations.
+  enableWhatsAppLandlordAccounts: false,
+
   // Automated approval (intake v2). Master switch OFF until the prompts have
   // been calibrated against real listings — with it off, publishing behaves
   // exactly as it does today.
@@ -215,6 +219,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   enableLlmParserFallback: {
     label: 'LLM parser fallback (intake)',
     description: 'When the rule-based intake parser leaves required listing fields missing, ask Claude to fill the gaps before replying to the sender. Requires ANTHROPIC_API_KEY (no-op without it). Off = deterministic rules only.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableWhatsAppLandlordAccounts: {
+    label: 'WhatsApp landlord accounts',
+    description:
+      'Create a real landlord account for each WhatsApp sender and give them view/edit/delete links so they can manage their own listing. OFF keeps intake listings under the Easy Rent Operations identity with no self-service.',
     group: 'Platform',
     appWide: true,
     public: false,
