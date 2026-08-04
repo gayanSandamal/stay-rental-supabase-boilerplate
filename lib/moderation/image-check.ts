@@ -170,8 +170,13 @@ export async function checkImage(args: {
   let personVisible = Boolean(g.person_visible);
   let adjudicated = false;
 
-  // Only ambiguous images pay for the bigger model.
-  const needsAdjudication = Boolean(g.uncertain) || (overlayText && Boolean(g.scene_text_present));
+  // Escalate whenever the gate claims text was ADDED — not only when it admits
+  // uncertainty. Live calibration showed the 8B gate returning uncertain=false
+  // with 0.99 confidence on a genuinely ambiguous sign, so gating tier 2 on
+  // `uncertain` made it dead code. "Added text" is precisely the class where a
+  // false positive costs a landlord a good photo, and it is a minority of
+  // images, so the bigger model is worth its price here.
+  const needsAdjudication = overlayText || Boolean(g.uncertain);
   if (needsAdjudication) {
     const adj = await chatJson<AdjudicateResponse>({
       model: MODERATION_ADJUDICATE_MODEL,
@@ -184,10 +189,13 @@ export async function checkImage(args: {
     usage.outputTokens += adj.usage.outputTokens;
     if (adj.data) {
       adjudicated = true;
+      // The adjudicator settles the added-vs-photographed text question only.
       overlayText = Boolean(adj.data.overlay_text);
-      if (typeof adj.data.person_is_subject === 'boolean') {
-        personVisible = adj.data.person_is_subject;
-      }
+      // It must NOT relax the person check: policy is to reject any human
+      // likeness (including reflections and wall portraits) until automatic
+      // face blurring ships, at which point this is where blurring hooks in
+      // using the gate's face boxes. It may only ESCALATE.
+      if (adj.data.person_is_subject === true) personVisible = true;
     }
   }
 
