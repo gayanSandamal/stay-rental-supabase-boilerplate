@@ -1,3 +1,4 @@
+import { publisherDisplayName } from '@/lib/publisher-name';
 import { notFound } from 'next/navigation';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { getIncludedBoostsRemaining } from '@/lib/landlord-plans';
@@ -100,7 +101,7 @@ export default async function ListingEditPage({
           const creator = await db.query.users.findFirst({
             where: eq(users.id, listing.createdBy),
           });
-          teamMemberName = creator?.name || creator?.email || null;
+          teamMemberName = creator ? publisherDisplayName(creator) : null;
         }
       }
     } catch (error) {
@@ -119,7 +120,7 @@ export default async function ListingEditPage({
       });
       
       if (landlordInfo?.user) {
-        publisherName = landlordInfo.user.name || landlordInfo.user.email;
+        publisherName = publisherDisplayName(landlordInfo.user);
       }
     } catch (error) {
       console.error('Error fetching landlord info:', error);
@@ -359,7 +360,7 @@ export default async function ListingEditPage({
           {isAdminOrOps && listing.landlord && (
             <LandlordPlanForm
               landlordId={listing.landlord.id}
-              landlordName={listing.landlord.user?.name || listing.landlord.user?.email || 'Landlord'}
+              landlordName={listing.landlord.user ? publisherDisplayName(listing.landlord.user) : 'Landlord'}
               currentTier={listing.landlord.landlordPlanTier}
               currentExpiresAt={listing.landlord.landlordPlanExpiresAt}
             />

@@ -54,6 +54,19 @@ describe('matchCity', () => {
     expect(matchCity('නුගේගොඩ house')?.city).toBe('Nugegoda');
   });
 
+  it('matches tamil script aliases', () => {
+    expect(matchCity('யாழ்ப்பாணம் வீடு')?.city).toBe('Jaffna');
+    expect(matchCity('கொழும்பு அபார்ட்மெண்ட்')?.city).toBe('Colombo');
+    expect(matchCity('மட்டக்களப்பு veedu')?.city).toBe('Batticaloa');
+    expect(matchCity('திருகோணமலை house for rent')?.city).toBe('Trincomalee');
+  });
+
+  it('resolves tamil aliases to the right district', () => {
+    expect(matchCity('கல்முனை house')?.district).toBe('Ampara');
+    expect(matchCity('கிண்ணியா house')?.district).toBe('Trincomalee');
+    expect(matchCity('காத்தான்குடி house')?.district).toBe('Batticaloa');
+  });
+
   it('returns null for unknown places', () => {
     expect(matchCity('a house in springfield')).toBeNull();
   });

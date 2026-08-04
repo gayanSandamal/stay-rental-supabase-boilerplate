@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
     ppr: true,
     clientSegmentCache: true,
   },
+  // sharp ships prebuilt native binaries — bundling them breaks the .node
+  // loading; leave it to file tracing instead.
+  serverExternalPackages: ['sharp'],
+  // The watermark asset lives in public/, which is served statically but is NOT
+  // traced into a function's filesystem unless named here.
+  outputFileTracingIncludes: {
+    '/api/cron/moderate-listings': ['./public/brand/**'],
+    '/api/listings/[id]/moderate': ['./public/brand/**'],
+  },
   images: {
     remotePatterns: [
       {

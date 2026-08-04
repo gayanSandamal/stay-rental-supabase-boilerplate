@@ -9,6 +9,7 @@ import {
   decimal,
   pgEnum,
   uuid,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
@@ -31,6 +32,19 @@ export const listingStatusEnum = pgEnum('listing_status', [
   'expired',
 ]);
 
+/**
+ * Automated approval state (migration 0032), independent of the public
+ * listing_status: a listing can be `active` + `passed`, or `pending` + `held`.
+ */
+export const listingModerationStatusEnum = pgEnum('listing_moderation_status', [
+  'queued', // waiting for the moderation sweeper
+  'running', // claimed by a sweeper run (lease held)
+  'passed', // all checks green (possibly after dropping bad photos)
+  'held', // needs a human: incoherent text, unsupported language, unsafe image
+  'error', // moderation could not run after retries — fail closed
+  'skipped', // moderation not configured/enabled for this row
+]);
+
 // Business Account Status enum
 export const businessAccountStatusEnum = pgEnum('business_account_status', [
   'active',
@@ -47,7 +61,11 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 255 }).notNull().unique(),
   passwordHash: text('password_hash'),
   role: userRoleEnum('role').notNull().default('tenant'),
-  phone: varchar('phone', { length: 20 }),
+  phone: varchar('phone', { length: 20 }), // user-typed, UNVERIFIED — never match on it
+  // Verified WhatsApp identity (E.164), written only by the intake pipeline after
+  // Meta has proven possession of the number. Unique among live accounts
+  // (partial index in migration 0030).
+  waPhone: varchar('wa_phone', { length: 20 }),
   subscriptionTier: varchar('subscription_tier', { length: 20 }).default('free'),
   subscriptionExpiresAt: timestamp('subscription_expires_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -171,6 +189,19 @@ export const listings = pgTable('listings', {
   businessAccountId: integer('business_account_id').references(() => businessAccounts.id), // Business account (if created by team member)
   publishedAt: timestamp('published_at'), // When listing was first published/approved
   expiresAt: timestamp('expires_at'), // When listing expires (publishedAt + 30 days)
+
+  // Automated approval (migration 0032). `photos` above stays the array of
+  // PUBLIC (compressed + watermarked) URLs every reader already parses;
+  // photosManifest is the source of truth carrying originals, hashes and
+  // per-image verdicts.
+  moderationStatus: listingModerationStatusEnum('moderation_status').notNull().default('skipped'),
+  moderationSummary: text('moderation_summary'), // short ops/landlord-facing line
+  moderationLanguage: varchar('moderation_language', { length: 12 }),
+  moderatedAt: timestamp('moderated_at'),
+  moderationAttempts: integer('moderation_attempts').notNull().default(0),
+  moderationLeaseUntil: timestamp('moderation_lease_until'),
+  photosManifest: text('photos_manifest'), // JSON array of PhotoManifestEntry
+  archivedAt: timestamp('archived_at'), // set on archive; purged 30 days later
 });
 
 // Listing views (for Premium/Agency performance insights)
@@ -272,6 +303,47 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+/**
+ * Passwordless "sign me in and take me there" links we send over WhatsApp.
+ * Unlike passwordResetTokens these are REUSABLE — the message stays in the
+ * landlord's chat thread and they reopen it weeks later — with a sliding
+ * expiry and a revocation column. Only the sha256 hash is stored, so an
+ * issued URL can never be reprinted (rotation = mint a new row).
+ */
+export const landlordAccessTokens = pgTable('landlord_access_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Listing this link was minted for (provenance only — the session is account-wide). */
+  listingId: integer('listing_id').references(() => listings.id, { onDelete: 'set null' }),
+  channel: text('channel').notNull().default('whatsapp'),
+  expiresAt: timestamp('expires_at').notNull(),
+  lastUsedAt: timestamp('last_used_at'),
+  useCount: integer('use_count').notNull().default(0),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
+ * Per-sender conversation state for multi-step commands (today: the delete
+ * confirmation). Separate from whatsapp_intakes, which models one property
+ * submission. `handledMessageIds` stops Meta redelivery re-running a command.
+ */
+export const intakeConversations = pgTable('intake_conversations', {
+  id: serial('id').primaryKey(),
+  channel: text('channel').notNull().default('whatsapp'),
+  fromNumber: text('from_number').notNull(),
+  /** idle | delete_pick | delete_confirm */
+  state: text('state').notNull().default('idle'),
+  payload: text('payload'), // JSON: e.g. the numbered listing ids on offer
+  expiresAt: timestamp('expires_at'),
+  handledMessageIds: text('handled_message_ids'), // JSON array, newest ~20
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Audit log action enum
 export const auditActionEnum = pgEnum('audit_action', [
   'listing_created',
@@ -302,6 +374,16 @@ export const auditActionEnum = pgEnum('audit_action', [
   'feature_flag_updated',
   'listing_auto_published',
   'whatsapp_intake_updated',
+  // 0030 — WhatsApp landlord accounts + passwordless links
+  'wa_account_created',
+  'auth_link_issued',
+  'auth_link_redeemed',
+  'listing_purged',
+  // 0032 — automated moderation
+  'listing_moderation_passed',
+  'listing_moderation_held',
+  'listing_moderation_overridden',
+  'listing_photos_dropped',
 ]);
 
 // WhatsApp concierge intake statuses
@@ -334,6 +416,52 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+/** One row per moderation attempt: ops audit trail + cost ledger. */
+export const listingModerations = pgTable('listing_moderations', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  attempt: integer('attempt').notNull().default(1),
+  outcome: listingModerationStatusEnum('outcome').notNull(),
+  language: varchar('language', { length: 12 }),
+  verdict: text('verdict'), // JSON: the full ModerationVerdict
+  reasons: text('reasons'), // JSON array of landlord-facing strings
+  imagesChecked: integer('images_checked').notNull().default(0),
+  imagesDropped: integer('images_dropped').notNull().default(0),
+  imagesCached: integer('images_cached').notNull().default(0),
+  model: varchar('model', { length: 64 }),
+  promptVersion: integer('prompt_version').notNull().default(1),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  durationMs: integer('duration_ms'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
+ * Content-addressed image verdict cache. Image checks judge the image alone, so
+ * a verdict is reusable across listings and across edits — this is what makes
+ * re-approval on edit nearly free. `humanOverride` makes an ops "restore this
+ * photo" decision permanent across future re-runs.
+ */
+export const imageModerationCache = pgTable(
+  'image_moderation_cache',
+  {
+    contentHash: varchar('content_hash', { length: 64 }).notNull(),
+    promptVersion: integer('prompt_version').notNull().default(1),
+    verdict: varchar('verdict', { length: 16 }).notNull(), // pass | reject
+    severity: varchar('severity', { length: 16 }), // cosmetic | safety
+    reasons: text('reasons'), // JSON array
+    raw: text('raw'), // JSON: provider response, kept for prompt tuning
+    model: varchar('model', { length: 64 }),
+    humanOverride: boolean('human_override').notNull().default(false),
+    overriddenBy: integer('overridden_by').references(() => users.id),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.contentHash, table.promptVersion] })]
+);
 
 // Audit log table
 export const auditLogs = pgTable('audit_logs', {
@@ -469,6 +597,24 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
   }),
 }));
 
+export const landlordAccessTokensRelations = relations(landlordAccessTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [landlordAccessTokens.userId],
+    references: [users.id],
+  }),
+  listing: one(listings, {
+    fields: [landlordAccessTokens.listingId],
+    references: [listings.id],
+  }),
+}));
+
+export const listingModerationsRelations = relations(listingModerations, ({ one }) => ({
+  listing: one(listings, {
+    fields: [listingModerations.listingId],
+    references: [listings.id],
+  }),
+}));
+
 // Notifications table (in-app notification center)
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),
@@ -516,3 +662,11 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type LandlordAccessToken = typeof landlordAccessTokens.$inferSelect;
+export type NewLandlordAccessToken = typeof landlordAccessTokens.$inferInsert;
+export type IntakeConversation = typeof intakeConversations.$inferSelect;
+export type NewIntakeConversation = typeof intakeConversations.$inferInsert;
+export type ListingModeration = typeof listingModerations.$inferSelect;
+export type NewListingModeration = typeof listingModerations.$inferInsert;
+export type ImageModerationCacheRow = typeof imageModerationCache.$inferSelect;
+export type NewImageModerationCacheRow = typeof imageModerationCache.$inferInsert;

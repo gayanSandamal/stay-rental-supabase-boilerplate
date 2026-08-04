@@ -65,6 +65,23 @@ export const featureFlagDefaults = {
   // fill-ins. No-op without ANTHROPIC_API_KEY. OFF = rules only, zero cost.
   enableLlmParserFallback: false,
 
+  // WhatsApp landlords get their own account and self-service edit links.
+  // OFF keeps today's behaviour: listings owned by Easy Rent Operations.
+  enableWhatsAppLandlordAccounts: false,
+
+  // Automated approval (intake v2). Master switch OFF until the prompts have
+  // been calibrated against real listings — with it off, publishing behaves
+  // exactly as it does today.
+  enableListingModeration: false,
+  moderateImages: true,
+  moderateTextCoherence: true,
+  holdOnUnsafeImages: true,
+  moderationFailOpen: false,
+  moderationMaxImagesPerListing: 6,
+  // Compression + watermark, independent of the AI checks.
+  enableImageProcessing: false,
+  watermarkListingImages: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
 } as const;
@@ -193,7 +210,8 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   },
   autoPublishWhatsAppIntakes: {
     label: 'Auto-publish WhatsApp intakes',
-    description: 'Publish intake listings immediately when automated checks pass — no human review, including first-time landlords. OFF routes them to pending for one-tap approval instead.',
+    description:
+      'Publish intake listings automatically once the automated approval checks pass (see "Automated listing approval"), with no human review — including for first-time landlords. OFF routes every intake to pending for one-tap approval instead.',
     group: 'Platform',
     appWide: true,
     public: false,
@@ -201,6 +219,76 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   enableLlmParserFallback: {
     label: 'LLM parser fallback (intake)',
     description: 'When the rule-based intake parser leaves required listing fields missing, ask Claude to fill the gaps before replying to the sender. Requires ANTHROPIC_API_KEY (no-op without it). Off = deterministic rules only.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableWhatsAppLandlordAccounts: {
+    label: 'WhatsApp landlord accounts',
+    description:
+      'Create a real landlord account for each WhatsApp sender and give them view/edit/delete links so they can manage their own listing. OFF keeps intake listings under the Easy Rent Operations identity with no self-service.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableListingModeration: {
+    label: 'Automated listing approval',
+    description:
+      'Run automated checks (language, title/description and location coherence, and image safety/text-overlay/person checks) before a listing goes live. Requires SILICONFLOW_API_KEY — a no-op without it. Off = listings publish exactly as they do today.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  moderateImages: {
+    label: '— check images',
+    description:
+      'Sub-switch: run the per-image checks (unsafe content, text added over the photo, people visible). Off keeps the text checks only and spends nothing on vision.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  moderateTextCoherence: {
+    label: '— check text coherence',
+    description:
+      'Sub-switch: verify the description matches the title and the location is consistent. Off keeps language and image checks only.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  holdOnUnsafeImages: {
+    label: '— hold on unsafe images',
+    description:
+      'A photo flagged for nudity, violence or harassment holds the whole listing for a human instead of just dropping that photo. Cosmetic problems (added text, a person in frame) always just drop the photo.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  moderationFailOpen: {
+    label: '— publish if checks unavailable',
+    description:
+      'EMERGENCY VALVE. When the moderation provider is unreachable, publish anyway instead of holding for review. Off (recommended) means nothing unchecked reaches the public site.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  moderationMaxImagesPerListing: {
+    label: 'Max images checked per listing',
+    description: 'Cost ceiling. Photos beyond this are dropped with an explicit reason, never silently ignored.',
+    group: 'Configuration',
+    appWide: false,
+    public: false,
+  },
+  enableImageProcessing: {
+    label: 'Compress + watermark images',
+    description:
+      'Re-encode listing photos (WebP, max 1920px, EXIF/GPS stripped) and apply the Easy Rent watermark. Photos from WhatsApp skip re-compression but are still watermarked.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  watermarkListingImages: {
+    label: '— apply watermark',
+    description: 'Sub-switch: compress without branding when off.',
     group: 'Platform',
     appWide: true,
     public: false,

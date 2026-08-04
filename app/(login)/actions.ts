@@ -1,5 +1,6 @@
 'use server';
 
+import { isReservedWaEmail } from '@/lib/intake/landlord-identity';
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
@@ -113,8 +114,17 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
   }
 });
 
+
+/**
+ * Placeholder addresses belong to WhatsApp landlord accounts, which sign in
+ * only via their access link. Allowing anyone to register or claim one would
+ * hand over that landlord's listings.
+ */
+const notReservedEmail = (email: string) => !isReservedWaEmail(email);
+const RESERVED_EMAIL_MSG = 'This email address is not available';
+
 const signUpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().refine(notReservedEmail, RESERVED_EMAIL_MSG),
   password: z.string().min(8),
   role: z.enum(['tenant', 'landlord']).optional(),
   plan: z.string().optional(),
@@ -600,7 +610,7 @@ export const deleteAccount = validatedActionWithUser(
 
 const updateAccountSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  email: z.string().email('Invalid email address')
+  email: z.string().email('Invalid email address').refine(notReservedEmail, RESERVED_EMAIL_MSG)
 });
 
 export const updateAccount = validatedActionWithUser(

@@ -7,6 +7,12 @@ const DROP_SQL = `
 DROP MATERIALIZED VIEW IF EXISTS "search_location_suggestions" CASCADE;
 
 -- Drop tables in reverse dependency order
+DROP TABLE IF EXISTS "image_moderation_cache" CASCADE;
+DROP TABLE IF EXISTS "listing_moderations" CASCADE;
+DROP TABLE IF EXISTS "landlord_access_tokens" CASCADE;
+DROP TABLE IF EXISTS "intake_conversations" CASCADE;
+DROP TABLE IF EXISTS "whatsapp_intakes" CASCADE;
+DROP TABLE IF EXISTS "feature_flags" CASCADE;
 DROP TABLE IF EXISTS "listing_contact_numbers" CASCADE;
 DROP TABLE IF EXISTS "user_contact_numbers" CASCADE;
 DROP TABLE IF EXISTS "listing_views" CASCADE;
@@ -27,6 +33,8 @@ DROP TABLE IF EXISTS "teams" CASCADE;
 DROP TABLE IF EXISTS "users" CASCADE;
 
 -- Drop enums
+DROP TYPE IF EXISTS "listing_moderation_status" CASCADE;
+DROP TYPE IF EXISTS "whatsapp_intake_status" CASCADE;
 DROP TYPE IF EXISTS "audit_action" CASCADE;
 DROP TYPE IF EXISTS "business_account_status" CASCADE;
 DROP TYPE IF EXISTS "lead_status" CASCADE;
@@ -88,6 +96,17 @@ async function reset() {
     '0022_landlord_included_boosts.sql',
     '0023_sync_featured_with_featured_until.sql',
     '0024_audit_visibility_actions.sql',
+    // This list had drifted (stopped at 0024), so `db:reset` produced a DB with
+    // no feature flags, no RLS and no intake tables. Keep it in step with the
+    // MIGRATIONS array in run-all-migrations.ts.
+    '0025_feature_flags.sql',
+    '0026_enable_rls.sql',
+    '0027_whatsapp_intake.sql',
+    '0028_intake_channel.sql',
+    '0029_intake_unsupported_media.sql',
+    '0030_wa_landlord_accounts.sql',
+    '0031_auth_user_trigger_hardening.sql',
+    '0032_listing_moderation.sql',
   ];
 
   function splitStatements(sql: string): string[] {

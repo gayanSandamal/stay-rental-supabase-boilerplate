@@ -4,6 +4,15 @@ import { listings, listingContactNumbers, userContactNumbers, businessAccountMem
 import { getUser } from '@/lib/db/queries';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
+import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import {
+  appendQueued,
+  manifestFromLegacyPhotos,
+  parseManifest,
+  parsePhotos,
+  serializeManifest,
+} from '@/lib/images/manifest';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
 
@@ -86,13 +95,13 @@ export async function PATCH(
         if (!listing.publishedAt) {
           updates.publishedAt = new Date();
           const expiresDate = new Date();
-          expiresDate.setDate(expiresDate.getDate() + 30);
+          expiresDate.setDate(expiresDate.getDate() + Number(getFeatureValue('listingExpirationDays') ?? 30));
           updates.expiresAt = expiresDate;
         }
         else if (!listing.expiresAt && listing.publishedAt) {
           const publishedDate = new Date(listing.publishedAt);
           const expiresDate = new Date(publishedDate);
-          expiresDate.setDate(expiresDate.getDate() + 30);
+          expiresDate.setDate(expiresDate.getDate() + Number(getFeatureValue('listingExpirationDays') ?? 30));
           updates.expiresAt = expiresDate;
         }
       }
@@ -203,6 +212,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    // Flags are read below (moderation queueing); the snapshot must be loaded first.
+    await loadFeatureFlags();
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -304,25 +315,59 @@ export async function PUT(
       updates.exclusive = Boolean(body.exclusive);
     }
 
-    // If editing an active listing, change status to pending for review
-    // But preserve publishedAt and expiresAt (don't include them in updates)
-    if (listing.status === 'active') {
-      // Check if any content fields are being updated (not just contactNumbers)
-      const contentFields = [
-        'title', 'description', 'address', 'city', 'district', 'latitude', 'longitude',
-        'propertyType', 'bedrooms', 'bathrooms', 'areaSqft', 'rentPerMonth', 'depositMonths',
-        'utilitiesIncluded', 'serviceCharge', 'powerBackup', 'waterSource', 'waterTankSize',
-        'hasFiber', 'fiberISPs', 'acUnits', 'fans', 'ventilation', 'isGated', 'hasGuard',
-        'hasCCTV', 'hasBurglarBars', 'parking', 'parkingSpaces', 'petsAllowed',
-        'noticePeriodDays', 'photos'
-      ];
-      
-      const hasContentChanges = contentFields.some(field => body[field] !== undefined);
-      
-      if (hasContentChanges) {
+    // Re-approval on edit.
+    //
+    // This used to unpublish on `body[field] !== undefined`, but the FormBuilder
+    // always submits the whole config — so EVERY save took a live listing dark,
+    // including a photos-only reorder. Compare against the stored row instead.
+    const CONTENT_FIELDS = [
+      'title', 'description', 'address', 'city', 'district', 'latitude', 'longitude',
+      'propertyType', 'bedrooms', 'bathrooms', 'areaSqft', 'rentPerMonth', 'depositMonths',
+      'utilitiesIncluded', 'serviceCharge', 'powerBackup', 'waterSource', 'waterTankSize',
+      'hasFiber', 'fiberISPs', 'acUnits', 'fans', 'ventilation', 'isGated', 'hasGuard',
+      'hasCCTV', 'hasBurglarBars', 'parking', 'parkingSpaces', 'petsAllowed',
+      'noticePeriodDays',
+    ] as const;
+
+    const norm = (v: unknown) =>
+      v === undefined || v === null || v === '' ? null : String(v);
+    const textChanged = CONTENT_FIELDS.some(
+      (f) => body[f] !== undefined && norm(body[f]) !== norm((listing as any)[f])
+    );
+
+    // Photos: only genuinely NEW URLs matter. Anything already in the manifest
+    // (as a published derivative or as an original) keeps its verdict, which is
+    // what makes re-approval on edit nearly free.
+    const submittedPhotos: string[] = Array.isArray(body.photos) ? body.photos : [];
+    const manifest = parseManifest(listing.photosManifest);
+    const known = new Set<string>();
+    for (const e of manifest) {
+      known.add(e.o);
+      if (e.p) known.add(e.p);
+    }
+    if (!manifest.length) for (const u of parsePhotos(listing.photos)) known.add(u);
+    const newPhotos = submittedPhotos.filter((u) => !known.has(u));
+    const photosChanged =
+      newPhotos.length > 0 ||
+      (body.photos !== undefined && submittedPhotos.length !== parsePhotos(listing.photos).length);
+
+    if (textChanged || photosChanged) {
+      // Queue the automated checks. New photos are appended as unverified
+      // originals so they are never published before passing.
+      if (isFeatureEnabled('enableListingModeration')) {
+        const nextManifest = manifest.length
+          ? appendQueued(manifest, newPhotos)
+          : appendQueued(manifestFromLegacyPhotos(parsePhotos(listing.photos)), newPhotos);
+        updates.photosManifest = serializeManifest(nextManifest);
+        updates.moderationStatus = 'queued';
+        updates.moderationAttempts = 0;
+      }
+
+      // An ops/admin edit IS the correction, so it must not be sent back to the
+      // machine that flagged it — but a landlord's edit unpublishes pending
+      // review, exactly as before. publishedAt/expiresAt are preserved either way.
+      if (!isAdminOrOps && listing.status === 'active') {
         updates.status = 'pending';
-        // Explicitly preserve publishedAt and expiresAt by not including them
-        // They will remain unchanged in the database
       }
     }
 
@@ -512,6 +557,15 @@ export async function DELETE(
     await db
       .delete(listingContactNumbers)
       .where(eq(listingContactNumbers.listingId, listingId));
+
+    // Audit BEFORE the row disappears — afterwards there is nothing to describe.
+    // This handler previously wrote no audit entry at all, so the platform's only
+    // hard-delete path left no trace.
+    await logListingAction('listing_deleted', listingId, user.id, {
+      title: listing.title,
+      city: listing.city,
+      previousStatus: listing.status,
+    }).catch(() => {});
 
     // Delete the listing
     await db.delete(listings).where(eq(listings.id, listingId));

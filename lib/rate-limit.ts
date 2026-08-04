@@ -33,6 +33,9 @@ const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
 };
 
 const VIEW_LIMIT: RateLimitConfig = { maxRequests: 30, windowMs: 60_000 }; // 30 views/min per IP
+// Access-link redemptions. Suppresses scanning noise; with 256-bit tokens,
+// guessing was never the threat model.
+const ACCESS_LINK_LIMIT: RateLimitConfig = { maxRequests: 10, windowMs: 60_000 };
 
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -58,6 +61,12 @@ export function checkRateLimit(
   if (!config && method === 'POST' && /\/api\/listings\/\d+\/view$/.test(pathname)) {
     config = VIEW_LIMIT;
     routeKey = 'POST:/api/listings/:id/view'; // Normalize so all view requests share limit
+  }
+  // Access links carry the token IN THE PATH, so without normalising, every
+  // attempt would land in its own bucket and the limit would do nothing.
+  if (!config && method === 'GET' && /^\/l\/[A-Za-z0-9_-]{20,}/.test(pathname)) {
+    config = ACCESS_LINK_LIMIT;
+    routeKey = 'GET:/l/:token';
   }
   config = config ?? ROUTE_LIMITS['default'];
   const key = `${ip}:${routeKey}`;

@@ -101,3 +101,118 @@ While the app is in **Development mode**, only numbers added as test recipients 
 - **Alerting is in-app only.** Pipeline events create bell notifications for ops/admin — nobody is emailed. If the webhook or cron breaks silently (bad secret, expired token), the symptom is "no new intakes". Check **Back Office → WhatsApp Intakes** daily in week one; a dead-man alert (oldest `received` intake age) is a good follow-up ticket.
 - **Replies outside 24h fail by design** (Meta's customer-service window). The pipeline flags these to ops ("could not reach sender") rather than erroring; the ops fallback is calling the number.
 - **The access token in Step 3.2 must be the never-expiring system-user token.** The API-Setup page's temporary token dies after 24h and every photo silently stops persisting (now logged loudly, but still).
+
+
+---
+
+# Intake v2 rollout (added 2026-08-04)
+
+Everything below is already deployed but **inert**: every new flag defaults OFF,
+and the moderation engine no-ops without an API key. Roll out in this order,
+watching each step before the next.
+
+## 0. One-time setup
+
+1. **Migrations** — `pnpm db:migrate-all` (0030–0032). Already applied to
+   production on 2026-08-04.
+2. **SiliconFlow key** for the automated checks. Create one at
+   [cloud.siliconflow.com](https://cloud.siliconflow.com/) → API Keys, then add
+   to Vercel (Production):
+
+   | Variable | Value |
+   | --- | --- |
+   | `SILICONFLOW_API_KEY` | your key |
+
+   Model ids and endpoint have working defaults (Qwen3-VL-8B for the per-image
+   gate and text checks, Qwen3-VL-32B to adjudicate flagged images). Only set
+   `MODERATION_API_BASE=https://api.siliconflow.cn/v1` if you use the China
+   platform. Cost is ~$0.002 per 6-photo listing — about $1/month at 500
+   listings — so a $5 top-up lasts months.
+3. **DNS**: `wa.easyrent.lk` should exist with **no MX record**. Landlord
+   accounts use placeholder addresses on that subdomain; the absent MX means a
+   stray send dies in DNS rather than reaching a third party.
+4. **Validate before enabling anything:**
+
+   ```bash
+   pnpm moderation:probe        # key, endpoint, model ids + the 2 risky behaviours
+   pnpm moderation:calibrate    # 14-case text corpus with expected verdicts
+   ```
+
+   Both must pass. The probe asserts that a Sinhala listing with an English
+   title is **not** flagged and that an added watermark **is** detected; the
+   calibration corpus covers Sinhala/Tamil/Singlish/bilingual, unknown towns,
+   spam, and the two zero-token deterministic holds.
+
+## 1. Image processing first (no AI involved)
+
+Back Office → Settings → **Compress + watermark images** ON.
+
+Validates sharp on Vercel and the derived-URL path in isolation. New photos
+become WebP (max 1920px, EXIF/GPS stripped) with the Easy Rent watermark; the
+logo variant is chosen per photo by corner brightness so it can't vanish on a
+white wall. Check a freshly published listing's gallery, then move on.
+
+## 2. Automated approval, images only
+
+Turn ON **Automated listing approval**, leave **check text coherence** OFF.
+
+Watch Back Office → **Moderation**. Every held listing shows its reasons and its
+original photos with per-photo verdicts. If a legitimate photo is rejected, hit
+**Restore** — that decision is remembered permanently, so the same image passes
+on every future check.
+
+## 3. Text coherence
+
+Turn ON **check text coherence**. This is the likelier source of false
+positives; watch the Moderation queue for a day before leaving it.
+
+## 4. Landlord accounts and self-service links (last)
+
+Turn ON **WhatsApp landlord accounts**.
+
+From here, each sender gets a real account, owns their listing, and the publish
+reply carries three links: view, edit, and remove. **Test cross-device before
+trusting it** — the whole point is that the link works on a phone that never
+started the session:
+
+1. WhatsApp a listing from your phone.
+2. When the 🎉 reply arrives, open the **edit** link on a *different* device.
+   You should land on the edit form already signed in.
+3. Change something, save, and confirm it re-enters the queue and republishes.
+4. Send `delete` → reply with the number → reply `DELETE`. The listing should
+   disappear from the site. Reply `yes` instead of `DELETE` on a later attempt
+   and confirm it does **not** delete.
+
+## Ops notes
+
+- **Moderation queue**: Back Office → Moderation. Actions: publish anyway
+  (override), restore photo (permanent), re-run checks.
+- **Removed listings** are archived immediately and purged permanently after 30
+  days by `/api/cron/purge-archived` (daily 03:30). Within that window ops can
+  restore one by setting its status back to `active`.
+- **Access links** live 90 days from last use. A landlord who sends `LINK` gets
+  fresh ones; `HELP` lists what they can do.
+- **If the moderation provider goes down**, listings queue and then hold — they
+  do not publish unchecked. `— publish if checks unavailable` is the emergency
+  valve if the queue backs up and ops has no bandwidth.
+- **Kill switches**, in order of bluntness: `WhatsApp landlord accounts` OFF
+  (back to Ops-owned listings, no self-service), `Automated listing approval`
+  OFF (publish as before, no checks), `enableWhatsAppIntake` OFF (webhook acks
+  and stores nothing).
+
+## Known limitations
+
+- A landlord whose account was created over WhatsApp cannot yet convert to
+  email + password sign-in (password change needs a current password; reset
+  would mail the undeliverable placeholder). They manage listings entirely
+  through their links. Self-deletion of the account is likewise unavailable.
+- If several people share one WhatsApp number — or an agent forwards clients'
+  properties — every listing from that number lands in the same account.
+- A real "For Rent" board photographed in a garden is the one image
+  false-positive risk we could not fully test before launch. The prompt
+  distinguishes photographed from added text and the 32B model adjudicates every
+  text finding, but watch for it. Worst case is a dropped photo, not a blocked
+  listing.
+- Face blurring is not built yet: a photo with a person visible is rejected
+  rather than blurred. Face bounding boxes are already captured on every check,
+  so adding blurring later is a small change.
