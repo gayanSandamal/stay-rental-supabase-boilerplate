@@ -384,10 +384,3 @@ export async function sweepModerationQueue(): Promise<SweepCounts> {
 
   return counts;
 }
-
-/** True when this listing came in over WhatsApp (drives how we reply). */
-export async function findIntakeForListing(listingId: number) {
-  return db.query.whatsappIntakes.findFirst({
-    where: and(eq(whatsappIntakes.listingId, listingId)),
-  });
-}
