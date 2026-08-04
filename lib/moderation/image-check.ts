@@ -7,7 +7,6 @@
  * every photo. See lib/images/process.ts.
  */
 
-import sharp from 'sharp';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { imageModerationCache } from '@/lib/db/schema';
@@ -51,6 +50,9 @@ export interface ImageCheckOutcome {
 
 /** Downscale for the model: visual tokens are the cost driver. */
 async function prepareForModel(original: Buffer): Promise<{ buffer: Buffer; mimeType: string }> {
+  // Lazy, same reasoning as lib/images/process.ts.
+  const mod = await import('sharp');
+  const sharp = (mod.default ?? mod) as unknown as (input?: Buffer) => any;
   const buffer = await sharp(original)
     .rotate()
     .resize({

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
-import { sweepModerationQueue } from '@/lib/moderation/engine';
 import { isModerationConfigured } from '@/lib/moderation/config';
 
 /**
@@ -30,6 +29,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no api key' });
   }
 
-  const counts = await sweepModerationQueue();
-  return NextResponse.json({ ok: true, ...counts });
+  // Imported HERE, not at module scope: the engine pulls in sharp (a native
+  // module), and a load failure at import time would 500 before the
+  // CRON_SECRET guard above could run — turning a fail-closed route into an
+  // open one that leaks a stack trace. Loading it after auth also means an
+  // unauthenticated request never pays for it.
+  try {
+    const { sweepModerationQueue } = await import('@/lib/moderation/engine');
+    const counts = await sweepModerationQueue();
+    return NextResponse.json({ ok: true, ...counts });
+  } catch (err: any) {
+    console.error('[cron/moderate-listings] failed', err);
+    return NextResponse.json({ ok: false, error: err?.message ?? 'moderation failed' }, { status: 500 });
+  }
 }
