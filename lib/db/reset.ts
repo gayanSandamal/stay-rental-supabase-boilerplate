@@ -107,6 +107,7 @@ async function reset() {
     '0030_wa_landlord_accounts.sql',
     '0031_auth_user_trigger_hardening.sql',
     '0032_listing_moderation.sql',
+    '0033_intake_location_pin.sql',
   ];
 
   function splitStatements(sql: string): string[] {

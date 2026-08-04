@@ -8,7 +8,7 @@
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { ParsedIntake, computeMissingFields } from './types';
 import { parseIntakeRules, RULES_VERSION } from './rule-parser';
-import { parseIntakeWithLlm } from './llm-parser';
+import { isLlmParserConfigured, parseIntakeWithLlm } from './llm-parser';
 
 export type { ParsedIntake } from './types';
 export { REQUIRED_FIELDS } from './types';
@@ -22,11 +22,16 @@ export async function parseIntake(messageText: string): Promise<ParsedIntake> {
   const wantLlm =
     rule.missingFields.length > 0 &&
     isFeatureEnabled('enableLlmParserFallback') &&
-    Boolean(process.env.ANTHROPIC_API_KEY);
+    isLlmParserConfigured();
   if (!wantLlm) return rule;
 
-  const llm = await parseIntakeWithLlm(messageText);
-  if (!llm) return rule;
+  const llm = await parseIntakeWithLlm(messageText, rule.missingFields);
+  if (!llm) {
+    // Mark the dark fallback in parsedPayload so a misconfigured model id is
+    // visible in the back office instead of masquerading as "fields absent".
+    rule.parserMeta = { ...rule.parserMeta!, llmFailed: true };
+    return rule;
+  }
 
   return mergeParsed(rule, llm);
 }
@@ -47,8 +52,17 @@ function mergeParsed(rule: ParsedIntake, llm: ParsedIntake): ParsedIntake {
     suspicious: rule.suspicious || llm.suspicious,
     suspicionReason:
       [rule.suspicionReason, llm.suspicionReason].filter(Boolean).join(' + ') || null,
+    // Safety flags must survive the merge — dropping multiProperty here would
+    // let a two-properties-in-one-message submission publish as one listing.
+    multiProperty: Boolean(rule.multiProperty || llm.multiProperty),
     parserMeta: { engine: 'rules+llm', rulesVersion: RULES_VERSION },
   };
+  // The rules compose a cityless title ("3BR House") when the gazetteer misses
+  // the town; if the LLM recovered the city, retrofit it — otherwise the
+  // listing publishes titled without its location.
+  if (merged.title && merged.city && !/\bin\b/i.test(merged.title)) {
+    merged.title = `${merged.title} in ${merged.city}`;
+  }
   merged.missingFields = computeMissingFields(merged);
   return merged;
 }

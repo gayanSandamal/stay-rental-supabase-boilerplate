@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
-import { listings, listingContactNumbers, userContactNumbers, businessAccountMembers, users } from '@/lib/db/schema';
+import { listings, listingContactNumbers, userContactNumbers, businessAccountMembers, users, whatsappIntakes } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
@@ -194,6 +194,21 @@ export async function PATCH(
       }
     }
 
+    // WhatsApp-originated listings: email goes to an unmonitored placeholder
+    // address, so keep the "we'll message you when it's live" promise on the
+    // channel the landlord actually uses. Awaited (a dangling promise dies
+    // when the serverless response returns) but never able to fail the PATCH.
+    if (
+      (status === 'active' && listing.status !== 'active') ||
+      (status === 'rejected' && rejectionReason)
+    ) {
+      try {
+        await notifyWhatsAppOwner(listingId, updatedListing.title, status, rejectionReason ?? null);
+      } catch (err) {
+        console.error('[listings PATCH] WhatsApp owner notify failed', err);
+      }
+    }
+
     return NextResponse.json(
       { success: true, listing: updatedListing },
       { status: 200 }
@@ -204,6 +219,41 @@ export async function PATCH(
       { error: error.message || 'Failed to update listing' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Chat reply for approval/rejection of a WhatsApp-originated listing. Lazy
+ * import keeps the channel layer out of this route's module graph for the
+ * (majority) non-WhatsApp requests.
+ */
+async function notifyWhatsAppOwner(
+  listingId: number,
+  title: string,
+  status: 'active' | 'rejected',
+  rejectionReason: string | null
+): Promise<void> {
+  const intake = await db.query.whatsappIntakes.findFirst({
+    where: eq(whatsappIntakes.listingId, listingId),
+  });
+  if (!intake?.fromNumber) return;
+  const { sendWhatsAppText } = await import('@/lib/intake/channels/whatsapp/send');
+  const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
+  const message =
+    status === 'active'
+      ? `🎉 Your listing "${title}" is now live on Easy Rent:\n${base}/listings/${listingId}\n\nTenants will call or WhatsApp you directly.`
+      : `Your listing "${title}" couldn't be approved: ${rejectionReason}.\nReply here if you have questions — our team can help.`;
+  const sent = await sendWhatsAppText(intake.fromNumber, message);
+  if (!sent) {
+    // Manual review routinely takes >24h, putting this send outside Meta's
+    // customer-service window (error 131047). WhatsApp is these landlords'
+    // ONLY channel — a silent drop means they never learn the outcome.
+    const { createNotificationsForOpsAndAdmin } = await import('@/lib/notifications');
+    await createNotificationsForOpsAndAdmin({
+      type: 'whatsapp_intake',
+      title: `Listing #${listingId} ${status === 'active' ? 'approved' : 'rejected'} but the WhatsApp notice failed — contact the owner manually`,
+      link: `/dashboard/listings/${listingId}`,
+    });
   }
 }
 

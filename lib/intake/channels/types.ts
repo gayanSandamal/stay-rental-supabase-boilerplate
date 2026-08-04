@@ -24,6 +24,18 @@ export interface NormalizedInboundMessage {
    * to resend as photos — silence is never acceptable.
    */
   unsupportedMedia?: boolean;
+  /**
+   * Id of the interactive button/list row the sender tapped (WhatsApp:
+   * button_reply/list_reply id). text carries the title they saw on screen.
+   */
+  interactiveReplyId?: string;
+  /** A shared location pin (text is '' — a pin is not prose). */
+  location?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
   timestamp: Date;
 }
 

@@ -1,16 +1,16 @@
 /**
  * Deterministic rule-based extraction of listing fields from free-text intake
- * messages (English / romanized Sinhala / Sinhala script). Primary parser for
- * the intake pipeline — pure, synchronous, never returns null, and safe to
- * unit-test with no environment. The flag-gated LLM fallback only fills
- * fields these rules leave null (see ./index.ts).
+ * messages (English / romanized Sinhala / Sinhala and Tamil script). Primary
+ * parser for the intake pipeline — pure, synchronous, never returns null, and
+ * safe to unit-test with no environment. The flag-gated LLM fallback only
+ * fills fields these rules leave null (see ./index.ts).
  */
 
 import { ParsedIntake, computeMissingFields } from './types';
 import { matchCity, matchAllCities, matchDistrict, isCityName } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
-export const RULES_VERSION = 3;
+export const RULES_VERSION = 4;
 
 /** Sanity clamp at extraction time; checks.ts enforces the market window. */
 const RENT_FLOOR = 1_000;
@@ -124,19 +124,21 @@ function firstRentMatch(
 const RENT_PASSES: Array<{ re: RegExp; amount: (m: RegExpMatchArray) => number }> = [
   // "1.2 lakh", "2 lakhs"
   { re: /(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|laks)\b/g, amount: (m) => Number(m[1]) * 100_000 },
-  // "Rs. 85,000", "LKR 85000", "rs 85k"
+  // "Rs. 85,000", "LKR 85000", "rs 85k", "ரூ. 85,000"
   {
-    re: /\b(?:lkr|rs\.?|rupees|slr)\s*:?\s*([\d,]+(?:\.\d+)?)\s*(k\b)?/g,
+    re: /(?:\b(?:lkr|rs\.?|rupees|slr)|ரூ(?:பாய்|பா)?\.?)\s*:?\s*([\d,]+(?:\.\d+)?)\s*(k\b)?/gu,
     amount: (m) => toAmount(m[1], Boolean(m[2])),
   },
-  // "monthly rent 85,000", "rent is 85000", "rent 50k", "kuliya 45,000"
+  // "monthly rent 85,000", "rent is 85000", "rent 50k", "kuliya 45,000",
+  // "வாடகை 45,000". Skip words admit \p{M}: Sinhala/Tamil vowel signs are
+  // combining marks, so "வாடகை மாதம் 45000" never bridges on \p{L} alone.
   {
-    re: /(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)(?:\s+\p{L}+){0,2}?\s*(?:[:\-]|is|of)?\s*([\d,]{2,}(?:\.\d+)?)\s*(k\b)?/gu,
+    re: /(?:\b(?:rental|rent|monthly)|kuliya|කුලිය|வாடகை)(?:\s+[\p{L}\p{M}]+){0,2}?\s*(?:[:\-]|is|of)?\s*([\d,]{2,}(?:\.\d+)?)\s*(k\b)?/gu,
     amount: (m) => toAmount(m[1], Boolean(m[2])),
   },
-  // "85,000/month", "85000 per month", "85k pm", "85000 monthly"
+  // "85,000/month", "85000 per month", "85k pm", "35,000 மாதம்"
   {
-    re: /([\d,]+(?:\.\d+)?)\s*(k\b)?\s*(?:\/|per\s*)?(?:monthly|month\b|mnth\b|mo\b|pm\b)/g,
+    re: /([\d,]+(?:\.\d+)?)\s*(k\b)?\s*(?:\/|per\s*)?(?:monthly|month\b|mnth\b|mo\b|pm\b|மாதம்|மாதத்திற்கு)/gu,
     amount: (m) => toAmount(m[1], Boolean(m[2])),
   },
   // "85,000/-", "85000/=" (common SL classified style)
@@ -145,7 +147,7 @@ const RENT_PASSES: Array<{ re: RegExp; amount: (m: RegExpMatchArray) => number }
   { re: /(\d+(?:\.\d+)?)\s*k\b/g, amount: (m) => toAmount(m[1], true) },
   // bare amount near a rent keyword: "80000 rent"
   {
-    re: /([\d,]{4,})[^\d]{0,30}(?:\b(?:rental|rent|monthly)|kuliya|කුලිය)/gu,
+    re: /([\d,]{4,})[^\d]{0,30}(?:\b(?:rental|rent|monthly)|kuliya|කුලිය|வாடகை)/gu,
     amount: (m) => toAmount(m[1], false),
   },
 ];
@@ -200,6 +202,10 @@ function extractBedrooms(lower: string): number | null {
     /(?:bed\s?rooms?|beds?)\s*[:\-]?\s*(\d+)/g,
     /(?:kamara|කාමර)\s*(\d+)/gu,
     /(\d+)\s*(?:kamara|කාමර)/gu,
+    // Bare அறை ("room") is a common bedroom count, but only as its own word
+    // and never right after குளியல் — "குளியல் அறை 2" counts bathrooms.
+    /(?:படுக்கையறை(?:கள்)?|(?<![\p{L}\p{M}])(?<!குளியல்\s{0,3})அறை(?:கள்)?)\s*[:\-]?\s*(\d+)/gu,
+    /(\d+)\s*(?:படுக்கையறை|அறை)/gu,
   ]);
 }
 
@@ -207,6 +213,8 @@ function extractBathrooms(lower: string): number | null {
   const counted = extractCount(lower, [
     /(\d+)[\s-]*(?:bath\s?rooms?|baths?|washrooms?|toilets?)\b/g,
     /(?:bath\s?rooms?|baths?|washrooms?|toilets?)\s*[:\-]?\s*(\d+)/g,
+    /(\d+)\s*(?:குளியலறை|குளியல்\s?அறை)/gu,
+    /(?:குளியலறை|குளியல்\s?அறை)(?:கள்)?\s*[:\-]?\s*(\d+)/gu,
   ]);
   if (counted != null) return counted;
   return /attached\s+bath(?:\s?room)?/.test(lower) ? 1 : null;
@@ -218,7 +226,10 @@ function extractPropertyType(lower: string): {
 } {
   // "annex" keeps the 3-value type union: stored as house, surfaced in title.
   if (/\bannexe?s?\b/.test(lower)) return { propertyType: 'house', annex: true };
-  if (/\b(?:apartments?|flats?|condos?|penthouses?)\b/.test(lower) || lower.includes('මහල්')) {
+  if (
+    /\b(?:apartments?|flats?|condos?|penthouses?)\b/.test(lower) ||
+    /මහල්|அடுக்குமாடி|அபார்ட்மெண்ட்/u.test(lower)
+  ) {
     return { propertyType: 'apartment', annex: false };
   }
   // "room" only in a renting context — "2 bedrooms" must never classify as
@@ -233,7 +244,7 @@ function extractPropertyType(lower: string): {
   }
   if (
     /\b(?:house|home|bungalow|villa|gedara|gedhara)\b/.test(lower) ||
-    /නිවස|ගෙදර/u.test(lower)
+    /නිවස|ගෙදර|வீடு|வீட்டு/u.test(lower)
   ) {
     return { propertyType: 'house', annex: false };
   }
@@ -245,7 +256,7 @@ const ADDRESS_RE =
   // not letters — without it no Sinhala street name can ever match.
   // The number token must be separated from what follows by a comma or space —
   // otherwise ordinals self-match ("1st" = "1" + the bare "st" suffix).
-  /(?:no\.?\s*)?\d+[\p{L}\p{M}\d/-]*(?:\s*,\s*|\s+)(?:[\p{L}][\p{L}\p{M}\d'.]*\s+){0,4}(?:road|rd|lane|ln|mawatha|mw|place|pl|avenue|ave|street|st|drive|crescent|close|gardens?|terrace|watt[ae]|para|pedesa|patumaga|පාර|මාවත|පෙදෙස|පටුමග)\.?(?=[\s,.]|$)/iu;
+  /(?:no\.?\s*)?\d+[\p{L}\p{M}\d/-]*(?:\s*,\s*|\s+)(?:[\p{L}][\p{L}\p{M}\d'.]*\s+){0,4}(?:road|rd|lane|ln|mawatha|mw|place|pl|avenue|ave|street|st|drive|crescent|close|gardens?|terrace|watt[ae]|para|pedesa|patumaga|පාර|මාවත|පෙදෙස|පටුමග|வீதி|தெரு|சாலை|ஒழுங்கை)\.?(?=[\s,.]|$)/iu;
 
 interface AddressResult {
   address: string;
@@ -294,13 +305,13 @@ const ADDRESS_FALLBACK_RE =
 // No '.' in the trailing filler: "for rent. 220/A, …" is a sentence boundary
 // before an address, not a rent amount ("rent: 4500," still guarded).
 const MONEY_CONTEXT_BEFORE_RE =
-  /(?:rent|rental|monthly|kuliya|කුලිය|rs\.?|lkr|slr|rupees|deposit|advance|key\s*money|area|size|extent|sq\.?\s*ft|sqft|perch(?:es)?)[\s:\-]*$/i;
+  /(?:rent|rental|monthly|kuliya|කුලිය|வாடகை|மாதம்|rs\.?|lkr|slr|ரூ\.?|rupees|deposit|advance|key\s*money|area|size|extent|sq\.?\s*ft|sqft|perch(?:es)?)[\s:\-]*$/i;
 
 // Words that never START an address segment: room/feature/unit vocabulary in
-// either script. Critical for Sinhala, which has no capitalization for the
-// caps guard to lean on.
+// any script. Critical for Sinhala and Tamil, which have no capitalization
+// for the caps guard to lean on.
 const SEGMENT_STOP_WORD_RE =
-  /^(?:kitchen|hall|bathrooms?|bedrooms?|beds?|baths?|rooms?|living|dining|pantry|garage|parking|rent|rental|monthly|available|modern|spacious|fully|furnished|sqft|perch(?:es)?|acres?|කාමර|කුලිය|නිවස|ගෙදර|මහල්|මාසික)$/iu;
+  /^(?:kitchen|hall|bathrooms?|bedrooms?|beds?|baths?|rooms?|living|dining|pantry|garage|parking|rent|rental|monthly|available|modern|spacious|fully|furnished|sqft|perch(?:es)?|acres?|කාමර|කුලිය|නිවස|ගෙදර|මහල්|මාසික|அறை(?:கள்)?|படுக்கையறை(?:கள்)?|குளியலறை(?:கள்)?|வாடகை|வீடு|மாதம்)$/iu;
 
 function extractAddressFallback(
   maskedOriginalCase: string,
@@ -367,13 +378,16 @@ function composeTitle(args: {
   annex: boolean;
   city: string | null;
 }): string | null {
-  if (!args.city) return null;
+  // A known type still titles without a city ("5BR House") — otherwise one
+  // gazetteer miss surfaces as TWO missing fields and the sender is asked
+  // for a property type they already gave.
+  if (!args.city && !args.propertyType) return null;
   const typeLabel = args.annex
     ? 'Annex'
     : args.propertyType
       ? args.propertyType.charAt(0).toUpperCase() + args.propertyType.slice(1)
       : 'Property';
-  return [args.bedrooms ? `${args.bedrooms}BR` : null, typeLabel, 'in', args.city]
+  return [args.bedrooms ? `${args.bedrooms}BR` : null, typeLabel, args.city ? `in ${args.city}` : null]
     .filter(Boolean)
     .join(' ');
 }

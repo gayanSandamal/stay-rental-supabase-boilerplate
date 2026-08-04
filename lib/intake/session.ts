@@ -61,13 +61,27 @@ export interface AppendOutcome {
     | 'command_cancelled'
     | 'no_listings'
     | 'link_reissue'
-    | 'help';
+    | 'help'
+    /** A location pin arrived within 48h of publish: saved onto that listing. */
+    | 'location_saved'
+    /** RESTORE command matched a recently chat-archived listing — ops take it. */
+    | 'restore_request';
   intakeId?: number;
-  /** attach_media / edit_link / delete: the live listing concerned. */
+  /** attach_media / edit_link / delete / location_saved: the listing concerned. */
   listingId?: number | null;
   listingTitle?: string | null;
   /** delete_menu: the numbered options offered to the sender. */
   menu?: Array<{ index: number; id: number; title: string; city: string | null; status: string }>;
+  /** link_reissue: the listing's status — a pending listing is not "live". */
+  listingStatus?: string;
+  /** appended/created: a location pin was stored on the intake. */
+  pinStored?: boolean;
+  /**
+   * appended: this message reopened a needs_info session — i.e. it answers a
+   * "we still need…" ask. At most one message per round flips the status back
+   * to received, so an ack keyed on this can never spam a multi-message burst.
+   */
+  reopenedFromNeedsInfo?: boolean;
   /** Photos persisted / photo downloads that failed (all actions). */
   mediaStored: number;
   mediaFailed: number;
@@ -219,7 +233,11 @@ export async function appendToIntake(
     // photos clears pending state and falls through, so a real submission is
     // never swallowed by a stale confirmation.
     const convo = await readConversation(tx, msg.channel, msg.senderId);
-    const substantive = hasSubstantiveText(msg) || msg.mediaIds.length > 0;
+    // A tapped button/list row is NEVER prose: its text is the row title we
+    // ourselves sent, and titles routinely contain digits ("Annex 45k") that
+    // would otherwise read as substantive and abort the pending command flow.
+    const substantive =
+      !msg.interactiveReplyId && (hasSubstantiveText(msg) || msg.mediaIds.length > 0);
 
     if (wasHandled(convo, msg.messageId)) {
       // Meta redelivered a command we already acted on.
@@ -227,16 +245,24 @@ export async function appendToIntake(
     }
 
     if (convo.state !== 'idle' && !substantive) {
-      if (isCancel(msg.text)) {
+      if (isCancel(msg.text) || msg.interactiveReplyId === 'cancel_delete') {
         await clearConversation(tx, msg.channel, msg.senderId);
         await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
         return { action: 'command_cancelled' } as const;
       }
 
       if (convo.state === 'delete_pick') {
+        // A tapped list row carries the listing id directly ("del:123");
+        // typed digits remain the fallback for clients without list support.
+        // Either way the id must be one we actually offered.
+        const tapped = msg.interactiveReplyId?.match(/^del:(\d+)$/);
         const pick = parseMenuPick(msg.text);
         const ids = convo.payload.ids ?? [];
-        const chosenId = pick ? ids[pick - 1] : undefined;
+        const chosenId = tapped
+          ? ids.find((id) => id === Number(tapped[1]))
+          : pick
+            ? ids[pick - 1]
+            : undefined;
         if (chosenId) {
           const listing = await tx.query.listings.findFirst({ where: eq(listings.id, chosenId) });
           if (listing) {
@@ -265,8 +291,14 @@ export async function appendToIntake(
       }
 
       if (convo.state === 'delete_confirm') {
-        // Anything other than the exact word cancels: ambiguity never destroys.
-        if (!isDeleteConfirmation(msg.text)) {
+        // A tap is validated by id, BOUND TO THE STAGED LISTING — a stale
+        // "Delete" button from an earlier prompt must not archive whatever is
+        // staged now. Typed text keeps the exact-word rule. Anything else
+        // cancels: ambiguity never destroys.
+        const confirmed = msg.interactiveReplyId
+          ? msg.interactiveReplyId === `confirm_delete:${convo.payload.chosenId}`
+          : isDeleteConfirmation(msg.text);
+        if (!confirmed) {
           await clearConversation(tx, msg.channel, msg.senderId);
           await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
           return { action: 'command_cancelled' } as const;
@@ -305,7 +337,53 @@ export async function appendToIntake(
       const menu = await buildDeleteMenu(tx, msg, {});
       const target = menu[0];
       return target
-        ? ({ action: 'link_reissue', listingId: target.id, listingTitle: target.title } as const)
+        ? ({
+            action: 'link_reissue',
+            listingId: target.id,
+            listingTitle: target.title,
+            listingStatus: target.status,
+          } as const)
+        : ({ action: 'no_listings' } as const);
+    }
+    if (command === 'restore') {
+      // The delete confirmation promises this word works for 30 days. Ops do
+      // the actual restore — a chat command must never flip a listing live
+      // without a human glance at why it was archived.
+      await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+      // Same two ownership sources as buildDeleteMenu — anything the sender
+      // could delete via chat, they can ask to restore.
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const e164 = msg.senderId.startsWith('+') ? msg.senderId : `+${msg.senderId}`;
+      const ownedArchived = await tx
+        .select({ id: listings.id, title: listings.title, archivedAt: listings.archivedAt })
+        .from(listings)
+        .innerJoin(landlords, eq(listings.landlordId, landlords.id))
+        .innerJoin(users, eq(landlords.userId, users.id))
+        .where(
+          and(
+            eq(users.waPhone, e164),
+            isNull(users.deletedAt),
+            eq(listings.status, 'archived'),
+            gte(listings.archivedAt, cutoff)
+          )
+        );
+      const intakeArchived = await tx
+        .select({ id: listings.id, title: listings.title, archivedAt: listings.archivedAt })
+        .from(whatsappIntakes)
+        .innerJoin(listings, eq(whatsappIntakes.listingId, listings.id))
+        .where(
+          and(
+            eq(whatsappIntakes.channel, msg.channel),
+            eq(whatsappIntakes.fromNumber, msg.senderId),
+            eq(listings.status, 'archived'),
+            gte(listings.archivedAt, cutoff)
+          )
+        );
+      const target = [...ownedArchived, ...intakeArchived].sort(
+        (a, b) => (b.archivedAt?.getTime() ?? 0) - (a.archivedAt?.getTime() ?? 0)
+      )[0];
+      return target
+        ? ({ action: 'restore_request', listingId: target.id, listingTitle: target.title } as const)
         : ({ action: 'no_listings' } as const);
     }
     if (command === 'delete') {
@@ -330,8 +408,18 @@ export async function appendToIntake(
           Date.now() - r.lastMessageAt.getTime() <= NEEDS_INFO_WINDOW_MS)
     );
     if (open) {
-      await appendTo(open, { status: 'received', lastMessageAt: new Date() });
-      return { action: 'appended', intakeId: open.id } as const;
+      const wasNeedsInfo = open.status === 'needs_info';
+      await appendTo(open, {
+        status: 'received',
+        lastMessageAt: new Date(),
+        ...(msg.location ? { locationPin: JSON.stringify(msg.location) } : {}),
+      });
+      return {
+        action: 'appended',
+        intakeId: open.id,
+        pinStored: Boolean(msg.location),
+        reopenedFromNeedsInfo: wasNeedsInfo,
+      } as const;
     }
 
     // Explicit edit request ("change the rent to 95,000", "remove the last
@@ -376,7 +464,32 @@ export async function appendToIntake(
       age <= AFTER_PUBLISH_WINDOW_MS &&
       !hasSubstantiveText(msg)
     ) {
-      await appendTo(latest, {});
+      await appendTo(latest, {
+        ...(msg.location ? { locationPin: JSON.stringify(msg.location) } : {}),
+      });
+      // A pin shortly after publish is the location for THAT listing — the
+      // most natural follow-up when the address was typed loosely.
+      if (msg.location && latest.listingId) {
+        const listing = await tx.query.listings.findFirst({
+          where: eq(listings.id, latest.listingId),
+        });
+        if (listing) {
+          await tx
+            .update(listings)
+            .set({
+              latitude: String(msg.location.latitude),
+              longitude: String(msg.location.longitude),
+              updatedAt: new Date(),
+            })
+            .where(eq(listings.id, listing.id));
+          return {
+            action: 'location_saved',
+            intakeId: latest.id,
+            listingId: listing.id,
+            listingTitle: listing.title,
+          } as const;
+        }
+      }
       if (msg.mediaIds.length > 0) {
         return { action: 'attach_media', intakeId: latest.id, listingId: latest.listingId } as const;
       }
@@ -386,8 +499,15 @@ export async function appendToIntake(
     // More context for an intake ops is already reviewing: append, do NOT
     // reopen — scam/duplicate-flagged intakes must not re-enter the auto path.
     if (latest && latest.status === 'manual_review' && age <= NEEDS_INFO_WINDOW_MS) {
-      await appendTo(latest, { lastMessageAt: new Date() });
-      return { action: 'appended_manual', intakeId: latest.id } as const;
+      await appendTo(latest, {
+        lastMessageAt: new Date(),
+        ...(msg.location ? { locationPin: JSON.stringify(msg.location) } : {}),
+      });
+      return {
+        action: 'appended_manual',
+        intakeId: latest.id,
+        pinStored: Boolean(msg.location),
+      } as const;
     }
 
     const [created] = await tx
@@ -398,11 +518,12 @@ export async function appendToIntake(
         profileName: msg.senderName,
         messageText: msg.text,
         mediaPaths: '[]',
+        ...(msg.location ? { locationPin: JSON.stringify(msg.location) } : {}),
         waMessageIds: JSON.stringify(msg.messageId ? [msg.messageId] : []),
         hasUnsupportedMedia: Boolean(msg.unsupportedMedia),
       })
       .returning({ id: whatsappIntakes.id });
-    return { action: 'created', intakeId: created.id } as const;
+    return { action: 'created', intakeId: created.id, pinStored: Boolean(msg.location) } as const;
   });
 
   const base: AppendOutcome = { ...outcome, mediaStored: 0, mediaFailed: 0 };

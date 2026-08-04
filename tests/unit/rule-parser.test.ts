@@ -176,9 +176,9 @@ const CASES: Array<{
     expected: { address: '23 Lake Lane', city: 'Nugegoda' },
   },
   {
-    name: 'unknown city stays null and blocks title',
+    name: 'unknown city stays null; known type still composes a cityless title',
     input: '2 bedroom house 50000 per month in Springfield',
-    expected: { city: null, title: null },
+    expected: { city: null, title: '2BR House', missingFields: ['address', 'city'] },
   },
   {
     name: 'district inferred from city, never stated',
@@ -186,9 +186,34 @@ const CASES: Array<{
     expected: { city: 'Negombo', district: 'Gampaha' },
   },
   {
-    name: 'no city → title and city missing',
+    name: 'no city → city missing, title survives on the type',
     input: '2 bedroom house for 80000 per month',
-    expected: { city: null, title: null },
+    expected: { city: null, title: '2BR House', missingFields: ['address', 'city'] },
+  },
+  {
+    name: 'cityless title without bedrooms is just the type',
+    input: 'Apartment for rent, 50000 per month',
+    expected: { title: 'Apartment', propertyType: 'apartment', city: null },
+  },
+  {
+    name: 'cityless annex title',
+    input: 'Annex for rent, 1 bedroom, 45000 per month',
+    expected: { title: '1BR Annex', propertyType: 'house' },
+  },
+  {
+    name: 'no type and no city still blocks the title',
+    input: '2 bedroom unit for 80000 per month',
+    expected: {
+      title: null,
+      propertyType: null,
+      city: null,
+      missingFields: ['title', 'address', 'city'],
+    },
+  },
+  {
+    name: 'type-unknown with city keeps the Property label',
+    input: '2 bedroom in Nugegoda 80k',
+    expected: { title: '2BR Property in Nugegoda', city: 'Nugegoda' },
   },
   {
     name: 'image-only / empty text',
@@ -384,6 +409,73 @@ const CASES: Array<{
     input: 'size 20/25, Kitchen And Hall, Matara house 40k pm',
     expected: { address: null, city: 'Matara' },
   },
+  {
+    name: 'kolonnawa resolves and only truly-absent fields are missing (live-found case)',
+    input:
+      'House for rent in Kolonnawa\n5 bedrooms, 3 bathrooms, parking, roller shutter gate, 4.5 perches, 700m to the Kolonnawa junction',
+    expected: {
+      city: 'Kolonnawa',
+      district: 'Colombo',
+      propertyType: 'house',
+      bedrooms: 5,
+      bathrooms: 3,
+      title: '5BR House in Kolonnawa',
+      missingFields: ['address', 'rentPerMonth'],
+    },
+  },
+  {
+    name: 'tamil full ad: house, counts, rent, street address',
+    input:
+      'வீடு வாடகைக்கு யாழ்ப்பாணம். 3 படுக்கையறை, 2 குளியலறை. மாத வாடகை 45,000. 12, கோயில் வீதி',
+    expected: {
+      propertyType: 'house',
+      city: 'Jaffna',
+      district: 'Jaffna',
+      bedrooms: 3,
+      bathrooms: 2,
+      rentPerMonth: 45000,
+      address: '12, கோயில் வீதி',
+      title: '3BR House in Jaffna',
+      missingFields: [],
+    },
+  },
+  {
+    name: 'tamil apartment with ரூ currency and keyword-first bedrooms',
+    input: 'வவுனியா அடுக்குமாடி குடியிருப்பு வாடகைக்கு. படுக்கையறை 2. வாடகை ரூ. 60,000',
+    expected: {
+      propertyType: 'apartment',
+      city: 'Vavuniya',
+      bedrooms: 2,
+      rentPerMonth: 60000,
+      title: '2BR Apartment in Vavuniya',
+    },
+  },
+  {
+    name: 'tamil அறை room count and மாதம் rent suffix',
+    input: 'மட்டக்களப்பு வீடு. அறைகள்: 3. 35,000 மாதம்',
+    expected: {
+      propertyType: 'house',
+      city: 'Batticaloa',
+      bedrooms: 3,
+      rentPerMonth: 35000,
+      title: '3BR House in Batticaloa',
+    },
+  },
+  {
+    name: 'tamil தெரு address, adjacent city segment dropped',
+    input: 'வீடு வாடகைக்கு. 45/2, பெரிய தெரு, மன்னார். மாத வாடகை 30,000',
+    expected: {
+      address: '45/2, பெரிய தெரு',
+      city: 'Mannar',
+      district: 'Mannar',
+      rentPerMonth: 30000,
+    },
+  },
+  {
+    name: 'tamil rent amount before comma never becomes a house number',
+    input: 'வீடு வாடகை 4500, யாழ்ப்பாணம் பக்கம், அறை 2',
+    expected: { address: null, rentPerMonth: 4500, bedrooms: 2, city: 'Jaffna' },
+  },
 ];
 
 describe('parseIntakeRules', () => {
@@ -411,7 +503,7 @@ describe('parseIntakeRules', () => {
   });
 
   it('tags parserMeta with the rules engine', () => {
-    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 3 });
+    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 4 });
   });
 });
 
