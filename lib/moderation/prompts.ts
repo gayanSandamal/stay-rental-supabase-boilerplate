@@ -61,14 +61,18 @@ Supported languages are English, Sinhala and Tamil, including romanized Sinhala/
 
 language: report "en", "si" (Sinhala script), "ta" (Tamil script), "si-Latn" (romanized Sinhala), "ta-Latn" (romanized Tamil), or "other:<language name>" for anything else.
 
-title_matches_description: false only for a real contradiction, such as a title saying "3BR House" for a description of a single room, or a completely different town.
+Instead of judging whether the title and description "match", EXTRACT what each one describes and let us compare them:
+- title_property / description_property: for each, report the property type as one of "house", "apartment", "annex", "room", or "unknown", and the number of bedrooms as a number or null.
+  A single room in a shared house (shared kitchen or bathroom, "room for a working lady", boarding) is type "room" with bedrooms 1 — NOT a house.
+  "Annex" means a self-contained part of a house with its own entrance.
+  Report what the text actually says, not what you think it should say. Use "unknown" whenever the text does not say.
 
 location_consistent: false only for a real contradiction between the address, town and district given. Sri Lanka has thousands of small towns — an unfamiliar town name is NOT an inconsistency. Notes from our town database are provided as context; weigh them, they are hints and not verdicts.
 
 looks_like_rental_listing: false for spam, a job or investment advert, a sales pitch, a scam, or text that is not offering a property to rent.
 
 Reply with ONLY a JSON object, no prose, no code fence:
-{"language":string,"title_matches_description":bool,"title_mismatch_reason":string|null,"location_consistent":bool,"location_mismatch_reason":string|null,"looks_like_rental_listing":bool,"spam_reason":string|null,"confidence":number}`;
+{"language":string,"title_property":{"type":string,"bedrooms":number|null},"description_property":{"type":string,"bedrooms":number|null},"describes_same_property":bool,"difference_reason":string|null,"location_consistent":bool,"location_mismatch_reason":string|null,"looks_like_rental_listing":bool,"spam_reason":string|null,"confidence":number}`;
 
 export function buildTextCheckUser(input: {
   title: string | null;

@@ -13,6 +13,11 @@
  * Run this before flipping enableListingModeration on.
  */
 
+import dotenv from 'dotenv';
+// Load before importing anything that reads process.env at module scope.
+dotenv.config();
+dotenv.config({ path: '.env.local', override: true });
+
 import sharp from 'sharp';
 import { readFile } from 'node:fs/promises';
 import { chatJson } from '../lib/moderation/client';

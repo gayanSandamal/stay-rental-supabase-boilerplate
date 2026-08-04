@@ -19,6 +19,7 @@
     "db:set-admin": "npx tsx scripts/set-admin.ts",
     "db:hard-delete-user": "npx tsx scripts/hard-delete-user.ts",
     "db:studio": "drizzle-kit studio",
+    "moderation:calibrate": "npx tsx scripts/moderation-calibrate.ts",
     "moderation:probe": "npx tsx scripts/moderation-probe.ts",
     "storage:setup": "npx tsx lib/db/setup-storage.ts",
     "test:unit": "vitest run",

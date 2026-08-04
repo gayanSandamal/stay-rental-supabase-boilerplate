@@ -15,15 +15,67 @@ import { checkLocationCoherence, type LocationInput } from './location';
 import { buildTextCheckUser, TEXT_CHECK_SYSTEM } from './prompts';
 import type { TextVerdict } from './types';
 
+interface PropertyShape {
+  type?: string | null;
+  bedrooms?: number | null;
+}
+
 interface TextResponse {
   language?: string;
-  title_matches_description?: boolean;
-  title_mismatch_reason?: string | null;
+  title_property?: PropertyShape;
+  description_property?: PropertyShape;
+  describes_same_property?: boolean;
+  difference_reason?: string | null;
   location_consistent?: boolean;
   location_mismatch_reason?: string | null;
   looks_like_rental_listing?: boolean;
   spam_reason?: string | null;
   confidence?: number;
+}
+
+/**
+ * A shared room is not a house; a house is not an apartment. Our parser stores
+ * "annex" as a house, so those two are compatible. 'unknown' never disagrees.
+ */
+const TYPE_GROUP: Record<string, string> = {
+  house: 'whole',
+  annex: 'whole',
+  apartment: 'apartment',
+  room: 'room',
+};
+
+/**
+ * Compare what the title and the description each describe, in code rather than
+ * asking the model for a verdict. Extraction is far more reliable than
+ * judgement: an 8B model happily called "3BR House" coherent with "single room,
+ * shared kitchen" when simply asked, but reports the two shapes correctly.
+ */
+export function comparePropertyShapes(
+  title: PropertyShape | undefined,
+  description: PropertyShape | undefined
+): { coherent: boolean; reason: string | null } {
+  const tType = (title?.type ?? 'unknown').toLowerCase();
+  const dType = (description?.type ?? 'unknown').toLowerCase();
+  const tGroup = TYPE_GROUP[tType];
+  const dGroup = TYPE_GROUP[dType];
+
+  if (tGroup && dGroup && tGroup !== dGroup) {
+    return {
+      coherent: false,
+      reason: `Title describes a ${tType} but the description describes a ${dType}.`,
+    };
+  }
+
+  const tBeds = typeof title?.bedrooms === 'number' ? title.bedrooms : null;
+  const dBeds = typeof description?.bedrooms === 'number' ? description.bedrooms : null;
+  if (tBeds !== null && dBeds !== null && tBeds !== dBeds) {
+    return {
+      coherent: false,
+      reason: `Title says ${tBeds} bedroom(s) but the description says ${dBeds}.`,
+    };
+  }
+
+  return { coherent: true, reason: null };
 }
 
 export interface TextCheckOutcome {
@@ -124,8 +176,16 @@ export async function checkText(listing: LocationInput): Promise<TextCheckOutcom
       : script.verdict
     : modelLang;
 
+  // Coherence is computed from the extracted shapes, not taken as the model's
+  // opinion. The model's own same/different flag is only allowed to ADD a
+  // failure, never to overturn a mismatch we detected.
+  const shapes = comparePropertyShapes(d.title_property, d.description_property);
+  const modelSaysDifferent = d.describes_same_property === false;
+  const titleCoherent = shapes.coherent && !modelSaysDifferent;
+
   const reasons: string[] = [];
-  if (d.title_mismatch_reason) reasons.push(d.title_mismatch_reason);
+  if (shapes.reason) reasons.push(shapes.reason);
+  if (modelSaysDifferent && d.difference_reason) reasons.push(d.difference_reason);
   if (d.location_mismatch_reason) reasons.push(d.location_mismatch_reason);
   if (d.spam_reason) reasons.push(d.spam_reason);
 
@@ -133,9 +193,9 @@ export async function checkText(listing: LocationInput): Promise<TextCheckOutcom
     verdict: {
       language,
       languageSupported: isSupportedLanguage(language),
+      titleCoherent,
       // Default to coherent when the model omits a field: never hold a listing
       // on a missing key.
-      titleCoherent: d.title_matches_description !== false,
       locationCoherent: d.location_consistent !== false,
       looksLikeRental: d.looks_like_rental_listing !== false,
       reasons,
