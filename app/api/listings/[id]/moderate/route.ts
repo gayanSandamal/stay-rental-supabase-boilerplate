@@ -6,7 +6,6 @@ import { getUser } from '@/lib/db/queries';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isModerationConfigured } from '@/lib/moderation/config';
-import { moderateListing } from '@/lib/moderation/engine';
 
 /**
  * Run the automated checks for one listing immediately, instead of waiting for
@@ -47,6 +46,9 @@ export async function POST(
   if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
 
   try {
+    // Lazy for the same reason as the cron route: keep native-module load
+    // failures out of the pre-auth path.
+    const { moderateListing } = await import('@/lib/moderation/engine');
     const verdict = await moderateListing(listing);
     return NextResponse.json({
       ok: true,

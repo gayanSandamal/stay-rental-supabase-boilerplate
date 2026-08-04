@@ -7,10 +7,26 @@
  * every photo. See lib/moderation/engine.ts.
  */
 
-import sharp from 'sharp';
+import type { Sharp } from 'sharp';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ProcessedImage } from './types';
+
+/**
+ * sharp ships prebuilt native binaries and is marked external for the bundler,
+ * so it is loaded on first use rather than at module scope. That keeps a missing
+ * platform binary from crashing a route at import time (which would defeat the
+ * auth guards that run before any of this work).
+ */
+type SharpFactory = (input?: Buffer | object) => Sharp;
+let sharpModule: SharpFactory | null = null;
+async function getSharp(): Promise<SharpFactory> {
+  if (!sharpModule) {
+    const mod = await import('sharp');
+    sharpModule = (mod.default ?? mod) as unknown as SharpFactory;
+  }
+  return sharpModule;
+}
 
 /** Long-edge bound for published images. 1920 is plenty for a full-width hero. */
 const MAX_EDGE = 1920;
@@ -58,6 +74,7 @@ async function cornerLuminance(input: Buffer, width: number, height: number): Pr
   try {
     const boxW = Math.max(1, Math.min(width, Math.round(width * 0.3)));
     const boxH = Math.max(1, Math.min(height, Math.round(height * 0.25)));
+    const sharp = await getSharp();
     const stats = await sharp(input)
       .extract({ left: width - boxW, top: height - boxH, width: boxW, height: boxH })
       .greyscale()
@@ -84,6 +101,7 @@ async function watermarkOverlay(
   const source = await loadLogoSource(variant);
   if (!source) return null;
   try {
+    const sharp = await getSharp();
     const overlay = await sharp(source)
       .resize({ width: targetWidth })
       .ensureAlpha()
@@ -124,6 +142,7 @@ export async function processListingImage(
 ): Promise<ProcessedImage> {
   const { whatsappSourced = false, watermark = true, compress = true } = opts;
 
+  const sharp = await getSharp();
   const meta = await sharp(input).metadata();
   // EXIF orientations 5–8 are transposed, and .rotate() bakes that in — so the
   // post-rotation dimensions are swapped relative to metadata.
