@@ -98,6 +98,31 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 - Auth/Supabase setup → `docs/AUTH_CONFIGURATION.md`, `docs/SUPABASE_DATABASE.md`
 - Form builder → `FORM_BUILDER_GUIDE.md`, `lib/forms/README.md`
 
+## WhatsApp intake v2 (2026-08-04)
+
+The intake pipeline now creates **real landlord accounts** and runs **automated
+approval**. All of it is flag-gated and OFF by default — see
+`docs/deep-dive-whatsapp-intake-pipeline.md` and the rollout section of
+`docs/whatsapp-golive-runbook.md`.
+
+- **Identity**: `users.wa_phone` is the verified WhatsApp identity. `users.phone`
+  is user-typed and unverified — **never match on it**. Auth records for these
+  landlords carry a synthetic `@wa.easyrent.lk` email; never render it (use
+  `publisherDisplayName()` in `lib/publisher-name.ts`), and `signUp`/
+  `updateAccount` reject that domain.
+- **Access links** (`lib/auth/access-links.ts`, `app/l/[...slug]/route.ts`) are
+  reusable and stored as sha256 only. A Supabase magic-link token is single-use,
+  so it can never be the link we send. Never mutate on GET from a link.
+- **Moderation** (`lib/moderation/**`): rules before models. Unknown towns are a
+  soft note, never a hold. Title coherence is computed in code from extracted
+  shapes, not asked of the model. Moderation always reads the ORIGINAL photo —
+  watermarking first would flag our own logo.
+- **Images** (`lib/images/**`): `listings.photos` stays an array of public URLs
+  (five readers depend on it); `photos_manifest` is the source of truth.
+- After changing prompts, re-run `pnpm moderation:probe` and
+  `pnpm moderation:calibrate`, and bump `PROMPT_VERSION` only deliberately — it
+  invalidates the whole image verdict cache.
+
 ## When making changes
 
 - Match the existing server-component-first style; reach for client components only when interactivity demands it.

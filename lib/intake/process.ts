@@ -6,7 +6,7 @@ import {
   listingContactNumbers,
 } from '@/lib/db/schema';
 import { and, eq, lte } from 'drizzle-orm';
-import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { parseIntake } from './parser';
@@ -201,7 +201,8 @@ export async function processIntake(
   })();
 
   const now = new Date();
-  const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const expirationDays = Number(getFeatureValue('listingExpirationDays') ?? 30);
+  const expires = new Date(now.getTime() + expirationDays * 24 * 60 * 60 * 1000);
 
   const [listing] = await db
     .insert(listings)

@@ -144,4 +144,82 @@ Live usage exposed two photo problems:
 1. **Photos after publish spawned a junk intake.** The publish reply says "Reply here anytime to update it", but a photo album sent after the 🎉 counted as "substantive" → new intake → "we still need: everything". Now: a message with photos but NO new-property text, within 48h of the sender's published intake, **appends the photos to that live listing's gallery** (`attach_media` outcome; session phase 3 also updates `listings.photos` under the sender lock) and replies "📸 Added N photos to <title>". Photos WITH substantive text (caption-style) still open a new intake — that's a second property.
 2. **Album downloads failed silently for the sender** (live: 2 of 5 lost). `persistWhatsAppMedia` now retries each Graph hop once (fresh AbortSignal per attempt, 15s/20s timeouts), `appendToIntake` reports `mediaStored`/`mediaFailed`, and the webhook notifies ops on any failure — plus tells the sender when attach-path photos didn't come through (never silent loss).
 
-_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-ups 2026-08-02. Original deep-dive generated 2026-07-10._
+## 2026-08-04 — intake v2: landlord accounts, self-service links, automated approval
+
+The biggest change since launch. Three shifts, all flag-gated and OFF by default:
+
+**1. Landlords own their listings.** `lib/intake/landlord-identity.ts` creates a
+real account per sender: the verified WhatsApp number is the identity
+(`users.wa_phone` — deliberately NOT `users.phone`, which is user-typed and
+unverified), while the auth record carries a deterministic synthetic email on a
+no-MX subdomain because `users.email` is NOT NULL UNIQUE and Supabase needs an
+address. The listing is owned by that landlord's own `landlords` row with NO
+business account, and the verified contact number moves to user scope — leaving
+it on the Ops business account would make the landlord's own edit form load zero
+contact numbers and PUT reject every save. Falls back to the Ops identity (plus
+an ops notification) if account creation fails; a submission is never lost to an
+auth hiccup. Flag: `enableWhatsAppLandlordAccounts`.
+
+**2. Self-service links, portable across devices.** `/l/<token>[/e/<id>|/d/<id>]`
+signs the landlord in with no password. The app's other link→session path
+(`app/auth/callback/route.ts`) is PKCE and needs the code-verifier cookie from the
+browser that started the flow, so it cannot work for a link living in a chat
+thread; `verifyOtp({token_hash})` carries no verifier and therefore does. Proven
+in `scripts/spike-access-link.ts`, which also established the load-bearing fact:
+**a Supabase magic-link token is single-use**, so it cannot itself be the link we
+send — hence our own reusable `landlord_access_tokens` (sha256-only, 90-day
+sliding expiry, revocable), with a fresh Supabase token minted and consumed per
+redemption. The route guards link-preview crawlers (WhatsApp fetches every URL we
+send), never mutates on GET, and audits each redemption with IP + user-agent.
+
+**3. WhatsApp is create-and-delete only.** Edit requests now return the
+landlord's own edit link (`edit_link` replaces the `update_request` ops handoff).
+Delete is a two-step conversation over `intake_conversations`: `delete` →
+numbered menu (max 9, so one digit is unambiguous) → pick → the exact word
+`DELETE`. Anything else cancels — ambiguity never destroys. Removal is a soft
+archive; `/api/cron/purge-archived` deletes the row and its storage objects after
+30 days. Command detection is strict whole-message matching with a digit guard,
+so "remove 2 rooms, 45000 per month" stays a listing, and handled command ids are
+remembered so a redelivered `DELETE` cannot archive twice.
+
+**Automated approval** (`lib/moderation/**`, `/api/cron/moderate-listings`, every
+2 min): one provider — SiliconFlow serving Qwen3-VL — does visual safety, grounded
+text/face detection with `bbox_2d`, added-vs-photographed text reasoning, and the
+text checks. Rules run first and settle what they can for free: Unicode script
+ranges decide Sinhala/Tamil and reject unsupported scripts with zero tokens, and
+the gazetteer catches city↔district contradictions and out-of-country
+coordinates. An UNKNOWN town is only ever a soft note — ~110 gazetteer towns
+against thousands nationally means hard-failing would auto-hold nearly every rural
+listing. Title coherence is computed in code from extracted property shapes, not
+taken as the model's opinion (an 8B model called "3BR House" coherent with
+"single room, shared kitchen"). Cosmetic image failures drop the photo and
+publish the rest; a safety failure holds the listing; provider failure fails
+CLOSED (3 attempts, then hold) with `moderationFailOpen` as the valve. Verdicts
+cache per (content hash, prompt version) so re-approval on edit is nearly free,
+and an ops "restore photo" override is permanent. Measured ~$0.002 per 6-photo
+listing.
+
+**Image pipeline** (`lib/images/**`): originals are stored and never published;
+moderation reads the ORIGINAL (watermarking first would make the checker flag our
+own logo on every photo); survivors are compressed to WebP q82 / 1920px with all
+metadata stripped (GPS in a public photo is a privacy leak) and watermarked with
+the logo variant chosen by corner luminance, so the mark cannot vanish on a white
+wall or at night. WhatsApp images skip re-compression but are still watermarked.
+`listings.photos` keeps its exact shape — an array of public URLs — and
+`photos_manifest` is the new source of truth.
+
+**Two live bugs fixed in passing:** the 0020 auth trigger could fail an
+`auth.users` insert (signing up with an email that exists as a legacy row died
+with "Database error saving new user"), and `whatsapp_intakes.listing_id` had no
+`ON DELETE`, so deleting any WhatsApp-originated listing 500'd. Also: PUT no
+longer unpublishes a live listing on every save (the FormBuilder submits the whole
+config, so the old `!== undefined` check always fired), DELETE finally writes an
+audit row, and `listingExpirationDays` — documented as live but read by nothing —
+is now actually used.
+
+**Calibration tooling:** `pnpm moderation:probe` validates key/endpoint/model ids
+and asserts the two behaviours that matter (a cross-language listing is NOT
+flagged; an added watermark IS detected). `pnpm moderation:calibrate` runs a
+14-case corpus with expected verdicts. Re-run both after any prompt change.
+
+_Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-ups 2026-08-02; intake v2 2026-08-04. Original deep-dive generated 2026-07-10._
