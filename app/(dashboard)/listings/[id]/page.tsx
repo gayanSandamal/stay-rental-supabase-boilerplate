@@ -1,3 +1,4 @@
+import { publisherDisplayName } from '@/lib/publisher-name';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -165,7 +166,7 @@ export default async function ListingDetailPage({
       });
       
       if (landlordInfo?.user) {
-        publisherName = landlordInfo.user.name || landlordInfo.user.email;
+        publisherName = publisherDisplayName(landlordInfo.user);
       }
     } catch (error) {
       console.error('Error fetching landlord info:', error);

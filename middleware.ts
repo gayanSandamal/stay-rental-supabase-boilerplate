@@ -59,6 +59,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // `l/` (with the slash, so /listings and /list-your-property are unaffected)
+  // is excluded: the access-link route writes session cookies itself, and
+  // middleware refreshing them in parallel would race it.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|l/).*)'],
   runtime: 'nodejs'
 };

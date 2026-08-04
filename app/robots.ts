@@ -8,7 +8,8 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/dashboard/', '/back-office/', '/api/'],
+        // /l/ holds passwordless access links — never index or follow them.
+        disallow: ['/dashboard/', '/back-office/', '/api/', '/l/', '/link-expired'],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

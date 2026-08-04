@@ -1,3 +1,4 @@
+import { publisherDisplayName } from '@/lib/publisher-name';
 import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
@@ -131,7 +132,7 @@ export default async function ListingsPage(props: {
               const creator = await db.query.users.findFirst({
                 where: eq(users.id, listing.createdBy),
               });
-              teamMemberName = creator?.name || creator?.email || null;
+              teamMemberName = creator ? publisherDisplayName(creator) : null;
             }
           }
         } catch (error) {
@@ -150,7 +151,7 @@ export default async function ListingsPage(props: {
           });
           
           if (landlordInfo?.user) {
-            publisherName = landlordInfo.user.name || landlordInfo.user.email;
+            publisherName = publisherDisplayName(landlordInfo.user);
           }
         } catch (error) {
           console.error('Error fetching landlord info:', error);
