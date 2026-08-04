@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/process-whatsapp-intakes",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/moderate-listings",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
