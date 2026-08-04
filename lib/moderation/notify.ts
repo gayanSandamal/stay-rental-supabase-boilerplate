@@ -9,10 +9,22 @@ import { db } from '@/lib/db/drizzle';
 import { landlords, listings } from '@/lib/db/schema';
 import { createNotification, createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
-import { findIntakeForListing } from './engine';
+import { whatsappIntakes } from '@/lib/db/schema';
 import type { ModerationVerdict } from './types';
 
 type ListingRow = typeof listings.$inferSelect;
+
+/**
+ * Did this listing arrive over WhatsApp? Defined here rather than imported from
+ * engine.ts: engine already imports this module, and the resulting cycle throws
+ * at module init in the production bundle (dev tolerates it, which is how it
+ * reached production once).
+ */
+async function findIntakeForListing(listingId: number) {
+  return db.query.whatsappIntakes.findFirst({
+    where: eq(whatsappIntakes.listingId, listingId),
+  });
+}
 
 function baseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
