@@ -7,8 +7,16 @@
  * Checks, in order:
  *   1. the endpoint + key work with the configured model id (a wrong id is an
  *      error, not a silent pass)
- *   2. the model recovers a city the rule parser missed ("Kolonnawa" is the
- *      canonical unknown-town case) and returns it as parseable JSON
+ *   2. the model recovers a city the rule parser GENUINELY missed and returns
+ *      it as parseable JSON
+ *
+ * The probe town must be absent from the gazetteer: the prompt tells the model
+ * to extract only fields the rules could not find, and asking it to "recover"
+ * a city the rules already resolved is a self-contradiction it (correctly)
+ * answers with null — measured 0/3 on a known town vs 2/2 on an unknown one.
+ * Production never produces that ask; the probe must not either. If a future
+ * gazetteer sweep adds the probe town, this exits with instructions instead of
+ * a misleading failure.
  *
  * Run this before flipping enableLlmParserFallback on.
  */
@@ -25,8 +33,19 @@ import { MODERATION_API_BASE, moderationApiKey } from '../lib/moderation/config'
 const ok = (s: string) => console.log(`  ✓ ${s}`);
 const bad = (s: string) => console.log(`  ✗ ${s}`);
 
-const MESSAGE = 'House for rent in Kolonnawa, 5 bedrooms, 3 bathrooms, parking';
+// Pallegama (Matale) is deliberately NOT in the gazetteer — the moderation
+// unit tests pin it as the canonical unknown town.
+const PROBE_TOWN = 'Pallegama';
+const MESSAGE = `House for rent in ${PROBE_TOWN}, 5 bedrooms, 3 bathrooms, parking`;
 const FALLBACK_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+
+/** One retry: the live endpoint shows occasional cold-path 8s timeouts. */
+async function callWithRetry(message: string, missing: string[]) {
+  const first = await parseIntakeWithLlm(message, missing);
+  if (first) return first;
+  console.log('  (empty/failed response — retrying once)');
+  return parseIntakeWithLlm(message, missing);
+}
 
 async function main() {
   const model = process.env.INTAKE_LLM_MODEL || 'Qwen/Qwen3-8B';
@@ -41,25 +60,28 @@ async function main() {
 
   let failures = 0;
 
-  console.log('Rule parser (should leave gaps for the LLM):');
+  console.log('Rule parser (must leave a city gap for the LLM):');
   const rule = parseIntakeRules(MESSAGE);
   console.log(
     `  city: ${JSON.stringify(rule.city)} | bedrooms: ${rule.bedrooms} | missing: [${rule.missingFields.join(', ')}]`
   );
 
-  // The probe exists to prove city recovery, so ask for it even if a future
-  // gazetteer sweep teaches the rules "Kolonnawa".
-  const missing = rule.missingFields.includes('city')
-    ? rule.missingFields
-    : ['city', ...rule.missingFields];
+  if (!rule.missingFields.includes('city')) {
+    bad(
+      `the gazetteer now resolves "${PROBE_TOWN}" — the probe no longer tests anything. ` +
+        `Change PROBE_TOWN to a real town matchCity() does not know.`
+    );
+    console.log('\n1 problem(s) found.\n');
+    process.exit(1);
+  }
 
-  console.log('\nLLM fallback:');
-  let llm = await parseIntakeWithLlm(MESSAGE, missing);
+  console.log('\nLLM fallback (asked for exactly the fields the rules missed):');
+  let llm = await callWithRetry(MESSAGE, rule.missingFields);
   if (!llm && !process.env.INTAKE_LLM_MODEL) {
     // A dead default model id should not end the probe without an answer.
     bad(`${model} returned nothing — retrying with ${FALLBACK_MODEL}`);
     process.env.INTAKE_LLM_MODEL = FALLBACK_MODEL;
-    llm = await parseIntakeWithLlm(MESSAGE, missing);
+    llm = await callWithRetry(MESSAGE, rule.missingFields);
     if (llm) console.log(`  → ${FALLBACK_MODEL} works; adopt it as the code default.`);
   }
 
@@ -67,11 +89,11 @@ async function main() {
     bad('fallback returned null — check the model id and key (errors logged above)');
     failures++;
   } else {
-    ok(`parsed: ${JSON.stringify({ city: llm.city, bedrooms: llm.bedrooms, bathrooms: llm.bathrooms })}`);
-    if ((llm.city ?? '').toLowerCase() === 'kolonnawa') {
-      ok('recovered city "Kolonnawa" — the field the rules missed');
+    ok(`parsed: ${JSON.stringify({ city: llm.city, address: llm.address })}`);
+    if ((llm.city ?? '').toLowerCase() === PROBE_TOWN.toLowerCase()) {
+      ok(`recovered city "${PROBE_TOWN}" — the field the rules missed`);
     } else {
-      bad(`city came back as ${JSON.stringify(llm.city)} — expected "Kolonnawa"`);
+      bad(`city came back as ${JSON.stringify(llm.city)} — expected "${PROBE_TOWN}"`);
       failures++;
     }
   }
