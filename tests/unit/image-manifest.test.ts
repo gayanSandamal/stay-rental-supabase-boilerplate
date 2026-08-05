@@ -47,9 +47,11 @@ describe('parsePhotos', () => {
 });
 
 describe('manifestFromLegacyPhotos', () => {
-  it('queues photos we own', () => {
+  it('queues photos we own but keeps them PUBLISHED (p = o)', () => {
+    // These URLs came out of `photos`, i.e. they are already public. Claiming
+    // p:null once let a moderation run unpublish photos it never evaluated.
     const [e] = manifestFromLegacyPhotos([orig('a')]);
-    expect(e).toMatchObject({ o: orig('a'), p: null, v: 'queued', wa: false });
+    expect(e).toMatchObject({ o: orig('a'), p: orig('a'), v: 'queued', wa: false });
   });
 
   it('flags WhatsApp-sourced originals so compression is skipped', () => {
@@ -66,7 +68,7 @@ describe('manifestFromLegacyPhotos', () => {
 });
 
 describe('derivePhotos', () => {
-  it('publishes only passed/external entries that have a URL', () => {
+  it('publishes every entry with a URL that is not rejected', () => {
     const entries: PhotoManifestEntry[] = [
       { o: orig('a'), p: derived('aa'), h: 'h', v: 'pass' },
       { o: orig('b'), p: null, h: 'h', v: 'queued' },
@@ -75,6 +77,23 @@ describe('derivePhotos', () => {
       { o: orig('d'), p: null, h: null, v: 'skipped' },
     ];
     expect(derivePhotos(entries)).toEqual([derived('aa'), 'https://images.unsplash.com/x']);
+  });
+
+  it('keeps a grandfathered queued photo visible, hides a newly arrived one', () => {
+    // THE distinction the whole non-destructive design rests on: p decides
+    // publication, v only vetoes.
+    const entries: PhotoManifestEntry[] = [
+      { o: orig('old'), p: orig('old'), h: null, v: 'queued' }, // already public
+      { o: orig('new'), p: null, h: null, v: 'queued' }, // just arrived
+    ];
+    expect(derivePhotos(entries)).toEqual([orig('old')]);
+  });
+
+  it('never publishes a reject even if it somehow has a URL', () => {
+    const entries: PhotoManifestEntry[] = [
+      { o: orig('x'), p: derived('xx'), h: 'h', v: 'reject', r: 'text added' },
+    ];
+    expect(derivePhotos(entries)).toEqual([]);
   });
 
   it('preserves manifest order', () => {

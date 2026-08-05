@@ -9,6 +9,9 @@ import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { photoCap } from '@/lib/images/cap';
+import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
 
@@ -88,6 +91,21 @@ export async function POST(request: NextRequest) {
     if (!contactNumbers || !Array.isArray(contactNumbers) || contactNumbers.length === 0) {
       return NextResponse.json(
         { error: 'At least one contact number is required' },
+        { status: 400 }
+      );
+    }
+
+    // Photo cap. /api/upload can only count ONE request's worth of files, so a
+    // client that uploads in batches assembles as many URLs as it likes; this is
+    // the only place a listing's total is actually bounded. Checked before the
+    // tenant→landlord upgrade below so a refused create mutates nothing.
+    const cap = photoCap();
+    if (Array.isArray(photos) && photos.length > cap) {
+      return NextResponse.json(
+        {
+          error: `A listing can show at most ${cap} photos.`,
+          code: 'PHOTO_LIMIT_EXCEEDED',
+        },
         { status: 400 }
       );
     }
@@ -192,6 +210,20 @@ export async function POST(request: NextRequest) {
         status: status || 'pending',
         exclusive: (user.role === 'admin' || user.role === 'ops' || isUserPremium(user)) && Boolean(exclusive),
     };
+
+    // Armed = the checks can actually run. Queueing without a configured
+    // provider would park photos with nothing to release them, so flag-on-
+    // without-key stays byte-identical to today.
+    if (isFeatureEnabled('enableListingModeration') && isModerationConfigured()) {
+      // Entries keep p = o (these URLs are already public), so `photos` is
+      // unchanged — the new listing is `pending` anyway. Without the queued
+      // status the sweeper never sees the row: it keys off moderation_status,
+      // and the column defaults to 'skipped'.
+      listingData.photosManifest = serializeManifest(
+        manifestFromLegacyPhotos(Array.isArray(photos) ? photos : [])
+      );
+      listingData.moderationStatus = 'queued';
+    }
 
     // Only add new fields if columns exist (after migration)
     // Check if businessAccountId is provided and verify membership

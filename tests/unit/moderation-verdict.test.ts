@@ -112,6 +112,8 @@ describe('combine — safety failures hold the whole listing', () => {
     });
     expect(v.outcome).toBe('held');
     expect(v.keptUrls).toEqual([]);
+    // Only this hold reason may take an already-live listing dark.
+    expect(v.holdReason).toBe('unsafe_image');
   });
 
   it('never tells the sender what tripped the safety filter', () => {
@@ -196,6 +198,58 @@ describe('combine — provider failure', () => {
   it('preserves already-published photos on a failure during an edit', () => {
     const v = call({ providerError: 'timeout', images: [img('new')], existingKeptUrls: ['old'] });
     expect(v.keptUrls).toEqual(['old']);
+  });
+});
+
+describe('combine — holdReason distinguishes what may unpublish a live listing', () => {
+  it('tags each text hold with its own reason', () => {
+    expect(call({ text: { ...okText, languageSupported: false } }).holdReason).toBe('language');
+    expect(call({ text: { ...okText, looksLikeRental: false } }).holdReason).toBe('not_rental');
+    expect(call({ text: { ...okText, titleCoherent: false } }).holdReason).toBe('incoherent');
+    expect(call({ text: { ...okText, locationCoherent: false } }).holdReason).toBe('incoherent');
+  });
+
+  it('leaves holdReason unset on a pass or an error', () => {
+    expect(call({ images: [img('a')] }).holdReason).toBeUndefined();
+    expect(call({ providerError: 'timeout' }).holdReason).toBeUndefined();
+  });
+});
+
+describe('combine — photos refused by the cap', () => {
+  it('reports them as dropped and tells the sender, without holding', () => {
+    const v = call({ images: [img('a')], cappedOutUrls: ['g', 'h'] });
+    expect(v.outcome).toBe('passed');
+    expect(v.droppedUrls).toEqual(['g', 'h']);
+    expect(v.keptUrls).toEqual(['a']);
+    const msg = v.landlordReasons.join(' ');
+    expect(msg).toContain('6'); // the cap from POLICY
+    expect(msg).toContain('2 photos were left out');
+    expect(msg).toContain('LINK');
+  });
+
+  it('uses singular phrasing for one refused photo', () => {
+    const v = call({ images: [img('a')], cappedOutUrls: ['g'] });
+    expect(v.landlordReasons.join(' ')).toContain('1 photo was left out');
+  });
+
+  it('keeps cap refusals visible even when the listing is held', () => {
+    // Otherwise a held listing loses the record of what was refused.
+    const v = call({
+      images: [img('bad', { verdict: 'reject', severity: 'safety', reasons: ['x'] })],
+      cappedOutUrls: ['g'],
+    });
+    expect(v.outcome).toBe('held');
+    expect(v.droppedUrls).toContain('g');
+  });
+
+  it('reports both kinds of drop separately', () => {
+    const v = call({
+      images: [img('a'), img('b', { verdict: 'reject', severity: 'cosmetic', reasons: ['text added'] })],
+      cappedOutUrls: ['g'],
+    });
+    expect(v.droppedUrls).toEqual(['b', 'g']);
+    // Two distinct messages: "couldn't be used" vs "no room".
+    expect(v.landlordReasons).toHaveLength(2);
   });
 });
 

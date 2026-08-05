@@ -30,9 +30,19 @@ function baseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 }
 
+export interface ModerationNotifyContext {
+  /** The listing was already public before this run (an incremental re-check). */
+  wasLive: boolean;
+  /** Photos that became publicly visible in this run. */
+  added: number;
+  /** Photos refused because the listing was already at the cap. */
+  refused: number;
+}
+
 export async function notifyModerationOutcome(
   listing: ListingRow,
-  verdict: ModerationVerdict
+  verdict: ModerationVerdict,
+  ctx: ModerationNotifyContext = { wasLive: false, added: 0, refused: 0 }
 ): Promise<void> {
   const intake = await findIntakeForListing(listing.id).catch(() => null);
 
@@ -61,16 +71,32 @@ export async function notifyModerationOutcome(
   }
 
   // --- the landlord --------------------------------------------------------
+  // A hold on an already-live listing that ISN'T about an unsafe image leaves
+  // the listing up (see persist), so telling the owner "we're reviewing your
+  // listing" would alarm them about something that is fine and still visible.
+  if (ctx.wasLive && verdict.outcome === 'held' && verdict.holdReason !== 'unsafe_image') return;
   if (!verdict.landlordReasons.length && verdict.outcome !== 'passed') return;
 
   const lines: string[] = [];
   if (verdict.outcome === 'passed') {
-    lines.push(`🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`);
+    if (!ctx.wasLive) {
+      lines.push(`🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`);
+    } else if (ctx.added > 0) {
+      // Incremental: the listing was already announced once. Repeating the
+      // 🎉 line on every photo batch reads like a bug.
+      lines.push(
+        `📸 ${ctx.added} photo${ctx.added === 1 ? '' : 's'} ${ctx.added === 1 ? 'is' : 'are'} now on "${listing.title}".`
+      );
+    } else if (!verdict.landlordReasons.length) {
+      // Nothing changed for the owner — stay quiet.
+      return;
+    }
     if (verdict.landlordReasons.length) lines.push('', ...verdict.landlordReasons);
   } else {
     lines.push(...verdict.landlordReasons);
   }
-  const message = lines.join('\n');
+  const message = lines.join('\n').trim();
+  if (!message) return;
 
   if (intake?.fromNumber) {
     const sent = await whatsappAdapter.sendText(intake.fromNumber, message);

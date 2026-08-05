@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
+import { useFeatureValue } from '@/lib/hooks/use-feature-flags';
 
 interface ImageUploaderProps {
   value?: string[];
@@ -14,7 +15,6 @@ interface ImageUploaderProps {
 }
 
 // Configurable constants
-const DEFAULT_MAX_IMAGES = 6;
 const DEFAULT_MAX_SIZE_MB = 5;
 const MAX_WIDTH = 1920;
 const MAX_HEIGHT = 1920;
@@ -23,10 +23,19 @@ const COMPRESSION_QUALITY = 0.8;
 export function ImageUploader({
   value = [],
   onChange,
-  maxImages = DEFAULT_MAX_IMAGES,
+  maxImages: maxImagesProp,
   maxSizeInMB = DEFAULT_MAX_SIZE_MB,
   disabled = false,
 }: ImageUploaderProps) {
+  // The cap comes from the `maxPhotosPerListing` flag so this form, /api/upload
+  // and WhatsApp all move together. Below 1 means "no limit", matching
+  // photoCap() on the server; a caller-supplied prop still wins.
+  const flagMaxImages = Number(useFeatureValue('maxPhotosPerListing'));
+  const maxImages =
+    maxImagesProp ??
+    (Number.isFinite(flagMaxImages) && flagMaxImages >= 1 ? flagMaxImages : Infinity);
+  const capped = Number.isFinite(maxImages);
+
   const [images, setImages] = useState<string[]>(value);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,12 +185,14 @@ export function ImageUploader({
             ) : (
               <>
                 <Upload className="mr-2 h-4 w-4" />
-                Upload Images ({images.length}/{maxImages})
+                Upload Images ({images.length}
+                {capped ? `/${maxImages}` : ''})
               </>
             )}
           </Button>
           <p className="text-xs text-gray-500 mt-1">
-            Max {maxImages} images, up to {maxSizeInMB}MB each. Images will be automatically optimized.
+            {capped ? `Max ${maxImages} images, up to ` : 'Up to '}
+            {maxSizeInMB}MB each. Images will be automatically optimized.
           </p>
         </div>
       )}

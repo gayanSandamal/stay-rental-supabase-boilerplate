@@ -5,6 +5,9 @@ import {
   listingPendingNoLinksMessage,
   manualReviewMessage,
   needsInfoMessage,
+  pendingReviewMessage,
+  photosAddedMessage,
+  photosAtCapMessage,
   photosMissedMessage,
   publishedMessage,
   receivedAckMessage,
@@ -88,6 +91,63 @@ describe('instant + status messages', () => {
   it('photosMissedMessage pluralises', () => {
     expect(photosMissedMessage(1)).toContain('1 photo ');
     expect(photosMissedMessage(3)).toContain('3 photos ');
+  });
+});
+
+describe('over-cap copy', () => {
+  it('publishedMessage names the cap, the leftover count and how to swap', () => {
+    const m = publishedMessage(
+      'X',
+      { viewUrl: 'https://easyrent.lk/listings/3', editUrl: 'https://easyrent.lk/l/e/tok' },
+      { photosOverCap: 2, photoCap: 6 }
+    );
+    expect(m).toContain('6 photos per listing');
+    expect(m).toContain('left 2 photos out');
+    expect(m).toContain('edit link above');
+    // Inviting more photos would be a dead end when they are already at the cap.
+    expect(m).not.toContain('Want to add photos');
+  });
+
+  it('points a link-less sender at the LINK command instead', () => {
+    const m = publishedMessage('X', { viewUrl: 'u' }, { photosOverCap: 1, photoCap: 6 });
+    expect(m).toContain('Reply LINK');
+    expect(m).toContain('left 1 photo out');
+  });
+
+  it('leaves publishedMessage byte-identical when nothing was over the cap', () => {
+    const links = { viewUrl: 'https://easyrent.lk/listings/3' };
+    expect(publishedMessage('X', links, { photosOverCap: 0 })).toBe(publishedMessage('X', links));
+  });
+
+  it('pendingReviewMessage carries the note too', () => {
+    const m = pendingReviewMessage('X', null, { photosOverCap: 3, photoCap: 6 });
+    expect(m).toContain('quick review');
+    expect(m).toContain('left 3 photos out');
+  });
+
+  it('photosAddedMessage promises "shortly" while photos await checks', () => {
+    const m = photosAddedMessage('X', 2, 0, { queued: true });
+    expect(m).toContain("they'll appear");
+    expect(m).not.toContain('Added 2');
+  });
+
+  it('photosAddedMessage still says "Added" when checks are off', () => {
+    expect(photosAddedMessage('X', 2, 0)).toContain('Added 2 photos');
+  });
+
+  it('photosAtCapMessage explains nothing was added and offers the swap', () => {
+    const m = photosAtCapMessage('X', 3, 6);
+    expect(m).toContain('all 6 photos');
+    expect(m).toContain("weren't added");
+    expect(m).toContain('LINK');
+    // Must NOT read like a delivery failure — these arrived fine.
+    expect(m).not.toContain('come through');
+  });
+
+  it('photosAtCapMessage uses singular phrasing for one photo', () => {
+    const m = photosAtCapMessage('X', 1, 6);
+    expect(m).toContain('that photo');
+    expect(m).toContain("wasn't added");
   });
 });
 

@@ -6,13 +6,16 @@ import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { photoCap } from '@/lib/images/cap';
 import {
-  appendQueued,
-  manifestFromLegacyPhotos,
+  adoptOrphanPhotos,
+  derivePhotos,
   parseManifest,
   parsePhotos,
+  reconcileManifest,
   serializeManifest,
 } from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
 
@@ -308,6 +311,23 @@ export async function PUT(
       }
     }
 
+    const submittedPhotos: string[] = Array.isArray(body.photos) ? body.photos : [];
+    const existingPhotos = parsePhotos(listing.photos);
+
+    // Photo cap, grandfathered against what the listing already carries: lowering
+    // the cap (or turning it on) must never make an over-cap listing uneditable —
+    // the landlord would have no way to fix a typo without our help.
+    const cap = photoCap();
+    if (submittedPhotos.length > Math.max(cap, existingPhotos.length)) {
+      return NextResponse.json(
+        {
+          error: `A listing can show at most ${cap} photos.`,
+          code: 'PHOTO_LIMIT_EXCEEDED',
+        },
+        { status: 400 }
+      );
+    }
+
     // Helper function to convert empty strings to null for numeric fields
     const toNumberOrNull = (value: any): number | null => {
       if (value === null || value === undefined || value === '') return null;
@@ -387,28 +407,33 @@ export async function PUT(
 
     // Photos: only genuinely NEW URLs matter. Anything already in the manifest
     // (as a published derivative or as an original) keeps its verdict, which is
-    // what makes re-approval on edit nearly free.
-    const submittedPhotos: string[] = Array.isArray(body.photos) ? body.photos : [];
-    const manifest = parseManifest(listing.photosManifest);
-    const known = new Set<string>();
-    for (const e of manifest) {
-      known.add(e.o);
-      if (e.p) known.add(e.p);
+    // what makes re-approval on edit nearly free. Adopting orphans FIRST is what
+    // stops a live-but-untracked URL from reading as a removal.
+    const manifest = adoptOrphanPhotos(
+      parseManifest(listing.photosManifest),
+      existingPhotos
+    ).entries;
+    const { entries, added, removed } = reconcileManifest(manifest, submittedPhotos);
+    // A pure reorder leaves both counts at zero, so it deliberately does not
+    // re-queue: every URL still resolves to an entry that already has a verdict.
+    const photosChanged = added > 0 || removed > 0;
+
+    // Armed = the checks can actually run. Flag-on-without-a-key would queue
+    // photos that nothing can ever release, so both halves are required.
+    const armed = isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+
+    if (armed) {
+      // Publish only what the manifest says is publishable, never the raw
+      // submitted array: a newly added photo is queued with p = null and must
+      // stay invisible until it passes. An ops/admin edit does not send the
+      // listing back to `pending`, so this is the only thing holding it.
+      const publishable = derivePhotos(entries);
+      updates.photos = publishable.length ? JSON.stringify(publishable) : null;
+      updates.photosManifest = serializeManifest(entries);
     }
-    if (!manifest.length) for (const u of parsePhotos(listing.photos)) known.add(u);
-    const newPhotos = submittedPhotos.filter((u) => !known.has(u));
-    const photosChanged =
-      newPhotos.length > 0 ||
-      (body.photos !== undefined && submittedPhotos.length !== parsePhotos(listing.photos).length);
 
     if (textChanged || photosChanged) {
-      // Queue the automated checks. New photos are appended as unverified
-      // originals so they are never published before passing.
-      if (isFeatureEnabled('enableListingModeration')) {
-        const nextManifest = manifest.length
-          ? appendQueued(manifest, newPhotos)
-          : appendQueued(manifestFromLegacyPhotos(parsePhotos(listing.photos)), newPhotos);
-        updates.photosManifest = serializeManifest(nextManifest);
+      if (armed) {
         updates.moderationStatus = 'queued';
         updates.moderationAttempts = 0;
       }

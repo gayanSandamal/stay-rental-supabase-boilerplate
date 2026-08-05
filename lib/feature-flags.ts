@@ -83,7 +83,11 @@ export const featureFlagDefaults = {
   moderateTextCoherence: true,
   holdOnUnsafeImages: true,
   moderationFailOpen: false,
-  moderationMaxImagesPerListing: 6,
+  // The per-listing photo maximum, enforced at every entry point (web form,
+  // API, WhatsApp) and derived as the moderation cost ceiling. One number:
+  // a separate "max checked" below this would publish unchecked photos.
+  enforcePhotoCap: true,
+  maxPhotosPerListing: 6,
   // Compression + watermark, independent of the AI checks.
   enableImageProcessing: false,
   watermarkListingImages: true,
@@ -285,12 +289,22 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     appWide: true,
     public: false,
   },
-  moderationMaxImagesPerListing: {
-    label: 'Max images checked per listing',
-    description: 'Cost ceiling. Photos beyond this are dropped with an explicit reason, never silently ignored.',
+  enforcePhotoCap: {
+    label: 'Enforce the photo limit',
+    description:
+      'Apply the per-listing photo maximum everywhere: the upload form, the API and WhatsApp. Off means listings can carry any number of photos (the pre-2026-08 behaviour).',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  maxPhotosPerListing: {
+    label: 'Max photos per listing',
+    description:
+      'How many photos a listing can show, on the web form and over WhatsApp. Doubles as the moderation cost ceiling — extra photos are refused with an explicit reason and kept for ops to swap in, never silently dropped. Set below 1 to disable the limit.',
     group: 'Configuration',
     appWide: false,
-    public: false,
+    // The uploader needs this number client-side to show "0/6" and block extras.
+    public: true,
   },
   enableImageProcessing: {
     label: 'Compress + watermark images',

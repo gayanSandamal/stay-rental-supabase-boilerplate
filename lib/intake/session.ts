@@ -1,6 +1,15 @@
 import { db } from '@/lib/db/drizzle';
 import { whatsappIntakes, listings, landlords, users } from '@/lib/db/schema';
 import { and, eq, gte, desc, sql, inArray, isNull, or } from 'drizzle-orm';
+import { isFeatureEnabled } from '@/lib/feature-flags';
+import { capHeadroom, photoCap } from '@/lib/images/cap';
+import {
+  adoptOrphanPhotos,
+  appendQueued,
+  parseManifest,
+  serializeManifest,
+} from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { detectUpdateIntent } from './parser/rule-parser';
 import {
   clearConversation,
@@ -15,6 +24,13 @@ import {
   type ConversationPayload,
 } from './commands';
 import type { NormalizedInboundMessage } from './channels/types';
+
+/**
+ * An abuse ceiling on how much media one message can make us download, not a
+ * product rule — the per-listing cap is `maxPhotosPerListing`. Guards the
+ * webhook's 60s budget against a sender attaching hundreds of images.
+ */
+const MAX_INTAKE_MEDIA = 30;
 
 /** Messages from the same sender within this window append to one intake. */
 export const SESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
@@ -85,6 +101,19 @@ export interface AppendOutcome {
   /** Photos persisted / photo downloads that failed (all actions). */
   mediaStored: number;
   mediaFailed: number;
+  /**
+   * Photos stored but NOT yet public — awaiting the automated checks. Distinct
+   * from mediaStored so the reply can promise "shortly" rather than "added".
+   */
+  mediaQueued?: number;
+  /**
+   * Photos refused because the listing is already at the cap. Deliberately not
+   * folded into mediaFailed: those get a "please send them again" reply, which
+   * would be wrong and infinitely looping here.
+   */
+  mediaOverCap?: number;
+  /** The cap in force, so the reply can name the number. */
+  photoCap?: number;
 }
 
 const parseArr = (s: string | null | undefined): string[] => {
@@ -529,15 +558,40 @@ export async function appendToIntake(
   const base: AppendOutcome = { ...outcome, mediaStored: 0, mediaFailed: 0 };
   if (base.action === 'duplicate' || msg.mediaIds.length === 0) return base;
 
+  // Photos going onto an ALREADY-PUBLISHED listing are capped here, before the
+  // download, so over-cap bytes never enter the bucket and there is nothing to
+  // orphan. New submissions are capped later at publish instead — the settle
+  // window has to assemble the whole album first (see process.ts).
+  let mediaIds = msg.mediaIds;
+  if (base.action === 'attach_media' || base.action === 'edit_link') {
+    const cap = photoCap();
+    if (Number.isFinite(cap) && base.listingId) {
+      const current = await db.query.listings.findFirst({
+        where: eq(listings.id, base.listingId),
+        columns: { photos: true },
+      });
+      const headroom = capHeadroom(parseArr(current?.photos ?? null).length, cap);
+      if (mediaIds.length > headroom) {
+        base.mediaOverCap = mediaIds.length - headroom;
+        base.photoCap = cap;
+        mediaIds = mediaIds.slice(0, headroom);
+      }
+    }
+  }
+  // An abuse ceiling, not a product rule: one sender must not be able to make
+  // the webhook download unbounded media inside its 60s budget.
+  if (mediaIds.length > MAX_INTAKE_MEDIA) mediaIds = mediaIds.slice(0, MAX_INTAKE_MEDIA);
+  if (mediaIds.length === 0) return base;
+
   // Phase 2 — download media OUTSIDE any transaction (Graph fetches take
   // seconds; a held row lock or pooled connection would serialize the world).
   const mediaUrls: string[] = [];
-  for (const mediaId of msg.mediaIds) {
+  for (const mediaId of mediaIds) {
     const url = await persistMedia(mediaId);
     if (url) mediaUrls.push(url);
   }
   base.mediaStored = mediaUrls.length;
-  base.mediaFailed = msg.mediaIds.length - mediaUrls.length;
+  base.mediaFailed = mediaIds.length - mediaUrls.length;
   if (mediaUrls.length === 0) return base;
 
   // Phase 3 — attach URLs under the lock (concurrent album siblings each
@@ -561,15 +615,43 @@ export async function appendToIntake(
         where: eq(listings.id, base.listingId),
       });
       if (!listing) return;
-      const existing = parseArr(typeof listing.photos === 'string' ? listing.photos : null);
-      await tx
-        .update(listings)
-        .set({
-          photos: JSON.stringify([...existing, ...mediaUrls]),
-          updatedAt: new Date(),
-        })
-        .where(eq(listings.id, listing.id));
       base.listingTitle = listing.title;
+      const existing = parseArr(typeof listing.photos === 'string' ? listing.photos : null);
+
+      if (isFeatureEnabled('enableListingModeration') && isModerationConfigured()) {
+        // Queue the photo instead of publishing it. A queued entry has p=null
+        // so it is invisible until the sweeper clears it — this is the exact
+        // path that once put unchecked photos (text, people) on a live listing.
+        // `photos` is deliberately untouched, so the listing never leaves search.
+        const merged = appendQueued(
+          adoptOrphanPhotos(parseManifest(listing.photosManifest), existing).entries,
+          mediaUrls,
+          { wa: true }
+        );
+        await tx
+          .update(listings)
+          .set({
+            photosManifest: serializeManifest(merged),
+            // Never demote a row the sweeper is mid-run on: a second cron could
+            // then claim it. persist() re-queues when it sees unevaluated
+            // entries, so leaving it 'running' loses nothing.
+            moderationStatus: sql`CASE WHEN ${listings.moderationStatus} = 'running'
+                                       THEN 'running'::listing_moderation_status
+                                       ELSE 'queued'::listing_moderation_status END`,
+            moderationAttempts: 0,
+            updatedAt: new Date(),
+          })
+          .where(eq(listings.id, listing.id));
+        base.mediaQueued = mediaUrls.length;
+      } else {
+        await tx
+          .update(listings)
+          .set({
+            photos: JSON.stringify([...existing, ...mediaUrls]),
+            updatedAt: new Date(),
+          })
+          .where(eq(listings.id, listing.id));
+      }
     }
   });
 

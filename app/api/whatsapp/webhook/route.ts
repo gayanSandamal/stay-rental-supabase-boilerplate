@@ -22,6 +22,7 @@ import {
   locationSavedMessage,
   noListingsMessage,
   photosAddedMessage,
+  photosAtCapMessage,
   photosFailedMessage,
   photosMissedMessage,
   receivedAckMessage,
@@ -254,18 +255,33 @@ async function handleInbound(
             : listingPendingNoLinksMessage(outcome.listingTitle ?? null)
       );
     } else if (outcome.action === 'attach_media') {
-      // Photos after publish went straight onto the live listing — confirm to
-      // the sender, and never stay silent when downloads failed.
+      // Photos after publish — confirm to the sender, and never stay silent
+      // when downloads failed or the cap refused them.
+      const title = outcome.listingTitle ?? 'your listing';
+      const cap = outcome.photoCap ?? 6;
       await whatsappAdapter.sendText(
         message.senderId,
         outcome.mediaStored > 0
-          ? photosAddedMessage(outcome.listingTitle ?? 'your listing', outcome.mediaStored, outcome.mediaFailed)
-          : photosFailedMessage()
+          ? photosAddedMessage(title, outcome.mediaStored, outcome.mediaFailed, {
+              overCap: outcome.mediaOverCap,
+              cap,
+              queued: Boolean(outcome.mediaQueued),
+            })
+          : outcome.mediaOverCap
+            ? photosAtCapMessage(title, outcome.mediaOverCap, cap)
+            : photosFailedMessage()
       );
       if (outcome.mediaStored > 0) {
         await createNotificationsForOpsAndAdmin({
           type: 'whatsapp_intake',
-          title: `${outcome.mediaStored} photo(s) added to listing #${outcome.listingId} via WhatsApp — spot-check`,
+          title: `${outcome.mediaStored} photo(s) ${outcome.mediaQueued ? 'queued for checks on' : 'added to'} listing #${outcome.listingId} via WhatsApp — spot-check`,
+          link: `/dashboard/listings/${outcome.listingId}`,
+        });
+      }
+      if (outcome.mediaOverCap) {
+        await createNotificationsForOpsAndAdmin({
+          type: 'whatsapp_intake',
+          title: `${outcome.mediaOverCap} photo(s) refused by the ${cap}-photo cap on listing #${outcome.listingId}`,
           link: `/dashboard/listings/${outcome.listingId}`,
         });
       }

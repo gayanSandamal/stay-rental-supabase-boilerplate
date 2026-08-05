@@ -29,6 +29,12 @@ export interface CombineInput {
   providerError?: string | null;
   /** Photos already published and previously passed (an edit adding new ones). */
   existingKeptUrls?: string[];
+  /**
+   * Photos refused by the per-listing cap before any model saw them. Passed IN
+   * rather than stitched on afterwards, so they reach droppedUrls and the
+   * landlord message instead of vanishing with a "published!" reply.
+   */
+  cappedOutUrls?: string[];
 }
 
 export function combine(input: CombineInput): ModerationVerdict {
@@ -42,6 +48,7 @@ export function combine(input: CombineInput): ModerationVerdict {
     durationMs,
     providerError,
     existingKeptUrls = [],
+    cappedOutUrls = [],
   } = input;
 
   const reasons: string[] = [];
@@ -100,9 +107,10 @@ export function combine(input: CombineInput): ModerationVerdict {
     return {
       ...base,
       outcome: 'held',
+      holdReason: 'unsafe_image',
       reasons,
       landlordReasons,
-      droppedUrls: rejected.map((i) => i.originalUrl),
+      droppedUrls: [...rejected.map((i) => i.originalUrl), ...cappedOutUrls],
       keptUrls: existingKeptUrls,
     };
   }
@@ -115,9 +123,10 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'language',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: cappedOutUrls,
         keptUrls: existingKeptUrls,
       };
     }
@@ -127,9 +136,10 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'not_rental',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: cappedOutUrls,
         keptUrls: existingKeptUrls,
       };
     }
@@ -140,9 +150,10 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'incoherent',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: cappedOutUrls,
         keptUrls: existingKeptUrls,
       };
     }
@@ -160,6 +171,20 @@ export function combine(input: CombineInput): ModerationVerdict {
     );
   }
 
+  // 4. Refused by the cap — a different message: nothing is wrong with these
+  //    photos, there is just no room for them.
+  if (cappedOutUrls.length > 0) {
+    reasons.push(`${cappedOutUrls.length} photo(s) beyond the ${policy.maxImages}-photo cap.`);
+    const plural = cappedOutUrls.length === 1 ? 'photo' : 'photos';
+    landlordReasons.push(
+      `We can show ${policy.maxImages} photos per listing, so ${cappedOutUrls.length} ${plural} ${
+        cappedOutUrls.length === 1 ? 'was' : 'were'
+      } left out. Reply LINK for your edit link if you'd like to swap ${
+        cappedOutUrls.length === 1 ? 'it' : 'one'
+      } in.`
+    );
+  }
+
   const keptUrls = [...existingKeptUrls, ...passed.map((i) => i.originalUrl)];
 
   // Publishing with no photos is allowed — photos are not a required field, and
@@ -173,7 +198,7 @@ export function combine(input: CombineInput): ModerationVerdict {
     outcome: 'passed',
     reasons: reasons.length ? reasons : ['All automated checks passed.'],
     landlordReasons,
-    droppedUrls: rejected.map((i) => i.originalUrl),
+    droppedUrls: [...rejected.map((i) => i.originalUrl), ...cappedOutUrls],
     keptUrls,
   };
 }

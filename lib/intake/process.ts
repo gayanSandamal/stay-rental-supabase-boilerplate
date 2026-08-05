@@ -9,6 +9,9 @@ import { and, eq, lte } from 'drizzle-orm';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
+import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
+import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { parseIntake } from './parser';
 import { matchCity } from './parser/gazetteer';
 import { computeMissingFields, type ParsedIntake } from './parser/types';
@@ -272,7 +275,7 @@ export async function processIntake(
       .returning();
   }
 
-  const media: string[] = (() => {
+  const allMedia: string[] = (() => {
     try {
       const v = JSON.parse(intake.mediaPaths ?? '[]');
       return Array.isArray(v) ? v : [];
@@ -280,10 +283,26 @@ export async function processIntake(
       return [];
     }
   })();
+  // Cap at publish rather than at accumulation: Meta fans an album out as
+  // several near-simultaneous webhooks with no ordering guarantee, so "the
+  // first 6" is only deterministic once the settle window has assembled the
+  // whole set. intake.mediaPaths keeps all of them for ops.
+  const cap = photoCap();
+  const { kept: media, dropped: overCapMedia } = capPhotos(allMedia, cap);
 
   const now = new Date();
   const expirationDays = Number(getFeatureValue('listingExpirationDays') ?? 30);
   const expires = new Date(now.getTime() + expirationDays * 24 * 60 * 60 * 1000);
+
+  // Armed = the checks can actually run. The listing then waits as `pending`
+  // and the passing verdict publishes it (see persist's goLive) — this is what
+  // "publish automatically once the automated approval checks pass" means, and
+  // it is the only way nothing unchecked is ever publicly visible.
+  const armed = isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+  const manifest = armed
+    ? [...manifestFromLegacyPhotos(media), ...capRejectEntries(overCapMedia, cap)]
+    : [];
+  const goLiveNow = autoPublish && !armed;
 
   const [listing] = await db
     .insert(listings)
@@ -307,8 +326,16 @@ export async function processIntake(
       ...(pin ? { latitude: String(pin.latitude), longitude: String(pin.longitude) } : {}),
       photos: media.length ? JSON.stringify(media) : null,
       sourceContactName: intake.profileName,
-      status: autoPublish ? 'active' : 'pending',
-      ...(autoPublish ? { publishedAt: now, expiresAt: expires } : {}),
+      status: goLiveNow ? 'active' : 'pending',
+      ...(goLiveNow ? { publishedAt: now, expiresAt: expires } : {}),
+      ...(armed
+        ? {
+            photosManifest: serializeManifest(manifest),
+            // Without this the sweeper never sees the listing: it keys off
+            // moderation_status, and the column defaults to 'skipped'.
+            moderationStatus: 'queued' as const,
+          }
+        : {}),
     })
     .returning();
 
@@ -336,7 +363,9 @@ export async function processIntake(
   // bubble into the outer catch and clobber the status to manual_review.
   try {
     await logListingAction(
-      autoPublish ? 'listing_auto_published' : 'listing_created',
+      // 'auto_published' must mean "public now"; when armed the engine logs
+      // listing_moderation_passed at the moment it actually goes live.
+      goLiveNow ? 'listing_auto_published' : 'listing_created',
       listing.id,
       owner?.userId ?? ops.userId,
       {
@@ -365,11 +394,18 @@ export async function processIntake(
       }
     }
 
-    const confirmation = autoPublish
+    // While armed the listing is `pending`, so publishedMessage's view link
+    // would 404 for an unauthenticated visitor — promise the follow-up instead.
+    const confirmation = goLiveNow
       ? publishedMessage(listing.title, links, {
           unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
+          photosOverCap: overCapMedia.length,
+          photoCap: cap,
         })
-      : pendingReviewMessage(listing.title, links.editUrl);
+      : pendingReviewMessage(listing.title, links.editUrl, {
+          photosOverCap: overCapMedia.length,
+          photoCap: cap,
+        });
     // Rich replies render the view link as a preview card (the copy already
     // puts it first for exactly this) — plain text otherwise, byte-identical
     // to the pre-flag behavior.
@@ -386,11 +422,21 @@ export async function processIntake(
 
     await notifyOps(
       intake.id,
-      autoPublish
+      goLiveNow
         ? `Auto-published from WhatsApp: "${listing.title}" (#${listing.id}) — spot-check it`
-        : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
+        : armed
+          ? `WhatsApp listing queued for automated checks: "${listing.title}" (#${listing.id})`
+          : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
       `/dashboard/listings/${listing.id}`
     );
+
+    if (overCapMedia.length) {
+      await notifyOps(
+        intake.id,
+        `${overCapMedia.length} photo(s) over the ${cap}-photo cap on listing #${listing.id} — originals kept, swap one in if better`,
+        `/dashboard/listings/${listing.id}`
+      );
+    }
   } catch (err) {
     console.error(`Post-publish follow-up failed for intake ${intake.id}`, err);
   }

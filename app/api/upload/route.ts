@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/db/queries';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { photoCap } from '@/lib/images/cap';
 import { storeImage } from '@/lib/storage';
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    // photoCap() reads the flag snapshot, which is per-instance and lazy.
+    await loadFeatureFlags();
     const ip = getClientIp(request);
     const rl = checkRateLimit(ip, 'POST', '/api/upload');
     if (!rl.allowed) return rateLimitResponse(rl.resetAt);
@@ -21,9 +25,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
 
-    if (files.length > 6) {
+    // PER-REQUEST only. There is no listing id here, and making the count
+    // listing-aware would need an ownership lookup or the endpoint becomes an
+    // enumeration oracle. The authoritative per-listing cap lives on
+    // POST/PUT /api/listings, which is what closes the batched-upload bypass.
+    const cap = photoCap();
+    if (files.length > cap) {
       return NextResponse.json(
-        { error: 'Maximum 6 images allowed' },
+        { error: `Maximum ${cap} images allowed` },
         { status: 400 }
       );
     }

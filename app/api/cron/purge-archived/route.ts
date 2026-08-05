@@ -45,11 +45,17 @@ export async function GET(request: NextRequest) {
     try {
       // Storage first: if the row goes but the objects don't, we lose the URLs
       // needed to find them.
+      // The union, not the manifest alone: a manifest that under-covers the
+      // gallery would leak every untracked object. removeListingObjects skips
+      // URLs outside our bucket, so a superset costs nothing.
       const manifest = parseManifest(listing.photosManifest);
-      const originals = manifest.length
-        ? manifest.map((e) => e.o)
-        : parsePhotos(listing.photos);
-      await removeListingObjects(listing.id, originals);
+      const objectUrls = Array.from(
+        new Set([
+          ...manifest.flatMap((e) => (e.p ? [e.o, e.p] : [e.o])),
+          ...parsePhotos(listing.photos),
+        ])
+      );
+      await removeListingObjects(listing.id, objectUrls);
 
       // The intake FK is ON DELETE SET NULL (migration 0032), but null it
       // explicitly so the intake row keeps a readable trail.

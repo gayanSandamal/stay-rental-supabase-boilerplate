@@ -59,20 +59,86 @@ export function parsePhotos(raw: unknown): string[] {
  * today's `photos` URLs become originals. URLs we don't own (unsplash seeds,
  * base64 data URLs from the uploader's offline fallback) are marked `external`
  * and keep their public URL — we never re-host or watermark someone else's asset.
+ *
+ * Owned URLs keep `p = o`: they came OUT of `photos`, so they are already
+ * public. Claiming otherwise (p = null) is what once let a moderation run
+ * unpublish photos it had never evaluated.
  */
 export function manifestFromLegacyPhotos(photos: string[]): PhotoManifestEntry[] {
   return photos.map((url) =>
     isOwnedUrl(url)
-      ? { o: url, p: null, h: null, v: 'queued' as const, wa: isWhatsAppUrl(url) }
+      ? { o: url, p: url, h: null, v: 'queued' as const, wa: isWhatsAppUrl(url) }
       : { o: url, p: url, h: null, v: 'external' as const }
   );
 }
 
-/** The public `photos` array: everything currently publishable, in manifest order. */
+/**
+ * The public `photos` array: everything currently publishable, in manifest
+ * order. `p` decides publication; `v` only vetoes. That split is what lets a
+ * grandfathered photo (queued, p set) stay visible while a newly arrived one
+ * (queued, p null) stays hidden until it passes.
+ */
 export function derivePhotos(entries: PhotoManifestEntry[]): string[] {
-  return entries
-    .filter((e) => (e.v === 'pass' || e.v === 'external') && e.p)
-    .map((e) => e.p as string);
+  return entries.filter((e) => e.p && e.v !== 'reject').map((e) => e.p as string);
+}
+
+/**
+ * Adopt any URL that is live in `photos` but missing from the manifest.
+ *
+ * The manifest can lag the gallery — a writer that predates it, or one that
+ * appends photos directly. Since `photos` is only ever rewritten as
+ * `derivePhotos(manifest)`, an unadopted URL would be silently unpublished.
+ * Adopted entries are `queued` with `p = o`: still visible, but now scheduled
+ * for a check.
+ *
+ * Matching on `p` AND `o` matters: a passed entry's live URL is its derived
+ * `p`, not its original, so matching on `o` alone would adopt a duplicate.
+ */
+export function adoptOrphanPhotos(
+  existing: PhotoManifestEntry[],
+  photos: string[]
+): { entries: PhotoManifestEntry[]; adopted: number } {
+  const known = new Set<string>();
+  for (const e of existing) {
+    known.add(e.o);
+    if (e.p) known.add(e.p);
+  }
+  const orphans = photos.filter((u) => !known.has(u));
+  if (!orphans.length) return { entries: existing, adopted: 0 };
+  return {
+    entries: [...existing, ...manifestFromLegacyPhotos(orphans)],
+    adopted: orphans.length,
+  };
+}
+
+/**
+ * Merge a moderation run's in-memory manifest back onto the row as it stands
+ * NOW (re-read under the row lock), rather than blind-writing the copy the run
+ * started from.
+ *
+ * The run may have taken seconds; a concurrent WhatsApp album or a landlord
+ * edit can have changed the set meanwhile. Authority is split: the fresh row
+ * owns membership and order, the run owns verdicts for the URLs it actually
+ * evaluated. Entries the run invented but the fresh row no longer has are NOT
+ * resurrected — a concurrent deletion has to stick.
+ *
+ * `unevaluatedQueued` tells the caller a photo arrived mid-run, so the listing
+ * must be re-queued rather than marked done.
+ */
+export function mergeRunIntoFresh(
+  fresh: PhotoManifestEntry[],
+  run: PhotoManifestEntry[],
+  evaluated: Set<string>,
+  freshPhotos: string[]
+): { entries: PhotoManifestEntry[]; adopted: number; unevaluatedQueued: number } {
+  const runByOriginal = new Map(run.map((e) => [e.o, e]));
+  const merged = fresh.map((e) => (evaluated.has(e.o) ? (runByOriginal.get(e.o) ?? e) : e));
+  const { entries, adopted } = adoptOrphanPhotos(merged, freshPhotos);
+  return {
+    entries,
+    adopted,
+    unevaluatedQueued: entries.filter((e) => e.v === 'queued' && !evaluated.has(e.o)).length,
+  };
 }
 
 /**

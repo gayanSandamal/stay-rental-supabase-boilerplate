@@ -74,6 +74,12 @@ export interface ModerationVerdict {
   durationMs: number;
   /** Set when outcome === 'error'. */
   errorMessage?: string;
+  /**
+   * Why a `held` outcome held. Only 'unsafe_image' may take an ALREADY-LIVE
+   * listing dark: a flaky text check must not unpublish a live listing just
+   * because the landlord sent another photo.
+   */
+  holdReason?: 'unsafe_image' | 'language' | 'not_rental' | 'incoherent';
 }
 
 /** Flags the policy layer reads. Passed in so verdict.ts stays pure. */

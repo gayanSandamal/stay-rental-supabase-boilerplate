@@ -44,6 +44,29 @@ export function ModerationActions({
   );
 }
 
+/** Same action as "Re-run checks", for a listing that was never checked once. */
+export function QueueForChecksButton({ listingId }: { listingId: number }) {
+  const [pending, start] = useTransition();
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      className="border-sky-300 text-sky-800 hover:bg-sky-50"
+      onClick={() => {
+        const fd = new FormData();
+        fd.set('listingId', String(listingId));
+        start(async () => {
+          await requeueAction(fd);
+        });
+      }}
+    >
+      <RefreshCw className="mr-1.5 h-4 w-4" />
+      Queue for checks
+    </Button>
+  );
+}
+
 export function RestorePhotoButton({
   listingId,
   originalUrl,

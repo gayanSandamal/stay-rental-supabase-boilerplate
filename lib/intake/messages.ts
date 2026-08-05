@@ -116,10 +116,23 @@ export interface ListingLinks {
  * The publish confirmation. The view URL goes FIRST because WhatsApp previews
  * only the first link in a message.
  */
+/**
+ * "We could only use N of your photos." Nothing is wrong with the extras —
+ * there is simply no room — so this reads differently from a rejection, and it
+ * names the LINK command because that command genuinely works.
+ */
+export function overCapNote(overCap: number, cap: number, canSelfServe: boolean): string {
+  const plural = overCap === 1 ? 'photo' : 'photos';
+  const swap = canSelfServe
+    ? 'Use the edit link above to swap one in.'
+    : "Reply LINK if you'd like to swap one in.";
+  return `📷 We can show ${cap} photos per listing, so we used the first ${cap} and left ${overCap} ${plural} out. ${swap}`;
+}
+
 export function publishedMessage(
   title: string,
   links: ListingLinks,
-  opts: { unsupportedMedia?: boolean } = {}
+  opts: { unsupportedMedia?: boolean; photosOverCap?: number; photoCap?: number } = {}
 ): string {
   const parts = [`🎉 Your listing "${title}" is now LIVE on Easy Rent:`, links.viewUrl];
   if (links.editUrl) {
@@ -128,27 +141,61 @@ export function publishedMessage(
   if (links.deleteUrl) {
     parts.push('', '🗑️ Remove it:', links.deleteUrl);
   }
-  // The 48h photo-append window has always existed but was never announced,
-  // which made a genuinely useful feature undiscoverable.
-  parts.push('', '📷 Want to add photos? Just send them here within 2 days.');
+  if (opts.photosOverCap) {
+    parts.push('', overCapNote(opts.photosOverCap, opts.photoCap ?? 6, Boolean(links.editUrl)));
+  } else {
+    // The 48h photo-append window has always existed but was never announced,
+    // which made a genuinely useful feature undiscoverable. Skipped when they
+    // are already at the cap — inviting more photos would be a dead end.
+    parts.push('', '📷 Want to add photos? Just send them here within 2 days.');
+  }
   parts.push('', 'Tenants will call or WhatsApp you directly.');
   const base = parts.join('\n');
   return opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
 }
 
-export function pendingReviewMessage(title: string, editUrl?: string | null): string {
-  const base = `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
-  return editUrl ? `${base}\n\n✏️ You can change the details meanwhile:\n${editUrl}` : base;
+export function pendingReviewMessage(
+  title: string,
+  editUrl?: string | null,
+  opts: { photosOverCap?: number; photoCap?: number } = {}
+): string {
+  const parts = [
+    `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`,
+  ];
+  if (editUrl) parts.push('', '✏️ You can change the details meanwhile:', editUrl);
+  if (opts.photosOverCap) {
+    parts.push('', overCapNote(opts.photosOverCap, opts.photoCap ?? 6, Boolean(editUrl)));
+  }
+  return parts.join('\n');
 }
 
 /** Photos sent after publish were added straight to the live listing. */
-export function photosAddedMessage(title: string, added: number, failed: number): string {
-  const base = `📸 Added ${added} photo${added === 1 ? '' : 's'} to "${title}".`;
+export function photosAddedMessage(
+  title: string,
+  added: number,
+  failed: number,
+  opts: { overCap?: number; cap?: number; queued?: boolean } = {}
+): string {
+  const base = opts.queued
+    ? `📸 Got ${added} photo${added === 1 ? '' : 's'} for "${title}" — ${added === 1 ? 'it' : 'they'}'ll appear in a minute once our checks finish.`
+    : `📸 Added ${added} photo${added === 1 ? '' : 's'} to "${title}".`;
   const fail =
     failed > 0
       ? ` ${failed} photo${failed === 1 ? '' : 's'} didn't come through — please send ${failed === 1 ? 'it' : 'them'} again.`
       : '';
-  return `${base}${fail}\nIf they were meant for a different listing, reply here and our team will sort it out.`;
+  const over = opts.overCap
+    ? `\n📷 That's the full ${opts.cap ?? 6} photos we can show, so ${opts.overCap} ${opts.overCap === 1 ? 'wasn' : 'weren'}'t added. Reply LINK to swap ${opts.overCap === 1 ? 'it' : 'one'} in.`
+    : '';
+  return `${base}${fail}${over}\nIf they were meant for a different listing, reply here and our team will sort it out.`;
+}
+
+/** They are already at the cap, so nothing was added at all. */
+export function photosAtCapMessage(title: string, refused: number, cap: number): string {
+  return [
+    `"${title}" already has all ${cap} photos we can show, so ${refused === 1 ? 'that photo' : `those ${refused} photos`} ${refused === 1 ? "wasn't" : "weren't"} added.`,
+    '',
+    '✏️ Reply LINK and we\'ll send your edit link so you can swap one out.',
+  ].join('\n');
 }
 
 /** Every photo download failed — never leave the sender thinking it worked. */

@@ -5,10 +5,17 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db/drizzle';
 import { imageModerationCache, listings } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
-import { getFeatureValue } from '@/lib/feature-flags';
+import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { PROMPT_VERSION } from '@/lib/moderation/prompts';
-import { derivePhotos, parseManifest, serializeManifest } from '@/lib/images/manifest';
+import {
+  adoptOrphanPhotos,
+  derivePhotos,
+  parseManifest,
+  parsePhotos,
+  serializeManifest,
+} from '@/lib/images/manifest';
 
 async function requireStaff() {
   const user = await getUser();
@@ -25,6 +32,20 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
   const listing = await db.query.listings.findFirst({ where: eq(listings.id, id) });
   if (!listing) return;
 
+  // An override publishes what the reviewer was looking at, photos included:
+  // entries left `queued` with no derived URL would publish the listing without
+  // them, and nothing would ever come back to release them.
+  const { entries } = adoptOrphanPhotos(
+    parseManifest(listing.photosManifest),
+    parsePhotos(listing.photos)
+  );
+  for (const entry of entries) {
+    if (entry.v !== 'queued') continue;
+    entry.p = entry.p ?? entry.o;
+    entry.v = 'pass';
+  }
+  const urls = derivePhotos(entries);
+
   const now = new Date();
   const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
   await db
@@ -33,6 +54,8 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
       status: 'active',
       moderationStatus: 'passed',
       moderationSummary: `Published by ${user.role} override`,
+      photosManifest: serializeManifest(entries),
+      photos: urls.length ? JSON.stringify(urls) : null,
       publishedAt: listing.publishedAt ?? now,
       expiresAt: listing.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
       moderationLeaseUntil: null,
@@ -71,7 +94,13 @@ export async function restorePhotoAction(formData: FormData): Promise<void> {
   const listing = await db.query.listings.findFirst({ where: eq(listings.id, id) });
   if (!listing || !originalUrl) return;
 
-  const manifest = parseManifest(listing.photosManifest);
+  // Adopt first: this action rewrites `photos` from the manifest, so a photo the
+  // manifest never tracked would be unpublished as a side effect of restoring a
+  // different one.
+  const { entries: manifest } = adoptOrphanPhotos(
+    parseManifest(listing.photosManifest),
+    parsePhotos(listing.photos)
+  );
   const entry = manifest.find((e) => e.o === originalUrl);
   if (!entry) return;
 
@@ -87,9 +116,19 @@ export async function restorePhotoAction(formData: FormData): Promise<void> {
       );
   }
 
-  entry.v = 'queued';
   delete entry.r;
   delete entry.sev;
+
+  // Only queue when something can actually claim the queue. Otherwise a
+  // restored photo (p === null while queued) would stay invisible forever with
+  // no checker to release it — ops would click Restore and see nothing happen.
+  const armed = isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+  if (armed) {
+    entry.v = 'queued';
+  } else {
+    entry.v = 'pass';
+    entry.p = entry.p ?? entry.o;
+  }
 
   await db
     .update(listings)
@@ -99,8 +138,7 @@ export async function restorePhotoAction(formData: FormData): Promise<void> {
         const urls = derivePhotos(manifest);
         return urls.length ? JSON.stringify(urls) : null;
       })(),
-      moderationStatus: 'queued',
-      moderationAttempts: 0,
+      ...(armed ? { moderationStatus: 'queued' as const, moderationAttempts: 0 } : {}),
       updatedAt: new Date(),
     })
     .where(eq(listings.id, id));

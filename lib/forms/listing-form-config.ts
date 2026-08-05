@@ -365,9 +365,8 @@ export const listingFormConfig: FormConfig = {
       label: 'Upload Photos',
       type: 'image-upload',
       required: false,
-      maxImages: 6,
       maxSizeInMB: 5,
-      helpText: 'Upload up to 6 photos of your property (optional). Images will be automatically compressed and optimized.',
+      helpText: 'Add photos of your property (optional). Images will be automatically compressed and optimized.',
       defaultValue: [],
     },
 
