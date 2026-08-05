@@ -74,6 +74,16 @@ export interface ModerationVerdict {
   durationMs: number;
   /** Set when outcome === 'error'. */
   errorMessage?: string;
+  /**
+   * Photos published as their ORIGINAL because compress+watermark failed. The
+   * fallback is deliberate (a processing failure must never lose a landlord's
+   * photo) but it is not normal, so it is counted, summarised and sent to ops —
+   * a systematic failure went unnoticed for a day by being logged and nothing
+   * more.
+   */
+  processingFallbacks?: number;
+  /** First processing failure of the run, ops-facing. */
+  processingError?: string;
 }
 
 /** Flags the policy layer reads. Passed in so verdict.ts stays pure. */

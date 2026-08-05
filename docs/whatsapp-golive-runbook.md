@@ -165,7 +165,21 @@ Back Office → Settings → **Compress + watermark images** ON.
 Validates sharp on Vercel and the derived-URL path in isolation. New photos
 become WebP (max 1920px, EXIF/GPS stripped) with the Easy Rent watermark; the
 logo variant is chosen per photo by corner brightness so it can't vanish on a
-white wall. Check a freshly published listing's gallery, then move on.
+white wall.
+
+**Confirm sharp actually loaded in the deployed function before trusting this
+step** — it is a native module, and file tracing has dropped its libvips library
+before (see the deep dive). Eyeballing the gallery is not enough: on failure the
+originals are published, and they look like photos:
+
+```bash
+curl -sH "Authorization: Bearer $CRON_SECRET" "$BASE/api/cron/moderate-listings" | jq .imageToolchain
+```
+
+`{"ok": true}` and nothing else will do. If it reports `ok:false`, stop — image
+moderation is dead too, and every photo will silently auto-pass. Then check a
+freshly published listing: its photo URLs must be `…/property-images/public/<id>/<hash>-w.webp`,
+not the `whatsapp-intake/…jpeg` originals.
 
 ## 2. Automated approval, images only
 

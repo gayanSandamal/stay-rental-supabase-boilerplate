@@ -209,6 +209,14 @@ describe('summarize', () => {
     expect(summarize(call({ providerError: 'timeout' }))).toContain('Moderation error');
   });
 
+  it('surfaces photos published unprocessed', () => {
+    // The one symptom of a broken image pipeline that ops actually read. Without
+    // this, a systematic compress/watermark failure is only visible by decoding
+    // photos_manifest by hand and noticing `p === o`.
+    const v = { ...call({ images: [img('a')] }), processingFallbacks: 3 };
+    expect(summarize(v)).toContain('3 unprocessed');
+  });
+
   it('never exceeds the column-friendly length', () => {
     const long = 'x'.repeat(500);
     const v = call({ text: { ...okText, titleCoherent: false, reasons: [long] } });

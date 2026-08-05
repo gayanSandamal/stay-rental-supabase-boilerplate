@@ -51,6 +51,17 @@ export async function notifyModerationOutcome(
       body: (verdict.errorMessage ?? '').slice(0, 300),
       link: `/dashboard/listings/${listing.id}`,
     });
+  } else if (verdict.processingFallbacks) {
+    // Louder than the dropped-photos note below: photos published unprocessed
+    // are unwatermarked and still carry their EXIF/GPS, and if the cause is the
+    // native toolchain then image moderation is degraded platform-wide, not just
+    // for this listing.
+    await createNotificationsForOpsAndAdmin({
+      type: 'whatsapp_intake',
+      title: `Listing #${listing.id}: ${verdict.processingFallbacks} photo(s) published unprocessed — check the image pipeline`,
+      body: `No compression or watermark applied; EXIF not stripped. Cause: ${verdict.processingError ?? 'unknown'}`.slice(0, 300),
+      link: `/dashboard/listings/${listing.id}`,
+    });
   } else if (verdict.droppedUrls.length) {
     await createNotificationsForOpsAndAdmin({
       type: 'whatsapp_intake',
