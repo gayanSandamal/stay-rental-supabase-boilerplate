@@ -1,31 +1,81 @@
 import type { NextConfig } from 'next';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /**
- * sharp's platform package (`@img/sharp-<platform>`) is a `.node` addon that
- * dlopens libvips from a SEPARATE package (`@img/sharp-libvips-<platform>`) at
+ * sharp's platform package (`@img/sharp-<platform>-<arch>`) is a `.node` addon
+ * that dlopens libvips from a SEPARATE package (`@img/sharp-libvips-…`) at
  * runtime. File tracing follows `require()` graphs, not native dynamic links, so
- * it copied the addon and left the ~18 MB shared library behind — and the
+ * it copied the addon and left the ~17 MB shared library behind — and the
  * deployed function threw `ERR_DLOPEN_FAILED: libvips-cpp.so…: cannot open
  * shared object file` on the first `import('sharp')`. Both call sites caught it,
  * so the only symptom was photos published unprocessed and image checks quietly
- * auto-passing. Name the artifacts explicitly.
+ * auto-passing.
  *
- * Two path shapes because it depends on the package manager: pnpm keeps the real
- * files under `.pnpm/`, npm/yarn hoist them to `node_modules/@img/`. A glob that
- * matches nothing is ignored, so listing both is safe.
+ * The library therefore has to be named in `outputFileTracingIncludes` — but as
+ * EXACT EXISTING FILE PATHS, resolved here at build time the same way sharp
+ * resolves them at runtime. DO NOT REACH FOR GLOBS. A wildcard include over the
+ * `@img` packages builds fine locally and on Linux, then fails the Vercel
+ * deployment; bisected against real deployments, a precise path for the very
+ * same library succeeds. Resolving instead of globbing also means no version
+ * pins to go stale, no package-manager-specific layout, and none of the
+ * linuxmusl builds that can never run on Vercel.
  *
- * PLATFORMS ARE NAMED ON PURPOSE. A wildcard here (`@img+sharp-libvips-*`) also
- * matches the linuxMUSL builds, which can never run on Vercel — that is 34 MB of
- * dead weight per function, and each library is ~17 MB against a 250 MB function
- * ceiling. `linux-x64` is what Vercel runs; `darwin-*` keeps local `next start`
- * honest. Deploying on a new architecture means adding it here, and the
- * `imageToolchain` probe on /api/cron/moderate-listings is what tells you.
+ * Returns [] if nothing resolves, which keeps the build working — the
+ * `imageToolchain` probe on /api/cron/moderate-listings is what tells you the
+ * deployed function came out without it.
  */
-const SHARP_LIBVIPS_PLATFORMS = ['linux-x64', 'darwin-arm64', 'darwin-x64'];
-const SHARP_NATIVE_LIBS = SHARP_LIBVIPS_PLATFORMS.flatMap((p) => [
-  `./node_modules/.pnpm/@img+sharp-libvips-${p}@*/node_modules/@img/sharp-libvips-${p}/lib/**`,
-  `./node_modules/@img/sharp-libvips-${p}/lib/**`,
-]);
+function sharpNativeLibs(): string[] {
+  const req = createRequire(import.meta.url);
+  const tryResolve = (spec: string, from?: string) => {
+    try {
+      return req.resolve(spec, from ? { paths: [from] } : undefined);
+    } catch {
+      return null;
+    }
+  };
+  // Resolve ENTRY POINTS, never `<pkg>/package.json` — sharp's `exports` map does
+  // not expose it, so asking for it throws ERR_PACKAGE_PATH_NOT_EXPORTED and this
+  // whole function would quietly return [].
+  const pkgRootOf = (file: string): string | null => {
+    let dir = path.dirname(file);
+    while (dir !== path.dirname(dir)) {
+      if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
+      dir = path.dirname(dir);
+    }
+    return null;
+  };
+
+  const sharpEntry = tryResolve('sharp');
+  const sharpDir = sharpEntry && pkgRootOf(sharpEntry);
+  if (!sharpDir) return [];
+
+  // Plain platform first: on a glibc host the musl package is not installed, and
+  // whichever one resolves is the one sharp itself will load.
+  for (const suffix of [
+    `${process.platform}-${process.arch}`,
+    `${process.platform}musl-${process.arch}`,
+  ]) {
+    const addon = tryResolve(`@img/sharp-${suffix}/sharp.node`, sharpDir);
+    const addonDir = addon && pkgRootOf(addon);
+    if (!addonDir) continue;
+    const vipsEntry = tryResolve(`@img/sharp-libvips-${suffix}/lib`, addonDir);
+    if (!vipsEntry) continue;
+
+    // Only the shared library itself: `lib/index.js` and the manifest already
+    // come through the require graph, and the bundled glib headers are
+    // build-time artifacts nothing dlopens.
+    const libDir = path.dirname(vipsEntry);
+    return fs
+      .readdirSync(libDir)
+      .filter((f) => f.startsWith('libvips-cpp'))
+      .map((f) => `./${path.relative(process.cwd(), path.join(libDir, f))}`);
+  }
+  return [];
+}
+
+const SHARP_NATIVE_LIBS = sharpNativeLibs();
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -46,12 +96,10 @@ const nextConfig: NextConfig = {
     // The old bracketed key silently contributed nothing.
     '/api/listings/*/moderate': ['./public/brand/**', ...SHARP_NATIVE_LIBS],
   },
-  // Headroom for the above. Tracing drags the repo's documentation into every
-  // function — a 12.6 MB PDF and the screenshot set — and no route reads any of
-  // it at runtime. Measured worst case per function: 196.5 MB before the sharp
-  // libraries, so the ~33 MB they add leaves little room against the 250 MB
-  // ceiling. The first attempt at this fix used a platform wildcard, pulled in
-  // the two linuxmusl builds as well, and the deployment failed on size.
+  // Tracing drags the repo's documentation into every function — a 12.6 MB PDF
+  // and the screenshot set — and no route reads any of it at runtime. Worth
+  // reclaiming: a function measured 196.5 MB before the ~17 MB library, against
+  // a 250 MB ceiling.
   outputFileTracingExcludes: {
     '*': ['./docs/**'],
   },
