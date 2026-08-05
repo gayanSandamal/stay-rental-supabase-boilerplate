@@ -13,6 +13,22 @@ import path from 'node:path';
 import type { ProcessedImage } from './types';
 
 /**
+ * Raised when sharp itself cannot be loaded — a packaging/deployment fault, not
+ * a problem with any particular photo. Callers MUST treat the two differently:
+ * one bad image is a photo we skip, a dead toolchain means nothing was processed
+ * or checked at all. Conflating them is what let a broken deployment publish
+ * unprocessed, unmoderated photos while reporting success.
+ */
+export class ImageToolchainUnavailableError extends Error {
+  readonly code = 'image_toolchain_unavailable';
+  constructor(cause: unknown) {
+    super(`sharp is unavailable in this runtime: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'ImageToolchainUnavailableError';
+    this.cause = cause;
+  }
+}
+
+/**
  * sharp ships prebuilt native binaries and is marked external for the bundler,
  * so it is loaded on first use rather than at module scope. That keeps a missing
  * platform binary from crashing a route at import time (which would defeat the
@@ -20,12 +36,54 @@ import type { ProcessedImage } from './types';
  */
 type SharpFactory = (input?: Buffer | object) => Sharp;
 let sharpModule: SharpFactory | null = null;
-async function getSharp(): Promise<SharpFactory> {
+/**
+ * Remembered so a broken native module costs one failed import per instance
+ * rather than one per photo. A `.node` load failure never heals inside a live
+ * process, so there is nothing to retry.
+ */
+let sharpLoadError: unknown = null;
+
+/**
+ * Shared accessor for the native module. Exported so every sharp user in the
+ * app funnels through the same load-once-and-classify-failures path.
+ */
+export async function loadSharp(): Promise<SharpFactory> {
+  if (sharpLoadError) throw new ImageToolchainUnavailableError(sharpLoadError);
   if (!sharpModule) {
-    const mod = await import('sharp');
-    sharpModule = (mod.default ?? mod) as unknown as SharpFactory;
+    try {
+      const mod = await import('sharp');
+      sharpModule = (mod.default ?? mod) as unknown as SharpFactory;
+    } catch (err) {
+      sharpLoadError = err;
+      // Logged once per instance, at the point of truth, because every caller
+      // above this deliberately degrades rather than failing the request.
+      console.error(
+        '[images] sharp failed to load — image processing and image moderation ' +
+          'CANNOT run in this deployment. Check that the libvips shared library ' +
+          'is traced into the function (next.config.ts SHARP_NATIVE_LIBS).',
+        err
+      );
+      throw new ImageToolchainUnavailableError(err);
+    }
   }
   return sharpModule;
+}
+
+/**
+ * Cheap liveness check for the native toolchain: encodes a 1x1 pixel. Surfaced
+ * on the moderation cron's JSON response so "is sharp working in production?"
+ * is one authenticated request away instead of an archaeology exercise.
+ */
+export async function probeImageToolchain(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const sharp = await loadSharp();
+    await sharp({ create: { width: 1, height: 1, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+      .webp()
+      .toBuffer();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Long-edge bound for published images. 1920 is plenty for a full-width hero. */
@@ -74,7 +132,7 @@ async function cornerLuminance(input: Buffer, width: number, height: number): Pr
   try {
     const boxW = Math.max(1, Math.min(width, Math.round(width * 0.3)));
     const boxH = Math.max(1, Math.min(height, Math.round(height * 0.25)));
-    const sharp = await getSharp();
+    const sharp = await loadSharp();
     const stats = await sharp(input)
       .extract({ left: width - boxW, top: height - boxH, width: boxW, height: boxH })
       .greyscale()
@@ -101,7 +159,7 @@ async function watermarkOverlay(
   const source = await loadLogoSource(variant);
   if (!source) return null;
   try {
-    const sharp = await getSharp();
+    const sharp = await loadSharp();
     const overlay = await sharp(source)
       .resize({ width: targetWidth })
       .ensureAlpha()
@@ -142,7 +200,7 @@ export async function processListingImage(
 ): Promise<ProcessedImage> {
   const { whatsappSourced = false, watermark = true, compress = true } = opts;
 
-  const sharp = await getSharp();
+  const sharp = await loadSharp();
   const meta = await sharp(input).metadata();
   // EXIF orientations 5–8 are transposed, and .rotate() bakes that in — so the
   // post-rotation dimensions are swapped relative to metadata.

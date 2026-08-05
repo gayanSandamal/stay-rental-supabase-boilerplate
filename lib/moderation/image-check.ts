@@ -10,6 +10,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { imageModerationCache } from '@/lib/db/schema';
+import { ImageToolchainUnavailableError, loadSharp } from '@/lib/images/process';
 import { chatJson } from './client';
 import {
   MODERATION_ADJUDICATE_MODEL,
@@ -50,9 +51,10 @@ export interface ImageCheckOutcome {
 
 /** Downscale for the model: visual tokens are the cost driver. */
 async function prepareForModel(original: Buffer): Promise<{ buffer: Buffer; mimeType: string }> {
-  // Lazy, same reasoning as lib/images/process.ts.
-  const mod = await import('sharp');
-  const sharp = (mod.default ?? mod) as unknown as (input?: Buffer) => any;
+  // Loaded through lib/images/process.ts rather than imported directly, so a
+  // dead native module arrives as ImageToolchainUnavailableError and is told
+  // apart from an image we simply cannot decode. See the caller.
+  const sharp = await loadSharp();
   const buffer = await sharp(original)
     .rotate()
     .resize({
@@ -139,9 +141,25 @@ export async function checkImage(args: {
     };
   }
 
-  const prepared = await prepareForModel(bytes).catch(() => null);
-  if (!prepared) {
-    // Unreadable image: skip rather than reject — it may be a format quirk.
+  let prepared: { buffer: Buffer; mimeType: string };
+  try {
+    prepared = await prepareForModel(bytes);
+  } catch (err) {
+    if (err instanceof ImageToolchainUnavailableError) {
+      // sharp is dead, so NO image can be checked in this deployment. Report it
+      // as a transport failure: the caller turns that into `providerError`, and
+      // the fail-closed policy holds the listing. Returning a bare `pass` here
+      // (as this once did) publishes every photo unexamined while the ledger
+      // records them as checked — the exact failure this branch exists to stop.
+      return {
+        verdict: { originalUrl, contentHash, verdict: 'pass', reasons: [], fromCache: false },
+        usage,
+        error: 'image_toolchain_unavailable',
+      };
+    }
+    // One image sharp could not decode: skip rather than reject — it may be a
+    // format quirk, and it says nothing about the rest of the listing.
+    console.error('[moderation] could not decode image for the model', originalUrl.slice(0, 120), err);
     return {
       verdict: { originalUrl, contentHash, verdict: 'pass', reasons: [], fromCache: false },
       usage,

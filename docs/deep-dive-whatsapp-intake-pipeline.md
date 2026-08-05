@@ -208,6 +208,36 @@ wall or at night. WhatsApp images skip re-compression but are still watermarked.
 `listings.photos` keeps its exact shape — an array of public URLs — and
 `photos_manifest` is the new source of truth.
 
+**sharp is a deployment liability — treat it as one.** It is the app's only
+native dependency and nothing else touches it at runtime, so a packaging
+regression is invisible from the outside. `@img/sharp-<platform>` is a `.node`
+addon that dlopens libvips out of a *separate* package at runtime; file tracing
+follows `require()` graphs, not native dynamic links, so it copies the addon and
+leaves the ~18 MB `libvips-cpp.so` behind. That is what happened on 2026-08-04:
+`import('sharp')` threw `ERR_DLOPEN_FAILED` inside the function, both call sites
+caught it, and the result was photos published unprocessed (no watermark, EXIF
+intact) *and every image silently auto-passing the vision check* while the ledger
+recorded them as checked. Two production listings passed with zero
+`image_moderation_cache` rows and zero derivatives in storage — the only
+derivatives that ever existed came from a laptop run of `spike-moderation-e2e`.
+
+Consequences to preserve:
+- `next.config.ts` names the libvips artifacts in `outputFileTracingIncludes`
+  (`SHARP_NATIVE_LIBS`) for **every** route that can reach `lib/images/process.ts`
+  or `lib/moderation/image-check.ts`. Those keys are matched as globs, so a
+  dynamic segment must be written `/api/listings/*/moderate` — a literal
+  `[id]` is read as a character class and silently matches nothing.
+- A dead toolchain is `ImageToolchainUnavailableError`, never a per-image skip.
+  `checkImage` returns it as a transport error so the fail-closed path holds the
+  listing; a genuinely undecodable photo still skips softly.
+- Publishing an original because processing failed is still the right fallback —
+  losing a landlord's photo is worse — but it is now counted on the verdict
+  (`processingFallbacks`), written into `moderation_summary` and pushed to ops.
+- **Verify after every deploy that touches images or dependencies:**
+  `curl -H "Authorization: Bearer $CRON_SECRET" $BASE/api/cron/moderate-listings`
+  returns `"imageToolchain":{"ok":true}`. If it says `ok:false`, image moderation
+  and watermarking are both dead platform-wide.
+
 **Two live bugs fixed in passing:** the 0020 auth trigger could fail an
 `auth.users` insert (signing up with an email that exists as a legacy row died
 with "Database error saving new user"), and `whatsapp_intakes.listing_id` had no

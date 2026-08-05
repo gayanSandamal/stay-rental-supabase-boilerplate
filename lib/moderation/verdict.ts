@@ -181,9 +181,12 @@ export function combine(input: CombineInput): ModerationVerdict {
 /** Short line stored on listings.moderation_summary for badges and queues. */
 export function summarize(v: ModerationVerdict): string {
   if (v.outcome === 'passed') {
-    return v.droppedUrls.length
-      ? `Passed — ${v.droppedUrls.length} photo(s) dropped`
-      : 'Passed all checks';
+    const parts = ['Passed all checks'];
+    if (v.droppedUrls.length) parts[0] = `Passed — ${v.droppedUrls.length} photo(s) dropped`;
+    // Ops read this string in the back office; a degraded image pipeline has to
+    // be legible there, not only in the manifest JSON.
+    if (v.processingFallbacks) parts.push(`${v.processingFallbacks} unprocessed`);
+    return parts.join(' · ').slice(0, 200);
   }
   if (v.outcome === 'held') return v.reasons[0]?.slice(0, 200) ?? 'Held for review';
   if (v.outcome === 'error') return `Moderation error: ${v.errorMessage ?? 'unknown'}`.slice(0, 200);

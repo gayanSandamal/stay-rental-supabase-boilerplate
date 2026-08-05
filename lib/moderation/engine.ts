@@ -211,15 +211,33 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
     const processingOn = isFeatureEnabled('enableImageProcessing');
     const watermark = isFeatureEnabled('watermarkListingImages');
 
+    // Counted, not just logged: when processing breaks for every photo the only
+    // visible symptom used to be `p === o` deep inside the manifest JSON.
+    let fallbacks = 0;
+    let firstProcessingError: string | undefined;
+    const noteFallback = (reason: string) => {
+      fallbacks++;
+      firstProcessingError ??= reason;
+    };
+
     for (const entry of manifest) {
       const v = byUrl.get(entry.o);
       if (!v || v.verdict !== 'pass') continue;
       const bytes = bytesByUrl.get(entry.o);
 
-      if (!processingOn || !bytes) {
-        // Publish the original as-is when processing is disabled.
+      if (!processingOn) {
+        // Publish the original as-is when processing is disabled. Not a
+        // fallback — this is the configured behaviour.
         entry.v = 'pass';
         entry.p = entry.o;
+        continue;
+      }
+      if (!bytes) {
+        // Processing is on but we never held the bytes (a settled entry re-passed
+        // from cache, or a fetch that failed). Publishable, but unprocessed.
+        entry.v = 'pass';
+        entry.p = entry.o;
+        noteFallback('original bytes unavailable');
         continue;
       }
       try {
@@ -230,11 +248,21 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
         const url = await storeDerived(listing.id, entry.h ?? hashBytes(bytes), processed);
         entry.v = 'pass';
         entry.p = url ?? entry.o; // upload failed → fall back to the original
+        if (!url) noteFallback('derived upload to storage failed');
       } catch (err) {
         console.error('[moderation] image processing failed', listing.id, err);
         entry.v = 'pass';
         entry.p = entry.o;
+        noteFallback(err instanceof Error ? err.message : 'image processing threw');
       }
+    }
+
+    if (fallbacks) {
+      verdict.processingFallbacks = fallbacks;
+      verdict.processingError = firstProcessingError;
+      verdict.reasons.push(
+        `${fallbacks} photo(s) published UNPROCESSED (no compression/watermark): ${firstProcessingError}.`
+      );
     }
   }
 

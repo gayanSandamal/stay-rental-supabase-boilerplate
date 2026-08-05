@@ -36,8 +36,19 @@ export async function GET(request: NextRequest) {
   // unauthenticated request never pays for it.
   try {
     const { sweepModerationQueue } = await import('@/lib/moderation/engine');
-    const counts = await sweepModerationQueue();
-    return NextResponse.json({ ok: true, ...counts });
+    // sharp is the only native dependency in the app and nothing else at runtime
+    // touches it, so a packaging regression is invisible until photos come out
+    // unprocessed. Report its health on every run: `imageToolchain.ok === false`
+    // means image checks and compression/watermarking are both dead.
+    const { probeImageToolchain } = await import('@/lib/images/process');
+    const [counts, imageToolchain] = await Promise.all([
+      sweepModerationQueue(),
+      probeImageToolchain(),
+    ]);
+    if (!imageToolchain.ok) {
+      console.error('[cron/moderate-listings] image toolchain unavailable', imageToolchain.error);
+    }
+    return NextResponse.json({ ok: true, ...counts, imageToolchain });
   } catch (err: any) {
     console.error('[cron/moderate-listings] failed', err);
     return NextResponse.json({ ok: false, error: err?.message ?? 'moderation failed' }, { status: 500 });

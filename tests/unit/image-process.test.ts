@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { processListingImage } from '@/lib/images/process';
+import { probeImageToolchain, processListingImage } from '@/lib/images/process';
 
 /**
  * Exercises the real sharp pipeline (no mocking) — the point is to assert the
@@ -116,5 +116,14 @@ describe('processListingImage', () => {
     expect(brDiff).toBeGreaterThan(2);
     expect(tlDiff).toBeLessThan(1);
     expect(brDiff).toBeGreaterThan(tlDiff * 5);
+  });
+});
+
+describe('probeImageToolchain', () => {
+  it('confirms the native module is loadable', async () => {
+    // Trivial here, load-bearing in production: sharp is the app's only native
+    // dependency, so a packaging regression is otherwise invisible until photos
+    // come out unprocessed. The moderation cron reports this on every run.
+    await expect(probeImageToolchain()).resolves.toEqual({ ok: true });
   });
 });
