@@ -65,6 +65,20 @@ There are **two migration systems** and they are not interchangeable:
 
 **The numbered SQL files in `lib/db/migrations/` are the source of truth for the deployed schema.** When you change `schema.ts`, you generally also need to add a new numbered `00NN_*.sql` file **and register it in the `MIGRATIONS` array** in `run-all-migrations.ts` (the runner is idempotent — it skips "already exists" errors). Don't assume `db:generate` alone updates production.
 
+> ⚠️ **`db:migrate-all` REPLAYS EVERY numbered file on every invocation** — there is no
+> applied-migrations ledger. So a migration must be safe to re-run against a
+> populated production database *forever*, not just correct once. Never write a
+> statement that destroys data: no `DROP COLUMN` on a column that holds data, no
+> `TRUNCATE`, no unguarded `UPDATE`/`DELETE`. Guard any conversion behind an
+> `information_schema` check inside a `DO $$ … $$;` block (see the fixed
+> `0001_stay_rental_transformation.sql`).
+>
+> This is not hypothetical: `0001` used to `DROP COLUMN IF EXISTS "role"` and
+> re-add it with `DEFAULT 'tenant'`, so **every migration run silently reset
+> every user's role**. On 2026-08-05 it locked the admin out of the back office
+> and demoted a WhatsApp landlord. Roles carry no other source of truth, so the
+> data was unrecoverable except by inference from `landlords` rows.
+
 - Connection: `lib/db/drizzle.ts` reads `DATABASE_URL`. **Production must use the Supabase transaction pooler (port 6543)**, not the direct connection (5432).
 - Schema lives entirely in `lib/db/schema.ts`. Core tables: `users`, `landlords`, `listings`, `listing_views`, `saved_searches`, `business_accounts`, `business_account_members`, `user_contact_numbers`, `listing_contact_numbers`, `notifications`, `password_reset_tokens`, `audit_logs`.
 - Enums: `listing_status` = `pending | active | rented | archived | rejected | expired`; `user_role`, `business_account_status`, `audit_action`.
