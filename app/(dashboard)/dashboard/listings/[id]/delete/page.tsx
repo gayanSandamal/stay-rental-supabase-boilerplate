@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { AlertTriangle, ArrowLeft, MapPin } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 import { getListingById, getUser } from '@/lib/db/queries';
 import { canManageListing } from '@/lib/auth/listing-access';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getFirstListingPhoto } from '@/lib/seo';
 import { archiveListingAction } from './actions';
+import { RemoveListingButton } from './remove-button';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -86,10 +87,7 @@ export default async function DeleteListingPage({
           {/* Mutation on POST only — never on page load. */}
           <form action={archiveListingAction} className="sm:flex-1">
             <input type="hidden" name="listingId" value={listing.id} />
-            <Button type="submit" variant="outline" className="w-full border-red-300 text-red-700 hover:bg-red-50">
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Yes, remove it
-            </Button>
+            <RemoveListingButton />
           </form>
           <Button asChild className="sm:flex-1">
             <Link href={`/dashboard/listings/${listing.id}/edit`}>Keep it — edit instead</Link>
