@@ -16,6 +16,9 @@ import { runIntakeChecks } from './checks';
 import { getOrCreateOpsIdentity } from './ops-identity';
 import { getOrCreateWhatsAppLandlord } from './landlord-identity';
 import { mintAccessLink } from '@/lib/auth/access-links';
+import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
+import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import {
   locationRequestPrompt,
   manualReviewMessage,
@@ -285,6 +288,24 @@ export async function processIntake(
   const expirationDays = Number(getFeatureValue('listingExpirationDays') ?? 30);
   const expires = new Date(now.getTime() + expirationDays * 24 * 60 * 60 * 1000);
 
+  // Enforce the cap at publish. NEVER truncate `intake.mediaPaths` — ops must
+  // still see everything the owner sent, and a dropped photo stays restorable.
+  const cap = photoCap();
+  const { kept: keptMedia, dropped: overCapMedia } = capPhotos(media, cap);
+
+  // Armed (I6) = the checks can actually run. When armed the listing is created
+  // PENDING and the sweeper publishes it once it passes, so nothing unchecked is
+  // ever public — which is what `autoPublishWhatsAppIntakes`' own description
+  // has always promised. `persist()`'s `goLive = autoPublish || …` is the
+  // handoff that flips it live, which is why 'pending' is right here.
+  const moderationArmed =
+    isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+  const goLiveNow = autoPublish && !moderationArmed;
+  const manifestEntries =
+    moderationArmed || overCapMedia.length
+      ? [...manifestFromLegacyPhotos(keptMedia), ...capRejectEntries(overCapMedia, cap)]
+      : [];
+
   const [listing] = await db
     .insert(listings)
     .values({
@@ -305,10 +326,14 @@ export async function processIntake(
       bathrooms: parsed.bathrooms,
       rentPerMonth: String(parsed.rentPerMonth!),
       ...(pin ? { latitude: String(pin.latitude), longitude: String(pin.longitude) } : {}),
-      photos: media.length ? JSON.stringify(media) : null,
+      photos: keptMedia.length ? JSON.stringify(keptMedia) : null,
+      ...(manifestEntries.length
+        ? { photosManifest: serializeManifest(manifestEntries) }
+        : {}),
+      ...(moderationArmed ? { moderationStatus: 'queued' as const } : {}),
       sourceContactName: intake.profileName,
-      status: autoPublish ? 'active' : 'pending',
-      ...(autoPublish ? { publishedAt: now, expiresAt: expires } : {}),
+      status: goLiveNow ? 'active' : 'pending',
+      ...(goLiveNow ? { publishedAt: now, expiresAt: expires } : {}),
     })
     .returning();
 
@@ -336,7 +361,7 @@ export async function processIntake(
   // bubble into the outer catch and clobber the status to manual_review.
   try {
     await logListingAction(
-      autoPublish ? 'listing_auto_published' : 'listing_created',
+      goLiveNow ? 'listing_auto_published' : 'listing_created',
       listing.id,
       owner?.userId ?? ops.userId,
       {
@@ -365,11 +390,19 @@ export async function processIntake(
       }
     }
 
-    const confirmation = autoPublish
+    // Not `autoPublish`: when the checks are armed the listing is pending, and
+    // publishedMessage's "now LIVE" + /listings/{id} link would 404 for ~2 min.
+    // The sweeper sends the real 🎉 once it passes (lib/moderation/notify.ts).
+    const confirmation = goLiveNow
       ? publishedMessage(listing.title, links, {
           unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
+          photosOverCap: overCapMedia.length,
+          photoCap: cap,
         })
-      : pendingReviewMessage(listing.title, links.editUrl);
+      : pendingReviewMessage(listing.title, links.editUrl, {
+          photosOverCap: overCapMedia.length,
+          photoCap: cap,
+        });
     // Rich replies render the view link as a preview card (the copy already
     // puts it first for exactly this) — plain text otherwise, byte-identical
     // to the pre-flag behavior.
@@ -386,9 +419,11 @@ export async function processIntake(
 
     await notifyOps(
       intake.id,
-      autoPublish
+      goLiveNow
         ? `Auto-published from WhatsApp: "${listing.title}" (#${listing.id}) — spot-check it`
-        : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
+        : moderationArmed
+          ? `WhatsApp listing queued for automated checks: "${listing.title}" (#${listing.id})`
+          : `WhatsApp listing awaiting approval: "${listing.title}" (#${listing.id})`,
       `/dashboard/listings/${listing.id}`
     );
   } catch (err) {

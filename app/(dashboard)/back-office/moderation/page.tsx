@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { desc, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, lt } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
 import { Card, CardContent } from '@/components/ui/card';
 import { ShieldCheck, ExternalLink, AlertTriangle } from 'lucide-react';
-import { parseManifest } from '@/lib/images/manifest';
+import { parseManifest, parsePhotos } from '@/lib/images/manifest';
 import { ModerationActions, RestorePhotoButton } from './moderation-actions';
 
 export const dynamic = 'force-dynamic';
@@ -40,9 +40,42 @@ export default async function ModerationQueuePage() {
     limit: 15,
   });
 
+  /**
+   * NEVER CHECKED. `moderation_status` defaults to 'skipped' and the sweeper
+   * only claims 'queued', so a listing nobody enqueued is never looked at — and
+   * because this page used to list only queued/running/held/error, that was
+   * invisible to ops as well. Four production listings went public that way.
+   */
+  const neverChecked = await db.query.listings.findMany({
+    where: and(
+      eq(listings.moderationStatus, 'skipped'),
+      inArray(listings.status, ['active', 'pending'])
+    ),
+    orderBy: [desc(listings.createdAt)],
+    limit: 50,
+  });
+
+  // Queued for more than half an hour means the sweeper is not draining.
+  const stuckSince = new Date(Date.now() - 30 * 60 * 1000);
+  const coverage = await db
+    .select({ status: listings.moderationStatus, n: count() })
+    .from(listings)
+    .groupBy(listings.moderationStatus);
+  const stuck = neverChecked.length
+    ? 0
+    : await db
+        .select({ n: count() })
+        .from(listings)
+        .where(and(eq(listings.moderationStatus, 'queued'), lt(listings.updatedAt, stuckSince)))
+        .then((r) => r[0]?.n ?? 0);
+
   const renderCard = (listing: (typeof rows)[number]) => {
     const manifest = parseManifest(listing.photosManifest);
     const rejected = manifest.filter((e) => e.v === 'reject');
+    // An I2 violation (a photo no manifest entry accounts for) is a bug worth
+    // seeing rather than a number worth hiding.
+    const publicCount = parsePhotos(listing.photos).length;
+    const covered = manifest.length;
 
     return (
       <Card key={listing.id} className="mb-4">
@@ -69,6 +102,15 @@ export default async function ModerationQueuePage() {
             </Link>
             <span className="text-sm text-slate-500">
               #{listing.id} · {listing.city} · attempt {listing.moderationAttempts}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 text-xs ${
+                publicCount > covered ? 'bg-amber-100 text-amber-900' : 'text-slate-500'
+              }`}
+              title="public photos vs manifest entries"
+            >
+              {publicCount} public / {covered} tracked
+              {publicCount > covered ? ' — uncovered!' : ''}
             </span>
           </div>
 
@@ -139,6 +181,48 @@ export default async function ModerationQueuePage() {
         <ShieldCheck className="h-6 w-6 text-teal-700" />
         <h1 className="text-2xl font-bold text-slate-900">Moderation</h1>
       </div>
+
+      {/* Coverage first: the failure that matters most is a listing the engine
+          never looked at, which by definition never appears in a queue. */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-4 text-sm">
+            {coverage.map((c) => (
+              <span key={c.status} className="flex items-center gap-1.5">
+                <span
+                  className={`rounded px-2 py-0.5 text-xs font-medium ${
+                    STATUS_STYLES[c.status] ?? 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {c.status}
+                </span>
+                <span className="font-semibold text-slate-900">{c.n}</span>
+              </span>
+            ))}
+          </div>
+          {neverChecked.length > 0 && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <strong>{neverChecked.length} live or pending listing(s) have never been
+              checked.</strong>{' '}
+              They were created before anything enqueued them. Re-queue each one below.
+            </p>
+          )}
+          {stuck > 0 && (
+            <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-900">
+              <strong>{stuck} listing(s) have been queued for over 30 minutes.</strong> The sweeper
+              may not be running — check the cron and{' '}
+              <code>GET /api/cron/moderate-listings</code>&apos;s <code>imageToolchain</code>.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {neverChecked.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-lg font-semibold text-slate-900">Never checked</h2>
+          {neverChecked.map(renderCard)}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <Card>

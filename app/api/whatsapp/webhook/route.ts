@@ -254,12 +254,19 @@ async function handleInbound(
             : listingPendingNoLinksMessage(outcome.listingTitle ?? null)
       );
     } else if (outcome.action === 'attach_media') {
-      // Photos after publish went straight onto the live listing — confirm to
-      // the sender, and never stay silent when downloads failed.
+      // Photos after publish went onto the live listing — confirm to the
+      // sender, and never stay silent when downloads failed.
       await whatsappAdapter.sendText(
         message.senderId,
         outcome.mediaStored > 0
-          ? photosAddedMessage(outcome.listingTitle ?? 'your listing', outcome.mediaStored, outcome.mediaFailed)
+          ? photosAddedMessage(
+              outcome.listingTitle ?? 'your listing',
+              outcome.mediaStored,
+              outcome.mediaFailed,
+              // When the checks are armed the photo is not visible yet, so
+              // promising it was "added" would send them looking for it.
+              { queued: Boolean(outcome.mediaQueued), overCap: outcome.mediaOverCap ?? 0 }
+            )
           : photosFailedMessage()
       );
       if (outcome.mediaStored > 0) {
