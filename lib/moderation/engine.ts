@@ -110,7 +110,22 @@ function ensureManifest(listing: ListingRow): PhotoManifestEntry[] {
     .entries;
 }
 
-export async function moderateListing(listing: ListingRow): Promise<ModerationVerdict> {
+/**
+ * @param deadline Wall-clock ms after which this run stops checking MORE images
+ *   and settles for what it has. Unchecked photos stay `queued`, which makes
+ *   `unevaluatedQueued` non-zero and sends the listing round again.
+ *
+ *   Without this a single listing could run unbounded: the sweeper's budget is
+ *   only consulted BETWEEN listings, so five photos (download + vision + sharp +
+ *   upload each) sailed past `maxDuration` and the function was killed
+ *   mid-listing, leaving the lease held and the row stuck on 'running' until it
+ *   expired — with nothing written and nothing learned. Partial progress every
+ *   two minutes beats a run that never finishes.
+ */
+export async function moderateListing(
+  listing: ListingRow,
+  deadline = Number.POSITIVE_INFINITY
+): Promise<ModerationVerdict> {
   const started = Date.now();
   const policy = policyFromFlags();
   const usage = { inputTokens: 0, outputTokens: 0 };
@@ -136,6 +151,8 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
 
   if (policy.moderateImages) {
     for (const entry of checkable) {
+      // Always do at least one, so a tight budget still makes progress.
+      if (evaluated.size > 0 && Date.now() > deadline) break;
       const fetched = await fetchOriginal(entry.o);
       if (!fetched) {
         // Could not read the original: leave it alone rather than reject it.
@@ -160,6 +177,7 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
   } else {
     // Images not checked: they still need processing, so fetch them anyway.
     for (const entry of checkable) {
+      if (evaluated.size > 0 && Date.now() > deadline) break;
       const fetched = await fetchOriginal(entry.o);
       if (!fetched) {
         entry.v = 'skipped';
@@ -526,7 +544,7 @@ export async function sweepModerationQueue(): Promise<SweepCounts> {
       continue;
     }
     try {
-      const verdict = await moderateListing(listing);
+      const verdict = await moderateListing(listing, started + MODERATION_RUN_BUDGET_MS);
       if (verdict.outcome === 'passed') counts.passed++;
       else if (verdict.outcome === 'held') counts.held++;
       else if (verdict.outcome === 'error') counts.errored++;
