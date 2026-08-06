@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../lib/db/drizzle';
 import { users } from '../lib/db/schema';
+import { logAudit } from '../lib/db/audit-logger';
 
 /**
  * Promote a user to admin. Run against whatever DATABASE_URL points at — which
@@ -40,6 +41,17 @@ async function main() {
     .update(users)
     .set({ role: 'admin', updatedAt: new Date() })
     .where(eq(users.id, existing.id));
+
+  // Granting admin is the most consequential change in this codebase and it was
+  // the only one leaving no trace. `userId` is null on purpose: a CLI run has no
+  // session, and inventing an actor would be worse than recording that it came
+  // from a shell.
+  await logAudit({
+    action: 'user_updated',
+    entityType: 'user',
+    entityId: existing.id,
+    metadata: { field: 'role', from: existing.role, to: 'admin', via: 'pnpm db:set-admin' },
+  });
 
   console.log(`✓ ${email} (#${existing.id}): ${existing.role} → admin`);
 
