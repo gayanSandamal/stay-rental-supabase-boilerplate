@@ -4,17 +4,18 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
+import { useFeatureValue } from '@/lib/hooks/use-feature-flags';
 
 interface ImageUploaderProps {
   value?: string[];
   onChange?: (urls: string[]) => void;
+  /** Overrides the `maxPhotosPerListing` flag. Leave unset in listing forms. */
   maxImages?: number;
   maxSizeInMB?: number;
   disabled?: boolean;
 }
 
 // Configurable constants
-const DEFAULT_MAX_IMAGES = 6;
 const DEFAULT_MAX_SIZE_MB = 5;
 const MAX_WIDTH = 1920;
 const MAX_HEIGHT = 1920;
@@ -23,10 +24,14 @@ const COMPRESSION_QUALITY = 0.8;
 export function ImageUploader({
   value = [],
   onChange,
-  maxImages = DEFAULT_MAX_IMAGES,
+  maxImages: maxImagesProp,
   maxSizeInMB = DEFAULT_MAX_SIZE_MB,
   disabled = false,
 }: ImageUploaderProps) {
+  // The server enforces this too (POST/PUT /api/listings and /api/upload); this
+  // is only so the UI states the same number ops configured.
+  const flagCap = useFeatureValue('maxPhotosPerListing');
+  const maxImages = maxImagesProp ?? flagCap;
   const [images, setImages] = useState<string[]>(value);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);

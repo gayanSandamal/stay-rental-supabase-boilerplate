@@ -6,6 +6,8 @@ import {
   manualReviewMessage,
   needsInfoMessage,
   photosMissedMessage,
+  photosAddedMessage,
+  pendingReviewMessage,
   publishedMessage,
   receivedAckMessage,
   restoreRequestedMessage,
@@ -135,5 +137,65 @@ describe('restore + pending-no-links messages', () => {
     expect(m).not.toMatch(/is live/i);
     expect(m).not.toContain('http');
     expect(m).toContain('review');
+  });
+});
+
+describe('over-cap photo copy', () => {
+  const links = { viewUrl: 'https://easyrent.lk/listings/3' };
+
+  // Regression pin: with nothing over the cap the output must be byte-identical
+  // to what it was before the cap existed.
+  it('adds nothing when no photo was refused', () => {
+    expect(publishedMessage('X', links, { photosOverCap: 0, photoCap: 6 })).toBe(
+      publishedMessage('X', links)
+    );
+    expect(pendingReviewMessage('X', null, { photosOverCap: 0, photoCap: 6 })).toBe(
+      pendingReviewMessage('X', null)
+    );
+  });
+
+  it('names the limit, the leftover count and how to swap', () => {
+    const m = publishedMessage('X', links, { photosOverCap: 3, photoCap: 6 });
+    expect(m).toContain('6 photos per listing');
+    expect(m).toContain('3 weren’t used');
+    expect(m).toMatch(/swap/i);
+  });
+
+  it('reads naturally for a single leftover', () => {
+    expect(publishedMessage('X', links, { photosOverCap: 1, photoCap: 6 })).toContain(
+      'one wasn’t used'
+    );
+  });
+
+  it('appears on the pending-review copy too', () => {
+    expect(pendingReviewMessage('X', null, { photosOverCap: 2, photoCap: 6 })).toContain(
+      '2 weren’t used'
+    );
+  });
+
+  it('says nothing when there is no cap', () => {
+    expect(publishedMessage('X', links, { photosOverCap: 2, photoCap: Infinity })).toBe(
+      publishedMessage('X', links)
+    );
+  });
+});
+
+describe('photosAddedMessage', () => {
+  it('promises visibility only when the photo is already public', () => {
+    expect(photosAddedMessage('X', 2, 0)).toContain('Added 2 photos');
+  });
+
+  // Armed moderation holds the photo for ~2 min; saying "added" would send the
+  // landlord looking for something that is not there yet.
+  it('says "checking" when the photo is queued', () => {
+    const m = photosAddedMessage('X', 1, 0, { queued: true });
+    expect(m).not.toContain('Added 1 photo');
+    expect(m).toMatch(/couple of minutes/);
+  });
+
+  it('reports over-cap photos without asking for a resend', () => {
+    const m = photosAddedMessage('X', 1, 0, { overCap: 2 });
+    expect(m).toContain('photo limit');
+    expect(m).not.toMatch(/send .* again/);
   });
 });
