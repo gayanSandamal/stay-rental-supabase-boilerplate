@@ -292,18 +292,21 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     public: false,
   },
   maxPhotosPerListing: {
-    label: 'Max photos per listing',
+    label: 'Photos per listing',
     description:
-      'The product cap AND the moderation cost ceiling — they are the same number by design. Enforced at every upload path; extra photos are refused or dropped with an explicit reason, never silently ignored. Set below 1 to disable the cap entirely.',
+      'The product cap AND the moderation cost ceiling — the same number by design. Enforced on every upload path; extra photos are refused or dropped with an explicit reason, never silently ignored. Needs "Photo limit" (Platform) switched on. Set below 1 for no limit.',
     group: 'Configuration',
     // public: the uploader reads it to show the right limit before submitting.
     appWide: false,
     public: true,
   },
   enforcePhotoCap: {
-    label: '— enforce the photo cap',
+    // NOT "— …": the leading dash marks a sub-switch of the toggle above it, and
+    // this one is independent of moderation — the cap is enforced on the web
+    // uploader and the listing API with the automated checks switched off.
+    label: 'Photo limit',
     description:
-      'Master switch. Off means the cap is advisory: uploads are accepted and nothing is dropped for being over the limit.',
+      'Enforce the per-listing photo cap set under Configuration → Photos per listing. Off means the limit is advisory: uploads are accepted and nothing is dropped for being over it.',
     group: 'Platform',
     appWide: true,
     public: true,

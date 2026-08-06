@@ -55,19 +55,20 @@ export default async function ModerationQueuePage() {
     limit: 50,
   });
 
-  // Queued for more than half an hour means the sweeper is not draining.
+  // Queued for more than half an hour means the sweeper is not draining. This
+  // is INDEPENDENT of the never-checked count — a listing nobody enqueued and a
+  // queue nobody is draining are different failures with different fixes, and
+  // hiding one behind the other loses the signal.
   const stuckSince = new Date(Date.now() - 30 * 60 * 1000);
   const coverage = await db
     .select({ status: listings.moderationStatus, n: count() })
     .from(listings)
     .groupBy(listings.moderationStatus);
-  const stuck = neverChecked.length
-    ? 0
-    : await db
-        .select({ n: count() })
-        .from(listings)
-        .where(and(eq(listings.moderationStatus, 'queued'), lt(listings.updatedAt, stuckSince)))
-        .then((r) => r[0]?.n ?? 0);
+  const stuck = await db
+    .select({ n: count() })
+    .from(listings)
+    .where(and(eq(listings.moderationStatus, 'queued'), lt(listings.updatedAt, stuckSince)))
+    .then((r) => r[0]?.n ?? 0);
 
   const renderCard = (listing: (typeof rows)[number]) => {
     const manifest = parseManifest(listing.photosManifest);
