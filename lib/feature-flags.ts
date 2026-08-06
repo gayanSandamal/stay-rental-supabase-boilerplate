@@ -61,8 +61,11 @@ export const featureFlagDefaults = {
   autoPublishWhatsAppIntakes: true,
 
   // LLM fallback for the deterministic intake rule parser: when required
-  // fields are still missing after rule parsing, try Claude and merge the
-  // fill-ins. No-op without ANTHROPIC_API_KEY. OFF = rules only, zero cost.
+  // fields are still missing after rule parsing, ask a model for ONLY those
+  // fields and merge the fill-ins (rule values always win). Uses SiliconFlow
+  // when SILICONFLOW_API_KEY is set — the same key the moderation engine uses —
+  // and only falls back to Anthropic when it is not. No-op with neither.
+  // OFF = rules only, zero cost.
   enableLlmParserFallback: false,
 
   // WhatsApp landlords get their own account and self-service edit links.
@@ -230,7 +233,8 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   },
   enableLlmParserFallback: {
     label: 'LLM parser fallback (intake)',
-    description: 'When the rule-based intake parser leaves required listing fields missing, ask Claude to fill the gaps before replying to the sender. Requires ANTHROPIC_API_KEY (no-op without it). Off = deterministic rules only.',
+    description:
+      'When the rule-based intake parser leaves required listing fields missing, ask a model for just those fields before replying to the sender — the rules always win where they found a value. Uses the SiliconFlow key the moderation engine already uses; falls back to Anthropic only if that is unset, and is a no-op with neither. Off = deterministic rules only.',
     group: 'Platform',
     appWide: true,
     public: false,
