@@ -1,10 +1,13 @@
 /**
  * Flag-gated LLM fallback for the intake rule parser (see ./index.ts).
  * Extracts listing fields from free text (English / Sinhala-English mix).
- * Provider is picked by which key is deployed: SiliconFlow (the vendor the
- * moderation pipeline already uses, OpenAI-compatible) wins over the direct
- * Anthropic API. Returns null when no key is set or the API/JSON fails;
- * callers treat null as "no fill-ins available".
+ *
+ * SiliconFlow only — the same vendor and the same `SILICONFLOW_API_KEY` the
+ * moderation pipeline runs on. There was a second, direct Anthropic path here;
+ * it is gone, because two providers meant two prompts, two response shapes and
+ * two failure modes for one job, and only one of them was ever exercised in
+ * production. Returns null when no key is set or the API/JSON fails; callers
+ * treat null as "no fill-ins available".
  */
 
 import { MODERATION_API_BASE, moderationApiKey } from '@/lib/moderation/config';
@@ -16,7 +19,7 @@ const PREAMBLE = `You extract rental-listing data from WhatsApp messages sent to
 
 const FOOTER = `Never invent facts not present in the message. Unknown → null.`;
 
-/** One description per extractable field, shared by both provider prompts. */
+/** One description per extractable field; only the missing ones are sent. */
 const FIELD_SPECS: Record<string, string> = {
   title: `title: short listing title you compose, e.g. "2BR House in Nugegoda" (null if you can't determine bedrooms+type+area)`,
   propertyType: `propertyType: "house" | "apartment" | "room" | null`,
@@ -30,7 +33,7 @@ const FIELD_SPECS: Record<string, string> = {
 };
 
 export function isLlmParserConfigured(): boolean {
-  return Boolean(moderationApiKey() || process.env.ANTHROPIC_API_KEY);
+  return Boolean(moderationApiKey());
 }
 
 export async function parseIntakeWithLlm(
@@ -42,8 +45,7 @@ export async function parseIntakeWithLlm(
   // Fail-soft is non-negotiable: a throwing fallback would break intake
   // processing, and the rules-only result is always an acceptable answer.
   try {
-    if (moderationApiKey()) return await parseWithSiliconFlow(messageText, missingFields);
-    return await parseWithAnthropic(messageText);
+    return await parseWithSiliconFlow(messageText, missingFields);
   } catch (err) {
     console.error('Intake LLM fallback failed', err instanceof Error ? err.message : err);
     return null;
@@ -98,46 +100,6 @@ ${FOOTER}`;
 
   const data = await res.json();
   return coerceParsed(data?.choices?.[0]?.message?.content ?? '');
-}
-
-async function parseWithAnthropic(messageText: string): Promise<ParsedIntake | null> {
-  const model = process.env.WHATSAPP_INTAKE_MODEL || 'claude-haiku-4-5-20251001';
-
-  const system = `${PREAMBLE}
-
-Return ONLY a JSON object with these keys:
-${Object.values(FIELD_SPECS)
-  .map((s) => `- ${s}`)
-  .join('\n')}
-- suspicious: true if this doesn't look like a genuine property rental submission (spam, scam patterns, gibberish, advertising something else)
-- suspicionReason: short reason when suspicious, else null
-
-${FOOTER}`;
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      system,
-      messages: [{ role: 'user', content: messageText }],
-    }),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    console.error('Intake LLM fallback: Anthropic API error', res.status, text.slice(0, 300));
-    return null;
-  }
-
-  const data = await res.json();
-  return coerceParsed(data?.content?.[0]?.text ?? '');
 }
 
 /** Malformed model output must coerce to null field-by-field, never throw. */

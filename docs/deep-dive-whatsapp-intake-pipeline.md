@@ -9,7 +9,7 @@ The intake pipeline turns inbound messenger messages ("Hi, I want to list my 2BR
 
 Since 2026-07-13 the pipeline is **channel-agnostic**: a core (session batching, parsing, checks, publishing) that knows nothing about Meta, plus per-channel adapters. WhatsApp is the first adapter; Telegram/iMessage later means one adapter module + one thin webhook route + a registry entry.
 
-Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic regex + a Sri Lanka gazetteer + scam heuristics, unit-tested, zero external calls. An optional LLM fallback can fill fields the rules miss, but only behind the `enableLlmParserFallback` flag (default OFF). Provider is SiliconFlow-first (`SILICONFLOW_API_KEY` — already deployed for moderation, model `Qwen/Qwen3-8B`, `INTAKE_LLM_MODEL` overrides), with Anthropic (`ANTHROPIC_API_KEY`) as the secondary path; no key at all → rules only. Validate with `pnpm parser:probe`.
+Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic regex + a Sri Lanka gazetteer + scam heuristics, unit-tested, zero external calls. An optional LLM fallback can fill fields the rules miss, but only behind the `enableLlmParserFallback` flag (default OFF). Provider is SiliconFlow, and only SiliconFlow (`SILICONFLOW_API_KEY` — already deployed for moderation, model `Qwen/Qwen3-8B`, `INTAKE_LLM_MODEL` overrides); no key → rules only. Validate with `pnpm parser:probe`.
 
 **Key responsibilities:**
 - Receive channel webhook events (verify + store) — thin and fast, no decisions.
@@ -43,7 +43,7 @@ Parsing is **rule-based and in-process** (`lib/intake/parser`) — deterministic
 | `rule-parser.ts` | `parseIntakeRules(text)` — pure, deterministic passes: phone masking → rent (lakh/Rs/k//month//-) → beds/baths → property type (annex→house, titled "Annex") → gazetteer city/district → address heuristic → title composition → description → suspicion. |
 | `gazetteer.ts` | 25 districts + ~90 cities/aliases (incl. Sinhala script, Colombo ward numbers). `matchCity` / `matchDistrict`. |
 | `scam.ts` | `scoreSuspicion` — additive keyword/heuristic scoring (threshold 3). Replaces the LLM's self-flag; suspicious → manual_review, never auto-replied. |
-| `llm-parser.ts` | `parseIntakeWithLlm` — the old Claude parser, now fallback-only. Direct fetch, model `WHATSAPP_INTAKE_MODEL` (default Haiku 4.5). Null on any failure. |
+| `llm-parser.ts` | `parseIntakeWithLlm` — fallback-only, asks for ONLY the fields the rules missed. Direct fetch to SiliconFlow, model `INTAKE_LLM_MODEL` (default `Qwen/Qwen3-8B`). Null on any failure. |
 | `types.ts` | `ParsedIntake`, `REQUIRED_FIELDS` (`title, address, city, bedrooms, rentPerMonth`), `parserMeta` diagnostics tag. Dependency-free. |
 
 ### Channels — `lib/intake/channels/`

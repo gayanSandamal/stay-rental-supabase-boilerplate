@@ -40,8 +40,6 @@ function ruleResult(overrides: Partial<ParsedIntake>): ParsedIntake {
 const sfReply = (content: string) =>
   new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
 
-const anthropicReply = (text: string) =>
-  new Response(JSON.stringify({ content: [{ type: 'text', text }] }), { status: 200 });
 
 describe('parser LLM fallback', () => {
   const originalFetch = global.fetch;
@@ -221,23 +219,20 @@ describe('parser LLM fallback', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('falls back to the Anthropic path when only ANTHROPIC_API_KEY is set', async () => {
+  // SiliconFlow is the only provider. ANTHROPIC_API_KEY must not resurrect a
+  // second code path, and must not make the fallback look configured when the
+  // key it would actually use is absent.
+  it('does not call Anthropic even when ANTHROPIC_API_KEY is the only key set', async () => {
     delete process.env.SILICONFLOW_API_KEY;
+    delete process.env.MODERATION_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
-    const calls: Array<{ url: string; headers: any }> = [];
-    global.fetch = vi.fn(async (url: any, init: any) => {
-      calls.push({ url: String(url), headers: init.headers });
-      return anthropicReply('{"city":"Kolonnawa"}');
-    }) as any;
+    global.fetch = vi.fn() as any;
 
-    const parsed = await parseIntakeWithLlm('house in kolonnawa', ['city']);
-
-    expect(parsed?.city).toBe('Kolonnawa');
-    expect(calls[0].url).toContain('api.anthropic.com');
-    expect(calls[0].headers['x-api-key']).toBe('sk-ant-test');
+    await expect(parseIntakeWithLlm('house in kolonnawa', ['city'])).resolves.toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('prefers SiliconFlow when both keys are set', async () => {
+  it('still uses SiliconFlow when an Anthropic key is also present', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
     let url = '';
     global.fetch = vi.fn(async (u: any) => {
