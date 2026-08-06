@@ -47,9 +47,12 @@ describe('parsePhotos', () => {
 });
 
 describe('manifestFromLegacyPhotos', () => {
-  it('queues photos we own', () => {
+  // p = o, NOT null: these URLs came out of `listings.photos`, so they are
+  // already public. Recording them as unpublished is what let a re-check wipe a
+  // live gallery — `derivePhotos` would return [] and `persist` would write it.
+  it('queues photos we own while keeping them published', () => {
     const [e] = manifestFromLegacyPhotos([orig('a')]);
-    expect(e).toMatchObject({ o: orig('a'), p: null, v: 'queued', wa: false });
+    expect(e).toMatchObject({ o: orig('a'), p: orig('a'), v: 'queued', wa: false });
   });
 
   it('flags WhatsApp-sourced originals so compression is skipped', () => {

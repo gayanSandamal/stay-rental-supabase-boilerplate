@@ -57,8 +57,18 @@ export interface TextVerdict {
 
 export type ModerationOutcome = 'passed' | 'held' | 'error' | 'skipped';
 
+/**
+ * WHY a listing was held, as a machine-readable tag. `reasons` is prose for
+ * humans; this is what code branches on — specifically the rule that a re-check
+ * may only take an already-live listing dark for a SAFETY problem, never for a
+ * text or coherence wobble.
+ */
+export type HoldReason = 'unsafe_image' | 'language' | 'not_rental' | 'incoherent';
+
 export interface ModerationVerdict {
   outcome: ModerationOutcome;
+  /** Set whenever outcome === 'held'. */
+  holdReason?: HoldReason;
   /** Ops-facing summary lines. */
   reasons: string[];
   /** Sender-facing lines (WhatsApp/in-app). */

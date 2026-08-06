@@ -59,20 +59,95 @@ export function parsePhotos(raw: unknown): string[] {
  * today's `photos` URLs become originals. URLs we don't own (unsplash seeds,
  * base64 data URLs from the uploader's offline fallback) are marked `external`
  * and keep their public URL — we never re-host or watermark someone else's asset.
+ *
+ * Owned URLs get `p = url`, NOT `p = null`. These URLs came *out of*
+ * `listings.photos`, which means they are already public; recording them as
+ * unpublished is the lie that let `persist()` delete a live gallery the moment a
+ * re-check returned anything other than `passed`. `v` stays `queued` because
+ * they genuinely have not been judged — that pair (`queued` with a `p`) is
+ * exactly "already visible, grandfathered in", and is what makes the whole
+ * re-check path non-destructive.
  */
 export function manifestFromLegacyPhotos(photos: string[]): PhotoManifestEntry[] {
   return photos.map((url) =>
     isOwnedUrl(url)
-      ? { o: url, p: null, h: null, v: 'queued' as const, wa: isWhatsAppUrl(url) }
+      ? { o: url, p: url, h: null, v: 'queued' as const, wa: isWhatsAppUrl(url) }
       : { o: url, p: url, h: null, v: 'external' as const }
   );
 }
 
-/** The public `photos` array: everything currently publishable, in manifest order. */
+/**
+ * The public `photos` array: everything currently publishable, in manifest order.
+ *
+ * `p` DECIDES publication; `v` only vetoes. A newly-arrived photo has `p: null`
+ * and is therefore invisible until it passes and gets its derived URL, while a
+ * grandfathered one carries `p` and stays visible through a re-check. Filtering
+ * on `v === 'pass'` instead would unpublish every photo the current run did not
+ * personally judge.
+ */
 export function derivePhotos(entries: PhotoManifestEntry[]): string[] {
-  return entries
-    .filter((e) => (e.v === 'pass' || e.v === 'external') && e.p)
-    .map((e) => e.p as string);
+  return entries.filter((e) => e.p && e.v !== 'reject').map((e) => e.p as string);
+}
+
+/**
+ * Bring `photos` URLs that no manifest entry accounts for under management.
+ *
+ * Matching is on BOTH `o` and `p`: a passed entry's live URL is its derived
+ * `p`, so matching only originals would re-adopt every processed photo as a
+ * duplicate. An orphan is adopted, never dropped — a reader that finds a URL it
+ * cannot explain must assume the manifest is incomplete, not that the photo is
+ * unwanted.
+ */
+export function adoptOrphanPhotos(
+  existing: PhotoManifestEntry[],
+  photos: string[]
+): { entries: PhotoManifestEntry[]; adopted: number } {
+  const known = new Set<string>();
+  for (const e of existing) {
+    known.add(e.o);
+    if (e.p) known.add(e.p);
+  }
+
+  const orphans: string[] = [];
+  for (const url of photos) {
+    if (known.has(url)) continue;
+    known.add(url); // a URL repeated in `photos` is adopted once
+    orphans.push(url);
+  }
+
+  const adoptedEntries = manifestFromLegacyPhotos(orphans);
+  return { entries: [...existing, ...adoptedEntries], adopted: adoptedEntries.length };
+}
+
+/**
+ * Fold a moderation run's results into the row as it stands NOW.
+ *
+ * The run may have taken minutes, during which photos can have been appended or
+ * removed. So the freshly-read row owns membership and order, and the run owns
+ * verdicts — but only for the URLs it actually evaluated. Two consequences that
+ * are easy to get wrong:
+ *
+ *  - entries present in `run` but absent from `fresh` are NOT resurrected, or a
+ *    concurrent deletion would silently come back;
+ *  - entries `fresh` has that the run never saw stay untouched and are counted
+ *    in `unevaluatedQueued`, which is the caller's signal to re-queue rather
+ *    than declare the listing checked.
+ */
+export function mergeRunIntoFresh(
+  fresh: PhotoManifestEntry[],
+  run: PhotoManifestEntry[],
+  evaluated: Set<string>,
+  freshPhotos: string[]
+): { entries: PhotoManifestEntry[]; adopted: number; unevaluatedQueued: number } {
+  const runByUrl = new Map(run.map((e) => [e.o, e]));
+  const merged = fresh.map((e) => (evaluated.has(e.o) ? runByUrl.get(e.o) ?? e : e));
+
+  const { entries, adopted } = adoptOrphanPhotos(merged, freshPhotos);
+  const unevaluatedQueued = entries.filter(
+    (e) => e.v === 'queued' && !evaluated.has(e.o)
+  ).length;
+
+  return { entries, adopted, unevaluatedQueued };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { combine, summarize } from '@/lib/moderation/verdict';
+import { combine, nextListingStatus, summarize } from '@/lib/moderation/verdict';
 import type { ImageVerdict, ModerationPolicy, TextVerdict } from '@/lib/moderation/types';
 
 /** The whole policy matrix from the plan, as a table. No I/O anywhere. */
@@ -221,5 +221,104 @@ describe('summarize', () => {
     const long = 'x'.repeat(500);
     const v = call({ text: { ...okText, titleCoherent: false, reasons: [long] } });
     expect(summarize(v).length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe('combine — holdReason tags every hold path', () => {
+  it('unsafe imagery', () => {
+    const v = call({
+      images: [img('a', { verdict: 'reject', severity: 'safety', reasons: ['nudity'] })],
+    });
+    expect(v.outcome).toBe('held');
+    expect(v.holdReason).toBe('unsafe_image');
+  });
+
+  it('unsupported language', () => {
+    const v = call({ text: { ...okText, languageSupported: false, language: 'fr' } });
+    expect(v.holdReason).toBe('language');
+  });
+
+  it('not a rental', () => {
+    const v = call({ text: { ...okText, looksLikeRental: false } });
+    expect(v.holdReason).toBe('not_rental');
+  });
+
+  it('incoherent title or location', () => {
+    expect(call({ text: { ...okText, titleCoherent: false } }).holdReason).toBe('incoherent');
+    expect(call({ text: { ...okText, locationCoherent: false } }).holdReason).toBe('incoherent');
+  });
+
+  it('is absent when nothing is held', () => {
+    expect(call({ images: [img('a')] }).holdReason).toBeUndefined();
+  });
+});
+
+describe('combine — over-cap photos', () => {
+  it('are dropped and explained without holding the listing', () => {
+    const v = call({ images: [img('a')], cappedOutUrls: ['x', 'y'] });
+    expect(v.outcome).toBe('passed');
+    expect(v.holdReason).toBeUndefined();
+    expect(v.droppedUrls).toEqual(['x', 'y']);
+    // The landlord is actually told — the old code appended this after
+    // combine() returned, so the message never reached them.
+    expect(v.landlordReasons.join(' ')).toMatch(/6 photos per listing/);
+    expect(v.landlordReasons.join(' ')).toMatch(/swap/i);
+  });
+
+  it('are still reported as dropped when the listing is held for another reason', () => {
+    const v = call({ text: { ...okText, looksLikeRental: false }, cappedOutUrls: ['x'] });
+    expect(v.outcome).toBe('held');
+    expect(v.droppedUrls).toEqual(['x']);
+  });
+
+  it('says "one" for a single leftover', () => {
+    const v = call({ cappedOutUrls: ['x'] });
+    expect(v.landlordReasons.join(' ')).toMatch(/last one wasn/);
+  });
+});
+
+describe('nextListingStatus — a re-check may only take a live listing dark for safety', () => {
+  const verdict = (over: Partial<Parameters<typeof combine>[0]> = {}) => call(over);
+
+  it('publishes a fresh pass when auto-publish is on', () => {
+    expect(
+      nextListingStatus({ wasLive: false, verdict: verdict(), autoPublish: true })
+    ).toBe('active');
+  });
+
+  it('parks a fresh pass for review when auto-publish is off', () => {
+    expect(
+      nextListingStatus({ wasLive: false, verdict: verdict(), autoPublish: false })
+    ).toBe('pending');
+  });
+
+  it('leaves a live listing alone on a text hold', () => {
+    const v = verdict({ text: { ...okText, titleCoherent: false } });
+    expect(nextListingStatus({ wasLive: true, verdict: v, autoPublish: true })).toBeNull();
+  });
+
+  it('takes a live listing dark on unsafe imagery', () => {
+    const v = verdict({
+      images: [img('a', { verdict: 'reject', severity: 'safety', reasons: ['nudity'] })],
+    });
+    expect(nextListingStatus({ wasLive: true, verdict: v, autoPublish: true })).toBe('pending');
+  });
+
+  it('keeps a held first-time listing unpublished', () => {
+    const v = verdict({ text: { ...okText, looksLikeRental: false } });
+    expect(nextListingStatus({ wasLive: false, verdict: v, autoPublish: true })).toBe('pending');
+  });
+
+  it('has no opinion when the run errored', () => {
+    const v = verdict({ providerError: 'timeout' });
+    expect(v.outcome).toBe('error');
+    expect(nextListingStatus({ wasLive: true, verdict: v, autoPublish: true })).toBeNull();
+    expect(nextListingStatus({ wasLive: false, verdict: v, autoPublish: true })).toBeNull();
+  });
+
+  it('keeps a live listing live when it passes', () => {
+    expect(
+      nextListingStatus({ wasLive: true, verdict: verdict(), autoPublish: false })
+    ).toBe('active');
   });
 });
