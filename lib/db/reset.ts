@@ -108,6 +108,7 @@ async function reset() {
     '0031_auth_user_trigger_hardening.sql',
     '0032_listing_moderation.sql',
     '0033_intake_location_pin.sql',
+    '0034_moderation_coverage.sql',
   ];
 
   function splitStatements(sql: string): string[] {
