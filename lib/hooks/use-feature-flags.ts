@@ -22,3 +22,15 @@ export function useFeatureFlag(flag: FeatureFlag): boolean {
   const value = data?.flags?.[flag] ?? featureFlagDefaults[flag];
   return typeof value === 'boolean' ? value : Boolean(value);
 }
+
+/**
+ * Same, but preserving the value's type — `useFeatureFlag` coerces to boolean
+ * and so cannot carry a number like `maxPhotosPerListing`.
+ */
+export function useFeatureValue<K extends FeatureFlag>(flag: K): FeatureFlags[K] {
+  const { data } = useSWR<{ flags: Partial<FeatureFlags> }>(
+    '/api/feature-flags',
+    fetcher
+  );
+  return (data?.flags?.[flag] ?? featureFlagDefaults[flag]) as FeatureFlags[K];
+}

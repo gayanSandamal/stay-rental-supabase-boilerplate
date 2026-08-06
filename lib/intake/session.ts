@@ -15,6 +15,16 @@ import {
   type ConversationPayload,
 } from './commands';
 import type { NormalizedInboundMessage } from './channels/types';
+import { isFeatureEnabled } from '@/lib/feature-flags';
+import { capHeadroom, photoCap } from '@/lib/images/cap';
+import {
+  adoptOrphanPhotos,
+  appendQueued,
+  parseManifest,
+  parsePhotos,
+  serializeManifest,
+} from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 
 /** Messages from the same sender within this window append to one intake. */
 export const SESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
@@ -85,6 +95,18 @@ export interface AppendOutcome {
   /** Photos persisted / photo downloads that failed (all actions). */
   mediaStored: number;
   mediaFailed: number;
+  /**
+   * Photos refused because the listing is at `maxPhotosPerListing`. Distinct
+   * from `mediaFailed` on purpose — the webhook tells the sender to resend
+   * anything that failed, and telling them to resend a photo we deliberately
+   * refused would loop forever.
+   */
+  mediaOverCap?: number;
+  /**
+   * Photos attached but held back for moderation, so they are NOT in the
+   * gallery yet. The reply has to say "checking" rather than "added".
+   */
+  mediaQueued?: number;
 }
 
 const parseArr = (s: string | null | undefined): string[] => {
@@ -529,15 +551,43 @@ export async function appendToIntake(
   const base: AppendOutcome = { ...outcome, mediaStored: 0, mediaFailed: 0 };
   if (base.action === 'duplicate' || msg.mediaIds.length === 0) return base;
 
+  // Headroom FIRST, so over-cap bytes are never downloaded — nothing lands in
+  // storage that no manifest entry will ever account for. Only the
+  // append-to-a-listing actions have a listing to measure against; a still-open
+  // intake is capped later, at publish (lib/intake/process.ts).
+  let acceptIds = msg.mediaIds;
+  if ((base.action === 'attach_media' || base.action === 'edit_link') && base.listingId) {
+    const target = await db.query.listings.findFirst({
+      where: eq(listings.id, base.listingId),
+      columns: { photos: true, photosManifest: true },
+    });
+    if (target) {
+      // Count the manifest, not `photos`: photos already queued for checking
+      // are absent from the gallery but do occupy a slot.
+      const manifest = adoptOrphanPhotos(
+        parseManifest(target.photosManifest),
+        parsePhotos(target.photos)
+      ).entries;
+      const occupied = manifest.filter((e) => e.v !== 'reject').length;
+      const headroom = capHeadroom(occupied, photoCap());
+      if (Number.isFinite(headroom) && msg.mediaIds.length > headroom) {
+        acceptIds = msg.mediaIds.slice(0, headroom);
+        base.mediaOverCap = msg.mediaIds.length - acceptIds.length;
+      }
+    }
+  }
+
   // Phase 2 — download media OUTSIDE any transaction (Graph fetches take
   // seconds; a held row lock or pooled connection would serialize the world).
   const mediaUrls: string[] = [];
-  for (const mediaId of msg.mediaIds) {
+  for (const mediaId of acceptIds) {
     const url = await persistMedia(mediaId);
     if (url) mediaUrls.push(url);
   }
   base.mediaStored = mediaUrls.length;
-  base.mediaFailed = msg.mediaIds.length - mediaUrls.length;
+  // Against acceptIds, not mediaIds: an over-cap refusal is not a failed
+  // download and must not be reported as one.
+  base.mediaFailed = acceptIds.length - mediaUrls.length;
   if (mediaUrls.length === 0) return base;
 
   // Phase 3 — attach URLs under the lock (concurrent album siblings each
@@ -561,6 +611,34 @@ export async function appendToIntake(
         where: eq(listings.id, base.listingId),
       });
       if (!listing) return;
+      base.listingTitle = listing.title;
+
+      if (isFeatureEnabled('enableListingModeration') && isModerationConfigured()) {
+        // Queued, NOT published: `p = null` keeps the photo out of the gallery
+        // until it passes (~2 min), while `photos` and the listing's status are
+        // left exactly as they are — sending a photo must never disturb a live
+        // listing. This is the gap that let unchecked photos onto listing #7.
+        const manifest = adoptOrphanPhotos(
+          parseManifest(listing.photosManifest),
+          parsePhotos(listing.photos)
+        ).entries;
+        await tx
+          .update(listings)
+          .set({
+            photosManifest: serializeManifest(appendQueued(manifest, mediaUrls, { wa: true })),
+            // Flipping a 'running' row would let the next cron claim a listing
+            // already in flight; persist()'s unevaluated-queued re-queue covers
+            // that case instead.
+            moderationStatus: sql`CASE WHEN ${listings.moderationStatus} = 'running' THEN 'running'::listing_moderation_status ELSE 'queued'::listing_moderation_status END`,
+            moderationAttempts: 0,
+            updatedAt: new Date(),
+          })
+          .where(eq(listings.id, listing.id));
+        base.mediaQueued = mediaUrls.length;
+        return;
+      }
+
+      // Unarmed: today's exact behaviour, byte for byte.
       const existing = parseArr(typeof listing.photos === 'string' ? listing.photos : null);
       await tx
         .update(listings)
@@ -569,7 +647,6 @@ export async function appendToIntake(
           updatedAt: new Date(),
         })
         .where(eq(listings.id, listing.id));
-      base.listingTitle = listing.title;
     }
   });
 

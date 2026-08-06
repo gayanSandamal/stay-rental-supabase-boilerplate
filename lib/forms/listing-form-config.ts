@@ -365,9 +365,11 @@ export const listingFormConfig: FormConfig = {
       label: 'Upload Photos',
       type: 'image-upload',
       required: false,
-      maxImages: 6,
+      // No maxImages / no count in the help text: the uploader reads
+      // `maxPhotosPerListing` itself and states the limit, so hardcoding it here
+      // would go stale the moment ops change the flag.
       maxSizeInMB: 5,
-      helpText: 'Upload up to 6 photos of your property (optional). Images will be automatically compressed and optimized.',
+      helpText: 'Add photos of your property (optional). Images are automatically compressed and optimized.',
       defaultValue: [],
     },
 

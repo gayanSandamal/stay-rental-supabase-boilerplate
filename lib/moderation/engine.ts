@@ -4,9 +4,16 @@
  *
  * Runs from a cron sweeper rather than inline in POST/PUT /api/listings: a
  * 6-photo listing is ~8-12s of work (downloads + vision calls + sharp + uploads)
- * and the create request would time out. Both the web form and the WhatsApp
- * intake already converge on status='pending', so a queue needs no changes at
- * either call site.
+ * and the create request would time out.
+ *
+ * THE SWEEPER KEYS OFF `moderation_status`, NOT `status`. `claimListings` only
+ * ever claims 'queued', and the column defaults to 'skipped' — so every write
+ * that creates a listing or adds a photo must enqueue it explicitly. This
+ * comment used to claim that converging on status='pending' was enough, which
+ * is why nothing enqueued and four production listings went live having never
+ * been checked. The enqueue points are: lib/intake/process.ts (create),
+ * lib/intake/session.ts (photos after publish), POST /api/listings, and
+ * PUT /api/listings/[id].
  */
 
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -15,8 +22,11 @@ import { listings, listingModerations, whatsappIntakes } from '@/lib/db/schema';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { processListingImage } from '@/lib/images/process';
+import { capReason, photoCap } from '@/lib/images/cap';
 import {
+  adoptOrphanPhotos,
   derivePhotos,
+  mergeRunIntoFresh,
   parseManifest,
   parsePhotos,
   manifestFromLegacyPhotos,
@@ -32,7 +42,7 @@ import {
 } from './config';
 import { checkImage } from './image-check';
 import { checkText } from './text-check';
-import { combine, summarize } from './verdict';
+import { combine, nextListingStatus, summarize } from './verdict';
 import { PROMPT_VERSION } from './prompts';
 import { MODERATION_IMAGE_MODEL } from './config';
 import { notifyModerationOutcome } from './notify';
@@ -54,7 +64,8 @@ function policyFromFlags(): ModerationPolicy {
     moderateTextCoherence: isFeatureEnabled('moderateTextCoherence'),
     holdOnUnsafeImages: isFeatureEnabled('holdOnUnsafeImages'),
     failOpen: isFeatureEnabled('moderationFailOpen'),
-    maxImages: Number(getFeatureValue('moderationMaxImagesPerListing') ?? 6),
+    // Same number the upload paths enforce — see lib/images/cap.ts.
+    maxImages: photoCap(),
   };
 }
 
@@ -85,11 +96,18 @@ export async function claimListings(limit: number): Promise<ListingRow[]> {
   return db.query.listings.findMany({ where: inArray(listings.id, ids) });
 }
 
-/** Ensure a manifest exists; legacy rows get one built from `photos`. */
+/**
+ * Every URL in `photos` must have a manifest entry (invariant I2).
+ *
+ * ALWAYS adopts — the old version returned early whenever the manifest was
+ * non-empty, so a partially-covered row (listing #7: 8 photos, 1 entry) kept
+ * its gap, and `persist()` writing `derivePhotos(manifest)` would have deleted
+ * the seven uncovered photos. A manifest that under-covers `photos` is the
+ * dangerous case, not the empty one.
+ */
 function ensureManifest(listing: ListingRow): PhotoManifestEntry[] {
-  const existing = parseManifest(listing.photosManifest);
-  if (existing.length) return existing;
-  return manifestFromLegacyPhotos(parsePhotos(listing.photos));
+  return adoptOrphanPhotos(parseManifest(listing.photosManifest), parsePhotos(listing.photos))
+    .entries;
 }
 
 export async function moderateListing(listing: ListingRow): Promise<ModerationVerdict> {
@@ -108,6 +126,10 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
   const checkable = overCap > 0 ? queued.slice(0, Math.max(0, queued.length - overCap)) : queued;
   const cappedOut = queued.slice(checkable.length);
 
+  // URLs this run actually reached a conclusion about. Anything outside this set
+  // keeps whatever the row says — see mergeRunIntoFresh.
+  const evaluated = new Set<string>();
+
   // --- images -------------------------------------------------------------
   const imageVerdicts: ImageVerdict[] = [];
   const bytesByUrl = new Map<string, Buffer>();
@@ -117,7 +139,11 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
       const fetched = await fetchOriginal(entry.o);
       if (!fetched) {
         // Could not read the original: leave it alone rather than reject it.
+        // 'skipped' (not 'queued') so the queue cannot spin on it forever, but
+        // say so, or the photo just quietly never appears.
         entry.v = 'skipped';
+        entry.r = 'We could not open this photo. Please send it again.';
+        evaluated.add(entry.o);
         continue;
       }
       bytesByUrl.set(entry.o, fetched.buffer);
@@ -129,6 +155,7 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
       usage.outputTokens += outcome.usage.outputTokens;
       if (outcome.error && outcome.error !== 'not_configured') providerError ??= outcome.error;
       imageVerdicts.push(outcome.verdict);
+      evaluated.add(entry.o);
     }
   } else {
     // Images not checked: they still need processing, so fetch them anyway.
@@ -136,6 +163,8 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
       const fetched = await fetchOriginal(entry.o);
       if (!fetched) {
         entry.v = 'skipped';
+        entry.r = 'We could not open this photo. Please send it again.';
+        evaluated.add(entry.o);
         continue;
       }
       bytesByUrl.set(entry.o, fetched.buffer);
@@ -147,6 +176,7 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
         reasons: [],
         fromCache: false,
       });
+      evaluated.add(entry.o);
     }
   }
 
@@ -168,6 +198,18 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
     textVerdict = outcome.verdict;
   }
 
+  // Cap-outs are settled BEFORE combine so they land in `droppedUrls` and in the
+  // landlord's message. Mutating `verdict.reasons` afterwards (as this used to)
+  // meant the sender was never told and `imagesDropped` undercounted.
+  for (const e of cappedOut) {
+    e.v = 'reject';
+    e.r = capReason(policy.maxImages);
+    e.sev = 'cosmetic';
+    e.pv = PROMPT_VERSION;
+    e.p = null;
+    evaluated.add(e.o);
+  }
+
   const verdict = combine({
     text: textVerdict,
     images: imageVerdicts,
@@ -178,17 +220,8 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
     durationMs: Date.now() - started,
     providerError,
     existingKeptUrls: alreadyKept.map((e) => e.p ?? e.o),
+    cappedOutUrls: cappedOut.map((e) => e.o),
   });
-
-  if (cappedOut.length) {
-    for (const e of cappedOut) {
-      e.v = 'reject';
-      e.r = `only ${policy.maxImages} photos can be published per listing`;
-      e.sev = 'cosmetic';
-      e.pv = PROMPT_VERSION;
-    }
-    verdict.reasons.push(`${cappedOut.length} photo(s) beyond the ${policy.maxImages}-photo cap.`);
-  }
 
   // --- apply verdicts to the manifest ------------------------------------
   const byUrl = new Map(imageVerdicts.map((v) => [v.originalUrl, v]));
@@ -266,60 +299,162 @@ export async function moderateListing(listing: ListingRow): Promise<ModerationVe
     }
   }
 
-  await persist(listing, manifest, verdict);
+  // persist() owns the notification too — it is the only place that knows
+  // whether the listing was already live and how many photos actually appeared.
+  await persist(listing, manifest, verdict, evaluated);
   return verdict;
+}
+
+/** What persist() decided, so the caller can notify accordingly. */
+interface PersistOutcome {
+  wasLive: boolean;
+  /** Newly published URLs this run — an incremental add, not a first publish. */
+  added: number;
+  /** The write was refused because photos would have vanished unexplained. */
+  refused: boolean;
 }
 
 async function persist(
   listing: ListingRow,
-  manifest: PhotoManifestEntry[],
-  verdict: ModerationVerdict
-): Promise<void> {
+  runManifest: PhotoManifestEntry[],
+  verdict: ModerationVerdict,
+  evaluated: Set<string>
+): Promise<PersistOutcome> {
   const now = new Date();
-  const publishable = derivePhotos(manifest);
+  const result: PersistOutcome = { wasLive: false, added: 0, refused: false };
 
-  const base = {
-    photosManifest: serializeManifest(manifest),
-    photos: publishable.length ? JSON.stringify(publishable) : null,
-    moderationSummary: summarize(verdict),
-    moderationLanguage: verdict.language ?? null,
-    moderatedAt: now,
-    moderationLeaseUntil: null,
-    updatedAt: now,
-  };
+  await db.transaction(async (tx) => {
+    // Re-read under a row lock. A run takes minutes; photos can have been
+    // appended or deleted since it started, and the row as it stands NOW owns
+    // membership and order (invariant I5).
+    const [fresh] = await tx
+      .select()
+      .from(listings)
+      .where(eq(listings.id, listing.id))
+      .for('update');
+    if (!fresh) return;
 
-  if (verdict.outcome === 'passed') {
-    const autoPublish = isFeatureEnabled('autoPublishWhatsAppIntakes');
-    const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
-    const goLive = autoPublish || listing.status === 'active';
-    await db
-      .update(listings)
-      .set({
-        ...base,
-        moderationStatus: 'passed',
-        ...(goLive
-          ? {
-              status: 'active' as const,
-              publishedAt: listing.publishedAt ?? now,
-              expiresAt:
-                listing.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
-            }
-          : { status: 'pending' as const }),
-      })
-      .where(eq(listings.id, listing.id));
-  } else if (verdict.outcome === 'error') {
-    // Retry until the cap, then hold so the queue can't spin forever.
-    const exhausted = (listing.moderationAttempts ?? 0) >= MODERATION_MAX_ATTEMPTS;
-    await db
-      .update(listings)
-      .set({ ...base, moderationStatus: exhausted ? 'held' : 'queued' })
-      .where(eq(listings.id, listing.id));
-  } else {
-    await db
-      .update(listings)
-      .set({ ...base, moderationStatus: 'held', status: 'pending' })
-      .where(eq(listings.id, listing.id));
-  }
+    result.wasLive = fresh.status === 'active';
+    const freshPhotos = parsePhotos(fresh.photos);
+
+    const { entries, unevaluatedQueued } = mergeRunIntoFresh(
+      adoptOrphanPhotos(parseManifest(fresh.photosManifest), freshPhotos).entries,
+      runManifest,
+      evaluated,
+      freshPhotos
+    );
+
+    const publishable = derivePhotos(entries);
+
+    // --- retraction guard (invariant I4) ---------------------------------
+    // A URL may only leave `photos` for a reason we can name. Anything else is
+    // a bug in this function, and the correct response to "I am about to delete
+    // a landlord's photos for reasons I cannot explain" is to not do it.
+    const after = new Set(publishable);
+    const byAnyUrl = new Map<string, PhotoManifestEntry>();
+    for (const e of entries) {
+      byAnyUrl.set(e.o, e);
+      if (e.p) byAnyUrl.set(e.p, e);
+    }
+    const unexplained = freshPhotos.filter((url) => {
+      if (after.has(url)) return false;
+      const entry = byAnyUrl.get(url);
+      if (!entry) return true; // no entry at all — adoption should have covered this
+      if (entry.v === 'reject') return false; // dropped, with a reason
+      if (entry.p && after.has(entry.p)) return false; // replaced by its derivative
+      return true;
+    });
+
+    const summary = summarize(verdict);
+
+    if (unexplained.length) {
+      console.error(
+        '[moderation] refusing to retract photos',
+        listing.id,
+        unexplained.slice(0, 3)
+      );
+      result.refused = true;
+      // Write the manifest (it is strictly more informed than what is there)
+      // but NOT `photos`, and park it for a human.
+      await tx
+        .update(listings)
+        .set({
+          photosManifest: serializeManifest(entries),
+          moderationStatus: 'error',
+          moderationSummary:
+            `Refused to unpublish ${unexplained.length} photo(s) without a reason — needs review`.slice(
+              0,
+              200
+            ),
+          moderationLeaseUntil: null,
+          moderatedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(listings.id, listing.id));
+      return;
+    }
+
+    result.added = publishable.filter((u) => !freshPhotos.includes(u)).length;
+
+    const base = {
+      photosManifest: serializeManifest(entries),
+      photos: publishable.length ? JSON.stringify(publishable) : null,
+      moderationSummary: summary,
+      moderationLanguage: verdict.language ?? null,
+      moderatedAt: now,
+      moderationLeaseUntil: null,
+      updatedAt: now,
+    };
+
+    const nextStatus = nextListingStatus({
+      wasLive: result.wasLive,
+      verdict,
+      autoPublish: isFeatureEnabled('autoPublishWhatsAppIntakes'),
+    });
+
+    if (verdict.outcome === 'passed') {
+      const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
+      const goLive = nextStatus === 'active';
+      await tx
+        .update(listings)
+        .set({
+          ...base,
+          // Photos that arrived mid-run were never judged, so this listing is
+          // NOT fully checked — go round again rather than claim it is.
+          moderationStatus: unevaluatedQueued > 0 ? 'queued' : 'passed',
+          // Consecutive failures are what the attempt cap is for; a successful
+          // pass has to clear the counter or incremental re-checks burn it down.
+          moderationAttempts: 0,
+          ...(goLive
+            ? {
+                status: 'active' as const,
+                publishedAt: fresh.publishedAt ?? now,
+                expiresAt:
+                  fresh.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
+              }
+            : { status: 'pending' as const }),
+        })
+        .where(eq(listings.id, listing.id));
+    } else if (verdict.outcome === 'error') {
+      // Retry until the cap, then hold so the queue can't spin forever.
+      const exhausted = (fresh.moderationAttempts ?? 0) >= MODERATION_MAX_ATTEMPTS;
+      await tx
+        .update(listings)
+        .set({ ...base, moderationStatus: exhausted ? 'held' : 'queued' })
+        .where(eq(listings.id, listing.id));
+    } else {
+      await tx
+        .update(listings)
+        .set({
+          ...base,
+          moderationStatus: 'held',
+          // null = leave it alone: a live listing must not go dark because a
+          // text check wobbled (I7).
+          ...(nextStatus ? { status: nextStatus } : {}),
+        })
+        .where(eq(listings.id, listing.id));
+    }
+  });
 
   try {
     await db.insert(listingModerations).values({
@@ -360,10 +495,12 @@ async function persist(
         reasons: verdict.reasons.slice(0, 3),
       });
     }
-    await notifyModerationOutcome(listing, verdict);
+    await notifyModerationOutcome(listing, verdict, result);
   } catch (err) {
     console.error('[moderation] post-decision follow-up failed', listing.id, err);
   }
+
+  return result;
 }
 
 /** Cron entry point. */

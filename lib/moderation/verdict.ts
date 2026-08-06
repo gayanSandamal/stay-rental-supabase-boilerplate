@@ -29,6 +29,12 @@ export interface CombineInput {
   providerError?: string | null;
   /** Photos already published and previously passed (an edit adding new ones). */
   existingKeptUrls?: string[];
+  /**
+   * Photos refused for being over `maxPhotosPerListing`. Passed IN rather than
+   * appended afterwards: the caller used to mutate `reasons` after `combine`
+   * returned, so the landlord was never told and `imagesDropped` undercounted.
+   */
+  cappedOutUrls?: string[];
 }
 
 export function combine(input: CombineInput): ModerationVerdict {
@@ -42,6 +48,7 @@ export function combine(input: CombineInput): ModerationVerdict {
     durationMs,
     providerError,
     existingKeptUrls = [],
+    cappedOutUrls = [],
   } = input;
 
   const reasons: string[] = [];
@@ -85,6 +92,11 @@ export function combine(input: CombineInput): ModerationVerdict {
   const passed = images.filter((i) => i.verdict === 'pass');
   const unsafe = rejected.filter((i) => i.severity === 'safety');
 
+  // Over-cap photos are dropped in every outcome, so fold them in once here.
+  // They must never influence WHETHER we publish — being over a limit is an
+  // administrative fact, not a moderation failure.
+  const withCapped = (urls: string[]) => [...urls, ...cappedOutUrls];
+
   // 1. Safety trumps everything: a photo containing nudity/violence/harassment
   //    says something about the submitter, so publishing their other photos is
   //    worse than holding the listing for a human.
@@ -100,9 +112,10 @@ export function combine(input: CombineInput): ModerationVerdict {
     return {
       ...base,
       outcome: 'held',
+      holdReason: 'unsafe_image',
       reasons,
       landlordReasons,
-      droppedUrls: rejected.map((i) => i.originalUrl),
+      droppedUrls: withCapped(rejected.map((i) => i.originalUrl)),
       keptUrls: existingKeptUrls,
     };
   }
@@ -115,9 +128,10 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'language',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: withCapped([]),
         keptUrls: existingKeptUrls,
       };
     }
@@ -127,9 +141,10 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'not_rental',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: withCapped([]),
         keptUrls: existingKeptUrls,
       };
     }
@@ -140,12 +155,23 @@ export function combine(input: CombineInput): ModerationVerdict {
       return {
         ...base,
         outcome: 'held',
+        holdReason: 'incoherent',
         reasons,
         landlordReasons,
-        droppedUrls: [],
+        droppedUrls: withCapped([]),
         keptUrls: existingKeptUrls,
       };
     }
+  }
+
+  // 2b. Over the photo limit: say so plainly, and say how to swap.
+  if (cappedOutUrls.length) {
+    const n = cappedOutUrls.length;
+    reasons.push(`${n} photo(s) beyond the ${policy.maxImages}-photo limit.`);
+    landlordReasons.push(
+      `We can show ${policy.maxImages} photos per listing, so the last ${n === 1 ? 'one wasn’t' : `${n} weren’t`} used. ` +
+        'Reply here any time to swap a photo for one of them.'
+    );
   }
 
   // 3. Cosmetic image failures: drop them, publish the rest (owner decision).
@@ -173,7 +199,7 @@ export function combine(input: CombineInput): ModerationVerdict {
     outcome: 'passed',
     reasons: reasons.length ? reasons : ['All automated checks passed.'],
     landlordReasons,
-    droppedUrls: rejected.map((i) => i.originalUrl),
+    droppedUrls: withCapped(rejected.map((i) => i.originalUrl)),
     keptUrls,
   };
 }
@@ -191,4 +217,35 @@ export function summarize(v: ModerationVerdict): string {
   if (v.outcome === 'held') return v.reasons[0]?.slice(0, 200) ?? 'Held for review';
   if (v.outcome === 'error') return `Moderation error: ${v.errorMessage ?? 'unknown'}`.slice(0, 200);
   return 'Moderation skipped';
+}
+
+/**
+ * What `listings.status` should become. `null` means LEAVE IT ALONE.
+ *
+ * The load-bearing rule (I7) is the `wasLive` branch: once a listing is public,
+ * a re-check may only take it dark for a SAFETY problem. Re-checks now happen
+ * routinely — every time a landlord WhatsApps another photo — so treating a
+ * flaky title-coherence read as grounds for unpublishing would mean a landlord
+ * sending a nice photo of their kitchen can knock their own listing off the
+ * site. Cosmetic problems drop the photo; text problems raise a flag for ops
+ * and the listing stays up.
+ */
+export function nextListingStatus(input: {
+  wasLive: boolean;
+  verdict: ModerationVerdict;
+  autoPublish: boolean;
+}): 'active' | 'pending' | null {
+  const { wasLive, verdict, autoPublish } = input;
+
+  if (verdict.outcome === 'passed') {
+    // Already live stays live; a first publish needs the auto-publish flag.
+    return autoPublish || wasLive ? 'active' : 'pending';
+  }
+  if (verdict.outcome === 'held') {
+    if (verdict.holdReason === 'unsafe_image') return 'pending'; // dark, always
+    return wasLive ? null : 'pending';
+  }
+  // error / skipped: the run reached no conclusion, so it gets no opinion on
+  // visibility. It will be retried.
+  return null;
 }

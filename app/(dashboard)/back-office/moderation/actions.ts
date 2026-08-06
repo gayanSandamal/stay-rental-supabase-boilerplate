@@ -8,7 +8,13 @@ import { getUser } from '@/lib/db/queries';
 import { getFeatureValue } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { PROMPT_VERSION } from '@/lib/moderation/prompts';
-import { derivePhotos, parseManifest, serializeManifest } from '@/lib/images/manifest';
+import {
+  adoptOrphanPhotos,
+  derivePhotos,
+  parseManifest,
+  parsePhotos,
+  serializeManifest,
+} from '@/lib/images/manifest';
 
 async function requireStaff() {
   const user = await getUser();
@@ -27,11 +33,29 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
 
   const now = new Date();
   const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
+
+  // "Publish anyway" means the reviewer looked at these photos and accepted
+  // them — so the queued ones have to become published, not just the listing.
+  // Without this the listing went live WITHOUT the very photos on screen.
+  const entries = adoptOrphanPhotos(
+    parseManifest(listing.photosManifest),
+    parsePhotos(listing.photos)
+  ).entries;
+  for (const e of entries) {
+    if (e.v === 'queued') {
+      e.v = 'pass';
+      e.p = e.p ?? e.o; // unprocessed, but visible — the next pass can derive it
+    }
+  }
+  const publishable = derivePhotos(entries);
+
   await db
     .update(listings)
     .set({
       status: 'active',
       moderationStatus: 'passed',
+      photosManifest: serializeManifest(entries),
+      photos: publishable.length ? JSON.stringify(publishable) : null,
       moderationSummary: `Published by ${user.role} override`,
       publishedAt: listing.publishedAt ?? now,
       expiresAt: listing.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
@@ -71,7 +95,12 @@ export async function restorePhotoAction(formData: FormData): Promise<void> {
   const listing = await db.query.listings.findFirst({ where: eq(listings.id, id) });
   if (!listing || !originalUrl) return;
 
-  const manifest = parseManifest(listing.photosManifest);
+  // Adopt first: writing derivePhotos() from a manifest that under-covers
+  // `photos` would drop the uncovered photos as a side effect of restoring one.
+  const manifest = adoptOrphanPhotos(
+    parseManifest(listing.photosManifest),
+    parsePhotos(listing.photos)
+  ).entries;
   const entry = manifest.find((e) => e.o === originalUrl);
   if (!entry) return;
 

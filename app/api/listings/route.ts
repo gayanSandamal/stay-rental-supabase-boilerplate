@@ -11,6 +11,9 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
+import { photoCap } from '@/lib/images/cap';
+import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
+import { isModerationConfigured } from '@/lib/moderation/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,6 +91,27 @@ export async function POST(request: NextRequest) {
     if (!contactNumbers || !Array.isArray(contactNumbers) || contactNumbers.length === 0) {
       return NextResponse.json(
         { error: 'At least one contact number is required' },
+        { status: 400 }
+      );
+    }
+
+    // The authoritative photo cap. /api/upload only limits a single request, so
+    // a client could upload six at a time twice and submit twelve here; this is
+    // where that is actually closed.
+    const submittedPhotos: string[] = Array.isArray(photos) ? photos : [];
+    // "Armed" = the checks can actually run (I6). Flag on without a provider key
+    // would park photos as queued forever with no checker to release them.
+    const moderationArmed =
+      isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+    const cap = photoCap();
+    if (submittedPhotos.length > cap) {
+      return NextResponse.json(
+        {
+          error: `A listing can have at most ${cap} photos`,
+          code: 'PHOTO_LIMIT_EXCEEDED',
+          max: cap,
+          submitted: submittedPhotos.length,
+        },
         { status: 400 }
       );
     }
@@ -186,9 +210,19 @@ export async function POST(request: NextRequest) {
         parkingSpaces: toNumberOrNull(parkingSpaces),
         petsAllowed: Boolean(petsAllowed),
         noticePeriodDays: toNumberOrNull(noticePeriodDays) ?? 30,
-        photos: photos && Array.isArray(photos) && photos.length > 0 
-          ? JSON.stringify(photos) 
-          : null,
+        photos: submittedPhotos.length > 0 ? JSON.stringify(submittedPhotos) : null,
+        // ENQUEUE ON CREATE. `moderation_status` defaults to 'skipped' and
+        // `claimListings` only ever claims 'queued', so a listing that nobody
+        // marks queued is never checked at all — which is how four production
+        // listings went live unmoderated. Photos start with `p = o` (already
+        // where `photos` points) so the first run cannot retract them; the
+        // engine swaps in the derived URL as each one passes.
+        ...(moderationArmed && submittedPhotos.length > 0
+          ? {
+              photosManifest: serializeManifest(manifestFromLegacyPhotos(submittedPhotos)),
+              moderationStatus: 'queued' as const,
+            }
+          : {}),
         status: status || 'pending',
         exclusive: (user.role === 'admin' || user.role === 'ops' || isUserPremium(user)) && Boolean(exclusive),
     };

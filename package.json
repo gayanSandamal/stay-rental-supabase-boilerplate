@@ -23,6 +23,7 @@
     "db:studio": "drizzle-kit studio",
     "moderation:calibrate": "npx tsx scripts/moderation-calibrate.ts",
     "moderation:probe": "npx tsx scripts/moderation-probe.ts",
+    "moderation:backfill": "npx tsx scripts/backfill-photo-manifests.ts",
     "storage:setup": "npx tsx lib/db/setup-storage.ts",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",

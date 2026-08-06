@@ -7,12 +7,15 @@ import { logListingAction } from '@/lib/db/audit-logger';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import {
-  appendQueued,
-  manifestFromLegacyPhotos,
+  adoptOrphanPhotos,
+  derivePhotos,
   parseManifest,
   parsePhotos,
+  reconcileManifest,
   serializeManifest,
 } from '@/lib/images/manifest';
+import { photoCap } from '@/lib/images/cap';
+import { isModerationConfigured } from '@/lib/moderation/config';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
 
@@ -387,28 +390,50 @@ export async function PUT(
 
     // Photos: only genuinely NEW URLs matter. Anything already in the manifest
     // (as a published derivative or as an original) keeps its verdict, which is
-    // what makes re-approval on edit nearly free.
+    // what makes re-approval on edit nearly free. `reconcileManifest` does the
+    // matching, ordering and removals in one place.
     const submittedPhotos: string[] = Array.isArray(body.photos) ? body.photos : [];
-    const manifest = parseManifest(listing.photosManifest);
-    const known = new Set<string>();
-    for (const e of manifest) {
-      known.add(e.o);
-      if (e.p) known.add(e.p);
+    const currentPhotos = parsePhotos(listing.photos);
+
+    // Grandfathered: refuse only if the landlord is submitting MORE than the cap
+    // and more than the listing already has. Otherwise lowering the cap would
+    // brick editing (or even reordering) every existing over-cap listing.
+    const cap = photoCap();
+    const editCeiling = Math.max(cap, currentPhotos.length);
+    if (submittedPhotos.length > editCeiling) {
+      return NextResponse.json(
+        {
+          error: `A listing can have at most ${cap} photos`,
+          code: 'PHOTO_LIMIT_EXCEEDED',
+          max: cap,
+          submitted: submittedPhotos.length,
+        },
+        { status: 400 }
+      );
     }
-    if (!manifest.length) for (const u of parsePhotos(listing.photos)) known.add(u);
-    const newPhotos = submittedPhotos.filter((u) => !known.has(u));
+
+    // Adopt before reconciling: a manifest that under-covers `photos` would
+    // otherwise treat the uncovered URLs as newly added on every save.
+    const manifest = adoptOrphanPhotos(parseManifest(listing.photosManifest), currentPhotos).entries;
+    const reconciled = reconcileManifest(manifest, submittedPhotos);
     const photosChanged =
-      newPhotos.length > 0 ||
-      (body.photos !== undefined && submittedPhotos.length !== parsePhotos(listing.photos).length);
+      reconciled.added > 0 ||
+      reconciled.removed > 0 ||
+      (body.photos !== undefined && submittedPhotos.length !== currentPhotos.length);
 
     if (textChanged || photosChanged) {
       // Queue the automated checks. New photos are appended as unverified
       // originals so they are never published before passing.
-      if (isFeatureEnabled('enableListingModeration')) {
-        const nextManifest = manifest.length
-          ? appendQueued(manifest, newPhotos)
-          : appendQueued(manifestFromLegacyPhotos(parsePhotos(listing.photos)), newPhotos);
-        updates.photosManifest = serializeManifest(nextManifest);
+      // Gate on the KEY too (I6): the flag alone, with no provider configured,
+      // parks every new photo as `queued` with nothing to ever release it.
+      if (isFeatureEnabled('enableListingModeration') && isModerationConfigured()) {
+        updates.photosManifest = serializeManifest(reconciled.entries);
+        // The manifest, not the submitted array, decides what is public — so a
+        // photo added here is invisible until it passes. Without this an
+        // ops/admin edit (which does not set `pending` below) would publish an
+        // unchecked photo immediately.
+        const publishable = derivePhotos(reconciled.entries);
+        updates.photos = publishable.length ? JSON.stringify(publishable) : null;
         updates.moderationStatus = 'queued';
         updates.moderationAttempts = 0;
       }

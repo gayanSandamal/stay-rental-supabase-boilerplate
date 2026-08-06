@@ -27,6 +27,9 @@ interface RateLimitConfig {
 
 const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
   'POST:/api/listings': { maxRequests: 10, windowMs: 60_000 },
+  // Uploads are per-request, not per-listing, so without an entry here this fell
+  // through to the 60/min default — six images a request, ~360 images a minute.
+  'POST:/api/upload': { maxRequests: 20, windowMs: 60_000 },
   'POST:/api/contact-numbers': { maxRequests: 10, windowMs: 60_000 },
   'POST:/api/business-accounts': { maxRequests: 5, windowMs: 60_000 },
   'default': { maxRequests: 60, windowMs: 60_000 },

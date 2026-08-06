@@ -30,11 +30,33 @@ function baseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 }
 
+export interface NotifyContext {
+  /** The listing was already public before this run. */
+  wasLive: boolean;
+  /** Photos that became visible in this run. */
+  added: number;
+  /** persist() refused to unpublish photos it could not explain. */
+  refused: boolean;
+}
+
 export async function notifyModerationOutcome(
   listing: ListingRow,
-  verdict: ModerationVerdict
+  verdict: ModerationVerdict,
+  ctx: NotifyContext = { wasLive: false, added: 0, refused: false }
 ): Promise<void> {
   const intake = await findIntakeForListing(listing.id).catch(() => null);
+
+  // A refused retraction is a code-level invariant breach, not a moderation
+  // outcome — it goes straight to ops and nothing goes to the landlord.
+  if (ctx.refused) {
+    await createNotificationsForOpsAndAdmin({
+      type: 'whatsapp_intake',
+      title: `Listing #${listing.id}: photo retraction refused — manifest needs review`,
+      body: 'Moderation would have unpublished photos without an explanation, so the photo list was left untouched.',
+      link: `/dashboard/listings/${listing.id}`,
+    });
+    return;
+  }
 
   // --- ops -----------------------------------------------------------------
   if (verdict.outcome === 'held') {
@@ -72,12 +94,29 @@ export async function notifyModerationOutcome(
   }
 
   // --- the landlord --------------------------------------------------------
-  if (!verdict.landlordReasons.length && verdict.outcome !== 'passed') return;
+  // A live listing is re-checked every time its owner sends another photo, so
+  // "🎉 now live" belongs to the FIRST publish only. Without this, every extra
+  // photo re-announces a listing the landlord has been looking at for days.
+  const isFirstPublish = verdict.outcome === 'passed' && !ctx.wasLive;
+
+  if (verdict.outcome === 'passed' && ctx.wasLive) {
+    // Nothing new became visible and nothing to explain → stay quiet.
+    if (ctx.added === 0 && !verdict.landlordReasons.length) return;
+  } else if (!verdict.landlordReasons.length && verdict.outcome !== 'passed') {
+    return;
+  }
 
   const lines: string[] = [];
-  if (verdict.outcome === 'passed') {
+  if (isFirstPublish) {
     lines.push(`🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`);
     if (verdict.landlordReasons.length) lines.push('', ...verdict.landlordReasons);
+  } else if (verdict.outcome === 'passed') {
+    if (ctx.added > 0) {
+      lines.push(
+        `✅ ${ctx.added} new photo${ctx.added === 1 ? '' : 's'} ${ctx.added === 1 ? 'is' : 'are'} now showing on "${listing.title}".`
+      );
+    }
+    if (verdict.landlordReasons.length) lines.push(...(lines.length ? [''] : []), ...verdict.landlordReasons);
   } else {
     lines.push(...verdict.landlordReasons);
   }

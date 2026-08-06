@@ -83,7 +83,13 @@ export const featureFlagDefaults = {
   moderateTextCoherence: true,
   holdOnUnsafeImages: true,
   moderationFailOpen: false,
-  moderationMaxImagesPerListing: 6,
+  // ONE number, not two. A separate "how many to check" and "how many to
+  // publish" can only be wrong: check < publish publishes unchecked photos,
+  // check > publish pays the provider for photos that can never appear. The
+  // only safe relation is equality, so the cost ceiling is derived from the
+  // product cap rather than configured alongside it.
+  maxPhotosPerListing: 6,
+  enforcePhotoCap: true,
   // Compression + watermark, independent of the AI checks.
   enableImageProcessing: false,
   watermarkListingImages: true,
@@ -285,12 +291,22 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     appWide: true,
     public: false,
   },
-  moderationMaxImagesPerListing: {
-    label: 'Max images checked per listing',
-    description: 'Cost ceiling. Photos beyond this are dropped with an explicit reason, never silently ignored.',
+  maxPhotosPerListing: {
+    label: 'Max photos per listing',
+    description:
+      'The product cap AND the moderation cost ceiling — they are the same number by design. Enforced at every upload path; extra photos are refused or dropped with an explicit reason, never silently ignored. Set below 1 to disable the cap entirely.',
     group: 'Configuration',
+    // public: the uploader reads it to show the right limit before submitting.
     appWide: false,
-    public: false,
+    public: true,
+  },
+  enforcePhotoCap: {
+    label: '— enforce the photo cap',
+    description:
+      'Master switch. Off means the cap is advisory: uploads are accepted and nothing is dropped for being over the limit.',
+    group: 'Platform',
+    appWide: true,
+    public: true,
   },
   enableImageProcessing: {
     label: 'Compress + watermark images',
