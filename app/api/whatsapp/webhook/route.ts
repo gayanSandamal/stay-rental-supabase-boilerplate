@@ -25,7 +25,7 @@ import {
   photosAddedMessage,
   photosFailedMessage,
   photosMissedMessage,
-  receivedAckMessage,
+  newListingTemplateMessage,
   restoreRequestedMessage,
   updateAckMessage,
 } from '@/lib/intake/messages';
@@ -121,10 +121,15 @@ async function handleInbound(
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
 
     if (outcome.action === 'created') {
-      // First contact for this submission: without an instant ack the sender
-      // hears NOTHING until the settle window + cron tick (~5 minutes).
+      // First contact for this submission: without an instant reply the sender
+      // hears NOTHING until the settle window + cron tick (~5 minutes). Send
+      // the field template so they know exactly what to include — it doubles as
+      // the instant ack and works whether they sent a full listing or just "hi".
       if (rich) {
-        await whatsappAdapter.sendText(message.senderId, receivedAckMessage(message.senderName));
+        await whatsappAdapter.sendText(
+          message.senderId,
+          newListingTemplateMessage(message.senderName)
+        );
       } else if (outcome.pinStored) {
         // Pin acks are unconditional (pins were silently dropped before this
         // existed) — with rich off, nothing else acknowledges a first-contact pin.

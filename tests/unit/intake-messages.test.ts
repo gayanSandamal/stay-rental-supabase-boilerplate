@@ -5,6 +5,7 @@ import {
   listingPendingNoLinksMessage,
   manualReviewMessage,
   needsInfoMessage,
+  newListingTemplateMessage,
   photosMissedMessage,
   photosAddedMessage,
   pendingReviewMessage,
@@ -79,6 +80,31 @@ describe('instant + status messages', () => {
   it('receivedAckMessage sets the expectation of a short wait', () => {
     expect(receivedAckMessage('Gayan')).toContain('few minutes');
     expect(receivedAckMessage(null)).not.toContain(', !');
+  });
+
+  it('newListingTemplateMessage lists the required fields and greets by name', () => {
+    const m = newListingTemplateMessage('Gayan');
+    expect(m).toContain('Thanks Gayan!');
+    for (const field of [
+      'Property type',
+      'Address',
+      'Town / city',
+      'bedrooms',
+      'bathrooms',
+      'Monthly rent',
+      'contact number',
+      'photos',
+    ]) {
+      expect(m).toContain(field);
+    }
+    // Must reassure free-form replies — owners rarely follow the list exactly.
+    expect(m).toMatch(/Sinhala or English/i);
+  });
+
+  it('newListingTemplateMessage stays clean without a profile name', () => {
+    const m = newListingTemplateMessage(null);
+    expect(m.startsWith('Thanks!')).toBe(true);
+    expect(m).not.toContain(', !');
   });
 
   it('manualReviewMessage never reveals why the listing was flagged', () => {
