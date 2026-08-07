@@ -289,6 +289,39 @@ const CASES: Array<{
     expected: { rentPerMonth: null, city: 'Colombo 3' },
   },
   {
+    name: 'bare round number is read as rent (the screenshot sign-off)',
+    input:
+      'House for rent in Angoda\n5 bedrooms, 3 bathrooms, parking, roller shutter gate, 4.5 perches, 700m to the Kolonnawa junction\n\n220, Flower road, Gampaha\n\n47000',
+    expected: {
+      rentPerMonth: 47000,
+      bedrooms: 5,
+      bathrooms: 3,
+      city: 'Gampaha',
+      district: 'Gampaha',
+      address: '220, Flower road',
+    },
+  },
+  {
+    name: 'address-line city beats a landmark town mentioned in prose',
+    input: 'House for rent 700m from the Kolonnawa junction, 12 Flower Road, Gampaha 55000',
+    expected: { city: 'Gampaha', district: 'Gampaha', rentPerMonth: 55000 },
+  },
+  {
+    name: 'bare number without a rental context is not grabbed as rent',
+    input: 'My house address is 45000 Lake Road area',
+    expected: { rentPerMonth: null },
+  },
+  {
+    name: 'bare sqft area is not read as rent',
+    input: 'House for rent in Malabe, 2500 sqft, call me',
+    expected: { rentPerMonth: null, city: 'Malabe' },
+  },
+  {
+    name: 'bare deposit amount is not read as rent',
+    input: 'Room for rent Maharagama. deposit 30000',
+    expected: { rentPerMonth: null, city: 'Maharagama' },
+  },
+  {
     name: 'road named after a town is not the city',
     input: '2BR house, 45 Negombo Road, Ja-Ela, 60000 per month',
     expected: { city: 'Ja-Ela', address: '45 Negombo Road' },
@@ -503,7 +536,7 @@ describe('parseIntakeRules', () => {
   });
 
   it('tags parserMeta with the rules engine', () => {
-    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 4 });
+    expect(parseIntakeRules('anything').parserMeta).toEqual({ engine: 'rules', rulesVersion: 5 });
   });
 });
 
