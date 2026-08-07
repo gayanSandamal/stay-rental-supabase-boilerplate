@@ -2,7 +2,7 @@ import { getListingsForOps, getUser } from '@/lib/db/queries';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Shield, MapPin, Eye, Building2, User, Calendar } from 'lucide-react';
+import { Plus, Shield, MapPin, Eye, Building2, User, Calendar, CheckCircle2 } from 'lucide-react';
 import { ListingActionsDropdown } from './listing-actions-dropdown';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db/drizzle';
@@ -89,6 +89,25 @@ export default async function ListingsPage(props: {
           </Link>
         </Button>
       </div>
+
+      {/* The archive flow redirects here with ?removed=1. Without this the
+          landlord lands on an unchanged-looking list and cannot tell whether
+          the removal worked. */}
+      {searchParams.removed === '1' && (
+        <div
+          role="status"
+          className="mb-6 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4"
+        >
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" aria-hidden />
+          <div className="text-sm">
+            <p className="font-medium text-green-900">Listing removed</p>
+            <p className="mt-0.5 text-green-800">
+              It is no longer visible to tenants. Changed your mind? Contact us within 30 days and we
+              can restore it.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {listingsWithPublisher.map((listing) => (
