@@ -21,6 +21,7 @@ import {
   locationReceivedMessage,
   locationSavedMessage,
   noListingsMessage,
+  manualReviewPendingMessage,
   photosAddedMessage,
   photosFailedMessage,
   photosMissedMessage,
@@ -136,6 +137,19 @@ async function handleInbound(
         // Exactly one message per needs_info round flips the status back, so
         // this can't spam a multi-message answer.
         await whatsappAdapter.sendText(message.senderId, updateAckMessage());
+      }
+
+      // A held intake used to swallow everything: the sender saw a typing
+      // bubble and then nothing, forever, and ops were never told the thread
+      // was still alive. Both halves now hear about it.
+      if (outcome.action === 'appended_manual') {
+        await whatsappAdapter.sendText(message.senderId, manualReviewPendingMessage());
+        await createNotificationsForOpsAndAdmin({
+          type: 'whatsapp_intake',
+          title: `Sender added more to intake #${outcome.intakeId}, which is held for review`,
+          body: 'They are waiting on a human. Resolve the hold or reply to them directly.',
+          link: '/back-office/whatsapp-intakes',
+        });
       }
     } else if (outcome.action === 'location_saved') {
       await whatsappAdapter.sendText(

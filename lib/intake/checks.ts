@@ -65,12 +65,28 @@ export async function runIntakeChecks(parsed: ParsedIntake): Promise<CheckResult
     ),
   });
   if (dupe) {
-    return {
-      ok: false,
-      retriable: false,
-      reason: `Possible duplicate of listing #${dupe.id} (same address+city)`,
-    };
+    return { ok: false, retriable: false, reason: duplicateReason(dupe.id) };
   }
 
   return { ok: true, retriable: false, reason: null };
+}
+
+/**
+ * The duplicate-hold reason, written and read in one place.
+ *
+ * `whatsapp_intakes.failure_reason` is free text, so the only way to later ask
+ * "is this hold still valid?" is to recover the listing id from it. Keeping the
+ * template and its parser adjacent is what stops the two drifting apart —
+ * lib/intake/session.ts reopens a held intake based on this.
+ */
+export function duplicateReason(listingId: number): string {
+  return `Possible duplicate of listing #${listingId} (same address+city)`;
+}
+
+const DUPLICATE_REASON_RE = /^Possible duplicate of listing #(\d+) \(same address\+city\)$/;
+
+/** The listing a duplicate hold points at, or null if this isn't one. */
+export function parseDuplicateReason(reason: string | null | undefined): number | null {
+  const id = Number(reason?.match(DUPLICATE_REASON_RE)?.[1]);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }

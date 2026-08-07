@@ -302,3 +302,11 @@ export function helpMessage(): string {
     '🗑️ Send DELETE — we’ll help you take a listing down.',
   ].join('\n');
 }
+
+/**
+ * Someone messaged an intake that is held for human review. Says the thread is
+ * alive without promising a listing — the hold may be a genuine scam flag.
+ */
+export function manualReviewPendingMessage(): string {
+  return `Thanks — got it. Our team is reviewing this submission and will get back to you here shortly.`;
+}

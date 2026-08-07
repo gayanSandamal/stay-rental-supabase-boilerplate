@@ -25,6 +25,7 @@ import {
   serializeManifest,
 } from '@/lib/images/manifest';
 import { isModerationConfigured } from '@/lib/moderation/config';
+import { parseDuplicateReason } from './checks';
 
 /** Messages from the same sender within this window append to one intake. */
 export const SESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
@@ -127,6 +128,29 @@ const parseArr = (s: string | null | undefined): string[] => {
 function hasSubstantiveText(msg: NormalizedInboundMessage): boolean {
   const text = msg.text ?? '';
   return /\d{4,}|\d+(?:\.\d+)?\s*k\b|lakh/i.test(text) || text.length > 80;
+}
+
+/**
+ * Is a manual_review hold a DUPLICATE hold whose blocking listing is no longer
+ * live? Only then may the intake re-enter the automatic path.
+ *
+ * Deliberately narrow: anything that is not a duplicate hold (scam, junk, an
+ * ops note) returns false and stays with a human. And a duplicate whose
+ * original is still active/pending also returns false — reopening then would
+ * just bounce off the same check.
+ */
+async function duplicateBlockerCleared(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  failureReason: string | null
+): Promise<boolean> {
+  const blockingId = parseDuplicateReason(failureReason);
+  if (!blockingId) return false;
+  const blocker = await tx.query.listings.findFirst({
+    where: eq(listings.id, blockingId),
+    columns: { status: true },
+  });
+  // Gone entirely, or no longer competing for the address.
+  return !blocker || !['active', 'pending'].includes(blocker.status);
 }
 
 /**
@@ -518,13 +542,26 @@ export async function appendToIntake(
       return { action: 'after_publish', intakeId: latest.id } as const;
     }
 
-    // More context for an intake ops is already reviewing: append, do NOT
-    // reopen — scam/duplicate-flagged intakes must not re-enter the auto path.
+    // More context for an intake ops is already reviewing: append, and do NOT
+    // reopen — a scam-flagged intake must never re-enter the auto path.
+    //
+    // EXCEPT a stale duplicate. "Duplicate of an active listing" is a fact
+    // about the world, not about the sender, and it expires: archive or rent
+    // out the original and the same submission becomes perfectly valid. A
+    // landlord who deletes their old listing and re-sends it would otherwise
+    // sit in manual_review forever, messaging into silence — which is exactly
+    // what happened to intake #9. Reopening is gated on the blocking listing
+    // actually being gone, so it can never bypass the check that fired.
     if (latest && latest.status === 'manual_review' && age <= NEEDS_INFO_WINDOW_MS) {
+      const unblocked = await duplicateBlockerCleared(tx, latest.failureReason);
       await appendTo(latest, {
         lastMessageAt: new Date(),
+        ...(unblocked ? { status: 'received' as const, failureReason: null } : {}),
         ...(msg.location ? { locationPin: JSON.stringify(msg.location) } : {}),
       });
+      if (unblocked) {
+        return { action: 'appended', intakeId: latest.id, reopenedFromNeedsInfo: true } as const;
+      }
       return {
         action: 'appended_manual',
         intakeId: latest.id,
