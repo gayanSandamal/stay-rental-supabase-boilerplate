@@ -10,10 +10,34 @@ CREATE TYPE "listing_status" AS ENUM('pending', 'active', 'rented', 'archived');
 CREATE TYPE "lead_status" AS ENUM('new', 'contacted', 'view_scheduled', 'no_show', 'interested', 'closed_won', 'closed_lost');
 
 -- Alter users table
-ALTER TABLE "users" 
-  DROP COLUMN IF EXISTS "role";
-ALTER TABLE "users"
-  ADD COLUMN IF NOT EXISTS "role" "user_role" DEFAULT 'tenant' NOT NULL;
+--
+-- Convert users.role from the legacy varchar(50) (migration 0000) to the
+-- user_role enum — but ONLY when it is still a varchar.
+--
+-- This used to be an unconditional `DROP COLUMN IF EXISTS "role"` followed by
+-- `ADD COLUMN ... DEFAULT 'tenant'`. Because run-all-migrations.ts replays
+-- EVERY numbered file on every invocation, each `pnpm db:migrate-all` silently
+-- destroyed every user's role and reset the whole table to 'tenant'. It locked
+-- an admin out of the back office and demoted a WhatsApp landlord on
+-- 2026-08-05. A migration that is replayed must never drop a data column.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'users'
+      AND column_name = 'role' AND udt_name <> 'user_role'
+  ) THEN
+    ALTER TABLE public.users DROP COLUMN role;
+    ALTER TABLE public.users ADD COLUMN role user_role DEFAULT 'tenant' NOT NULL;
+  ELSIF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'role'
+  ) THEN
+    ALTER TABLE public.users ADD COLUMN role user_role DEFAULT 'tenant' NOT NULL;
+  END IF;
+END
+$$;
+
 ALTER TABLE "users"
   ADD COLUMN IF NOT EXISTS "phone" varchar(20);
 
