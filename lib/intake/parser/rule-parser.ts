@@ -10,7 +10,7 @@ import { ParsedIntake, computeMissingFields } from './types';
 import { matchCity, matchAllCities, matchDistrict, isCityName } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
-export const RULES_VERSION = 4;
+export const RULES_VERSION = 5;
 
 /** Sanity clamp at extraction time; checks.ts enforces the market window. */
 const RENT_FLOOR = 1_000;
@@ -152,13 +152,54 @@ const RENT_PASSES: Array<{ re: RegExp; amount: (m: RegExpMatchArray) => number }
   },
 ];
 
+/** The bare-number fallback only fires for a message that is clearly a rental. */
+const RENT_CONTEXT_RE =
+  /\b(?:rent|rental|renting|monthly|lease|price)\b|kuliya|කුලිය|வாடகை|\blkr\b|\brs\b|rupees/iu;
+
+/** A unit glued after a number proves it is size/distance/count, not rent. */
+const NON_RENT_UNIT_AFTER_RE =
+  /^\s*(?:sq\.?\s?(?:ft|feet|foot|m|meters?|metres?)|sqft|sqm|perch(?:es)?|acres?|cents?|kms?\b|cm\b|mm\b|meters?\b|metres?\b|m\b|min(?:ute)?s?\b|%|kg\b|kw\b|bhk\b|br\b|beds?\b|baths?\b|floors?\b|stor(?:eys?|ies|y)\b|years?\b|yrs?\b|ft\b|feet\b)/iu;
+
+/**
+ * Rents written bare are always well above the market floor, so a low floor
+ * here would let years ("built 2000") and ids slip through as rent.
+ */
+const BARE_RENT_FLOOR = 5_000;
+
+/**
+ * Last-resort rent: a bare, round number with no currency, keyword or suffix —
+ * the extremely common "…\n47000" sign-off that every RENT_PASSES pattern
+ * misses. Guarded hard because bare numbers are dangerous: needs a rental
+ * context in the message, a 4–7 digit (or comma-grouped) value that is a
+ * multiple of 100 (rents are round; house numbers and ids are not), not glued
+ * to a size/distance unit, and not a deposit/date/USD amount. The rent is the
+ * largest such figure in a listing.
+ */
+function extractBareRent(lower: string): number | null {
+  if (!RENT_CONTEXT_RE.test(lower)) return null;
+  const re = /(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d{4,7})(?![\d.,])/g;
+  let best: number | null = null;
+  for (const m of lower.matchAll(re)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    const value = Number(m[1].replace(/,/g, ''));
+    if (!Number.isFinite(value) || value < BARE_RENT_FLOOR || value > RENT_CEIL) continue;
+    if (value % 100 !== 0) continue;
+    if (isDepositContext(lower, start, end)) continue;
+    if (isExcludedRentContext(lower, start, end, value, start)) continue;
+    if (NON_RENT_UNIT_AFTER_RE.test(lower.slice(end, end + 12))) continue;
+    if (best == null || value > best) best = value;
+  }
+  return best;
+}
+
 function extractRent(lower: string): number | null {
   for (const pass of RENT_PASSES) {
     pass.re.lastIndex = 0;
     const value = firstRentMatch(lower, pass.re, pass.amount);
     if (value != null) return value;
   }
-  return null;
+  return extractBareRent(lower);
 }
 
 /**
@@ -276,8 +317,12 @@ function extractAddress(maskedOriginalCase: string, city: string | null): Addres
 
   // The following comma segment is either the area/city (resolve through the
   // gazetteer — any alias/script) or an unknown area kept as address detail.
+  // The segment may end at a comma/full-stop, the string end, OR a run of 3+
+  // digits — after normalize() folds the newlines, a bare rent glued on
+  // ("…, Gampaha 47000") must not stop the city from resolving. A 1–2 digit
+  // Colombo ward ("…, Colombo 5") is deliberately NOT a terminator.
   const rest = maskedOriginalCase.slice((m.index ?? 0) + m[0].length);
-  const segment = rest.match(/^\s*,\s*([\p{L}][\p{L}\p{M}\s'.-]{1,40}?)(?=[,.]|$)/u);
+  const segment = rest.match(/^\s*,\s*([\p{L}][\p{L}\p{M}\s'.-]{1,40}?)(?=\s*(?:[,.]|\d{3,}|$))/u);
   if (segment) {
     const seg = segment[1].trim();
     const segMatch = matchCity(seg.toLowerCase());
