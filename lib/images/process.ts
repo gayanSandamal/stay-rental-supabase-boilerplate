@@ -91,9 +91,13 @@ const MAX_EDGE = 1920;
 /** WhatsApp images are already ~1600px; only resize if something is wildly big. */
 const WA_RESIZE_ABOVE = 2400;
 const WEBP_QUALITY = 82;
-/** Below this, an 18% logo is illegible branding covering a big share of frame. */
+/** Below this, the logo is illegible branding covering a big share of frame. */
 const MIN_WATERMARK_WIDTH = 480;
 const MIN_WATERMARK_HEIGHT = 360;
+/** Mark width as a share of the image width. */
+const WATERMARK_WIDTH_RATIO = 0.15;
+/** Legibility floor: below ~90px the wordmark stops being readable at all. */
+const MIN_LOGO_WIDTH = 90;
 
 /**
  * Two logo variants, chosen per image: the reversed (light) mark disappears on
@@ -125,16 +129,21 @@ async function loadLogoSource(variant: LogoVariant): Promise<Buffer | null> {
 }
 
 /**
- * Mean luminance (0–255) of the bottom-right region where the mark goes.
+ * Mean luminance (0–255) of the centre region where the mark goes.
  * Returns null if it can't be sampled, in which case we keep the light mark.
  */
-async function cornerLuminance(input: Buffer, width: number, height: number): Promise<number | null> {
+async function centreLuminance(input: Buffer, width: number, height: number): Promise<number | null> {
   try {
     const boxW = Math.max(1, Math.min(width, Math.round(width * 0.3)));
-    const boxH = Math.max(1, Math.min(height, Math.round(height * 0.25)));
+    const boxH = Math.max(1, Math.min(height, Math.round(height * 0.3)));
     const sharp = await loadSharp();
     const stats = await sharp(input)
-      .extract({ left: width - boxW, top: height - boxH, width: boxW, height: boxH })
+      .extract({
+        left: Math.max(0, Math.round((width - boxW) / 2)),
+        top: Math.max(0, Math.round((height - boxH) / 2)),
+        width: boxW,
+        height: boxH,
+      })
       .greyscale()
       .stats();
     return stats.channels[0]?.mean ?? null;
@@ -144,14 +153,17 @@ async function cornerLuminance(input: Buffer, width: number, height: number): Pr
 }
 
 /**
- * Build the composited mark: logo resized to `targetWidth`, alpha reduced, and
- * padded right/bottom by `inset`. The padding IS the margin — sharp's
- * `gravity` positions flush to the edge and has no inset parameter.
+ * Build the composited mark: logo resized to `targetWidth` with its alpha
+ * reduced, optionally padded right/bottom by `inset`.
+ *
+ * The padding exists only for edge gravities — sharp positions those flush to
+ * the edge and has no inset parameter, so the padding IS the margin. A centred
+ * mark needs none, and passing one would shove it off-centre by inset/2.
  */
 async function watermarkOverlay(
   variant: LogoVariant,
   targetWidth: number,
-  inset: number
+  inset = 0
 ): Promise<Buffer | null> {
   const key = `${variant}:${targetWidth}:${inset}`;
   const cached = logoCache.get(key);
@@ -160,19 +172,20 @@ async function watermarkOverlay(
   if (!source) return null;
   try {
     const sharp = await loadSharp();
-    const overlay = await sharp(source)
+    const overlayBase = sharp(source)
       .resize({ width: targetWidth })
       .ensureAlpha()
       // Scale the alpha band only (RGB multipliers stay 1) so the mark reads as
       // a watermark rather than a sticker.
-      .linear([1, 1, 1, 0.55], [0, 0, 0, 0])
-      .extend({
-        right: inset,
-        bottom: inset,
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .png()
-      .toBuffer();
+      .linear([1, 1, 1, 0.55], [0, 0, 0, 0]);
+    const padded = inset
+      ? overlayBase.extend({
+          right: inset,
+          bottom: inset,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+      : overlayBase;
+    const overlay = await padded.png().toBuffer();
     logoCache.set(key, overlay);
     return overlay;
   } catch (err) {
@@ -237,17 +250,24 @@ export async function processListingImage(
   const bigEnough =
     projectedWidth >= MIN_WATERMARK_WIDTH && projectedHeight >= MIN_WATERMARK_HEIGHT;
   if (watermark && bigEnough) {
-    const logoWidth = Math.min(320, Math.max(90, Math.round(projectedWidth * 0.18)));
-    const inset = projectedWidth < 900 ? 12 : 24;
-    // Sample the source corner (cheap: no full decode of the resized output).
+    // A flat share of the width, with only a legibility floor under it: the
+    // mark sits in the middle of the frame now, so it must scale with the photo
+    // rather than being capped into insignificance on a large one.
+    const logoWidth = Math.max(
+      MIN_LOGO_WIDTH,
+      Math.round(projectedWidth * WATERMARK_WIDTH_RATIO)
+    );
+    // Sample the source centre (cheap: no full decode of the resized output).
     // Uses PRE-rotation dimensions so extract() can't go out of bounds on an
-    // EXIF-transposed image; for those the sampled corner is approximate, which
-    // is fine for a light/dark heuristic.
-    const luminance = await cornerLuminance(input, meta.width ?? 0, meta.height ?? 0);
+    // EXIF-transposed image; for those the sampled box is approximate, which is
+    // fine for a light/dark heuristic.
+    const luminance = await centreLuminance(input, meta.width ?? 0, meta.height ?? 0);
     const variant: LogoVariant = luminance !== null && luminance > 140 ? 'dark' : 'light';
-    const overlay = await watermarkOverlay(variant, logoWidth, inset);
+    // No inset: 'centre' gravity centres the overlay, and edge padding would
+    // only drag it off-centre.
+    const overlay = await watermarkOverlay(variant, logoWidth);
     if (overlay) {
-      pipeline = pipeline.composite([{ input: overlay, gravity: 'southeast', blend: 'over' }]);
+      pipeline = pipeline.composite([{ input: overlay, gravity: 'centre', blend: 'over' }]);
       watermarked = true;
     }
   }
