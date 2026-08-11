@@ -399,7 +399,7 @@ export async function processIntake(
           photosOverCap: overCapMedia.length,
           photoCap: cap,
         })
-      : pendingReviewMessage(listing.title, links.editUrl, {
+      : pendingReviewMessage(listing.title, links, {
           photosOverCap: overCapMedia.length,
           photoCap: cap,
         });

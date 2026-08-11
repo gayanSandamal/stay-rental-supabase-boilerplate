@@ -143,6 +143,33 @@ describe('publishedMessage', () => {
   });
 });
 
+describe('pendingReviewMessage links', () => {
+  // With the automated checks armed every intake lands pending, so this is the
+  // ONLY message that can hand the landlord a remove link — publishedMessage is
+  // never sent and the approval notice is a bare public URL.
+  it('offers both the edit and the remove link', () => {
+    const m = pendingReviewMessage('2BR House in Dehiwala', {
+      editUrl: 'https://easyrent.lk/l/tok/e/12',
+      deleteUrl: 'https://easyrent.lk/l/tok/d/12',
+    });
+    expect(m).toContain('https://easyrent.lk/l/tok/e/12');
+    expect(m).toContain('https://easyrent.lk/l/tok/d/12');
+    expect(m).toMatch(/remove/i);
+    // Never a "live" claim or a public URL — it is still pending.
+    expect(m).not.toMatch(/is live/i);
+  });
+
+  it('omits the remove line when no delete link could be minted', () => {
+    const m = pendingReviewMessage('X', { editUrl: 'https://easyrent.lk/l/tok/e/12' });
+    expect(m).toContain('/e/12');
+    expect(m).not.toMatch(/remove it/i);
+  });
+
+  it('stays byte-identical to the no-links copy when nothing was minted', () => {
+    expect(pendingReviewMessage('X', null)).toBe(pendingReviewMessage('X'));
+  });
+});
+
 describe('listingLiveNoLinksMessage', () => {
   it('points at the live listing instead of claiming none exist', () => {
     const m = listingLiveNoLinksMessage('2BR House in Kandy', 'https://easyrent.lk/listings/3');

@@ -190,14 +190,21 @@ export function publishedMessage(
 
 export function pendingReviewMessage(
   title: string,
-  editUrl?: string | null,
+  links?: Pick<ListingLinks, 'editUrl' | 'deleteUrl'> | null,
   opts: { photosOverCap?: number; photoCap?: number } = {}
 ): string {
-  const base = `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
-  const withEdit = editUrl
-    ? `${base}\n\n✏️ You can change the details meanwhile:\n${editUrl}`
-    : base;
-  return withEdit + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
+  const parts = [
+    `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`,
+  ];
+  if (links?.editUrl) parts.push('', '✏️ You can change the details meanwhile:', links.editUrl);
+  // The remove link belongs here, not only on publishedMessage. With the
+  // automated checks armed every intake lands pending, so publishedMessage —
+  // the only other message carrying a delete link — is never sent, and the
+  // approval notice is a bare public URL. Without this the landlord is never
+  // given one. Access links are reusable, so it keeps working once live, and a
+  // landlord who spots a mistake can pull the listing before anyone sees it.
+  if (links?.deleteUrl) parts.push('', '🗑️ Or remove it:', links.deleteUrl);
+  return parts.join('\n') + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
 }
 
 /** Photos sent after publish were added to the live listing (or queued first). */
