@@ -88,7 +88,7 @@ describe('processListingImage', () => {
     expect(out.watermarked).toBe(false);
   });
 
-  it('applies the watermark to the bottom-right corner only', async () => {
+  it('applies the watermark to the centre of the frame only', async () => {
     const src = await makePhoto(1200, 900);
     const plain = await processListingImage(src, { watermark: false });
     const marked = await processListingImage(src, { watermark: true });
@@ -103,6 +103,11 @@ describe('processListingImage', () => {
       return sum / a.length;
     };
 
+    const centreDiff = meanDiff(
+      await region(plain.buffer, { left: 510, top: 390 }),
+      await region(marked.buffer, { left: 510, top: 390 })
+    );
+    // The old home of the mark: it must no longer be touched.
     const brDiff = meanDiff(
       await region(plain.buffer, { left: 1000, top: 760 }),
       await region(marked.buffer, { left: 1000, top: 760 })
@@ -112,10 +117,54 @@ describe('processListingImage', () => {
       await region(marked.buffer, { left: 0, top: 0 })
     );
 
-    // The mark lands bottom-right; elsewhere only lossy-encoding noise differs.
-    expect(brDiff).toBeGreaterThan(2);
+    // The mark lands dead centre; elsewhere only lossy-encoding noise differs.
+    expect(centreDiff).toBeGreaterThan(2);
     expect(tlDiff).toBeLessThan(1);
-    expect(brDiff).toBeGreaterThan(tlDiff * 5);
+    expect(brDiff).toBeLessThan(1);
+    expect(centreDiff).toBeGreaterThan(tlDiff * 5);
+  });
+
+  it('sizes the mark at 15% of the image width', async () => {
+    // 1600px wide → a ~240px mark. Measured by finding the columns the overlay
+    // actually altered, so it pins the RATIO, not just "a mark exists".
+    const src = await makePhoto(1600, 1200);
+    const plain = await processListingImage(src, { watermark: false });
+    const marked = await processListingImage(src, { watermark: true });
+
+    const row = async (buf: Buffer) =>
+      sharp(buf)
+        .extract({ left: 0, top: 570, width: 1600, height: 60 })
+        .greyscale()
+        .raw()
+        .toBuffer();
+    const a = await row(plain.buffer);
+    const b = await row(marked.buffer);
+
+    let first = -1;
+    let last = -1;
+    for (let x = 0; x < 1600; x++) {
+      let changed = false;
+      for (let y = 0; y < 60; y++) {
+        if (Math.abs(a[y * 1600 + x] - b[y * 1600 + x]) > 12) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) {
+        if (first === -1) first = x;
+        last = x;
+      }
+    }
+
+    const markWidth = last - first + 1;
+    const expected = 1600 * 0.15;
+    // Generous band: the logo asset has its own transparent padding, and the
+    // outermost pixels of a 55%-alpha mark may not clear the threshold.
+    expect(markWidth).toBeGreaterThan(expected * 0.6);
+    expect(markWidth).toBeLessThanOrEqual(expected * 1.1);
+    // …and it is centred, so the mark straddles the middle column.
+    expect(first).toBeLessThan(800);
+    expect(last).toBeGreaterThan(800);
   });
 });
 
