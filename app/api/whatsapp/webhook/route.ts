@@ -26,9 +26,12 @@ import {
   photosFailedMessage,
   photosMissedMessage,
   newListingTemplateMessage,
+  receivedAckMessage,
   restoreRequestedMessage,
   updateAckMessage,
 } from '@/lib/intake/messages';
+import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
+import { hasListingDetail } from '@/lib/intake/parser/types';
 import { mintAccessLink } from '@/lib/auth/access-links';
 import { db } from '@/lib/db/drizzle';
 import { landlords, users } from '@/lib/db/schema';
@@ -93,9 +96,22 @@ export async function POST(request: NextRequest) {
     void markWhatsAppRead(newestId, { typing: true }).catch(() => {});
   }
 
+  // Did this delivery already describe a property? Computed across the WHOLE
+  // batch, not per message: an album arrives as one message per photo with the
+  // caption riding on only one of them, and the session is created by whichever
+  // lands first. Pure regex over text already in memory — no IO, so the webhook
+  // stays thin.
+  const batchHasDetail = (() => {
+    const text = messages
+      .map((m) => m.text)
+      .filter(Boolean)
+      .join('\n');
+    return text ? hasListingDetail(parseIntakeRules(text)) : false;
+  })();
+
   for (const message of messages) {
     try {
-      await handleInbound(message, rich);
+      await handleInbound(message, rich, batchHasDetail);
     } catch (err) {
       // One malformed message must not 500 the whole POST — Meta would
       // redeliver the entire batch in a retry storm.
@@ -113,7 +129,8 @@ export async function POST(request: NextRequest) {
 
 async function handleInbound(
   message: ReturnType<typeof whatsappAdapter.normalizeInbound>[number],
-  rich: boolean
+  rich: boolean,
+  batchHasDetail: boolean
 ): Promise<void> {
   {
     // Session write + redelivery dedup happen BEFORE media download inside
@@ -122,13 +139,20 @@ async function handleInbound(
 
     if (outcome.action === 'created') {
       // First contact for this submission: without an instant reply the sender
-      // hears NOTHING until the settle window + cron tick (~5 minutes). Send
-      // the field template so they know exactly what to include — it doubles as
-      // the instant ack and works whether they sent a full listing or just "hi".
+      // hears NOTHING until the settle window + cron tick (~5 minutes).
+      //
+      // WHICH reply depends on what they sent. Handing the checklist to someone
+      // who just typed a full listing reads as "the bot ignored my message" —
+      // it asks for the very fields they supplied. So the template is for
+      // senders who opened with "hi" or photos alone; anyone who already
+      // described a property gets the plain ack, and the processing job follows
+      // with a needs-info reply naming only the gaps.
       if (rich) {
         await whatsappAdapter.sendText(
           message.senderId,
-          newListingTemplateMessage(message.senderName)
+          batchHasDetail
+            ? receivedAckMessage(message.senderName)
+            : newListingTemplateMessage(message.senderName)
         );
       } else if (outcome.pinStored) {
         // Pin acks are unconditional (pins were silently dropped before this
