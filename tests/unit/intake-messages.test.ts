@@ -92,13 +92,22 @@ describe('instant + status messages', () => {
       'bedrooms',
       'bathrooms',
       'Monthly rent',
-      'contact number',
       'photos',
     ]) {
       expect(m).toContain(field);
     }
     // Must reassure free-form replies — owners rarely follow the list exactly.
     expect(m).toMatch(/Sinhala or English/i);
+  });
+
+  // The sender's WhatsApp number is already attached as a VERIFIED contact and
+  // the parser discards typed phone numbers — asking for one collects nothing
+  // and implies the typed number is what tenants would see.
+  it('newListingTemplateMessage never asks for a contact number', () => {
+    const m = newListingTemplateMessage('Gayan');
+    expect(m).not.toMatch(/•.*contact number/i);
+    expect(m).not.toMatch(/phone number/i);
+    expect(m).toMatch(/contact you on this WhatsApp number/i);
   });
 
   it('newListingTemplateMessage stays clean without a profile name', () => {
@@ -131,6 +140,33 @@ describe('publishedMessage', () => {
       editUrl: 'https://easyrent.lk/l/e/tok',
     });
     expect(m.indexOf('listings/3')).toBeLessThan(m.indexOf('/l/e/tok'));
+  });
+});
+
+describe('pendingReviewMessage links', () => {
+  // With the automated checks armed every intake lands pending, so this is the
+  // ONLY message that can hand the landlord a remove link — publishedMessage is
+  // never sent and the approval notice is a bare public URL.
+  it('offers both the edit and the remove link', () => {
+    const m = pendingReviewMessage('2BR House in Dehiwala', {
+      editUrl: 'https://easyrent.lk/l/tok/e/12',
+      deleteUrl: 'https://easyrent.lk/l/tok/d/12',
+    });
+    expect(m).toContain('https://easyrent.lk/l/tok/e/12');
+    expect(m).toContain('https://easyrent.lk/l/tok/d/12');
+    expect(m).toMatch(/remove/i);
+    // Never a "live" claim or a public URL — it is still pending.
+    expect(m).not.toMatch(/is live/i);
+  });
+
+  it('omits the remove line when no delete link could be minted', () => {
+    const m = pendingReviewMessage('X', { editUrl: 'https://easyrent.lk/l/tok/e/12' });
+    expect(m).toContain('/e/12');
+    expect(m).not.toMatch(/remove it/i);
+  });
+
+  it('stays byte-identical to the no-links copy when nothing was minted', () => {
+    expect(pendingReviewMessage('X', null)).toBe(pendingReviewMessage('X'));
   });
 });
 

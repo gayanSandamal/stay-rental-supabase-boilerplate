@@ -84,6 +84,13 @@ export function receivedAckMessage(profileName: string | null): string {
  * wording, and they must not feel they have to. The rule parser handles
  * free-form Sinhala-English text, so the template guides without demanding a
  * format — nothing downstream assumes the reply mirrors this list.
+ *
+ * A contact number is deliberately NOT asked for. The sender's WhatsApp number
+ * is already attached to the listing as a VERIFIED contact (processIntake —
+ * possession is proven by WhatsApp itself), and the rule parser masks and
+ * discards phone numbers in the message body, so a typed number is silently
+ * thrown away. Asking would collect nothing and imply the typed number is what
+ * tenants see. The list says so explicitly instead.
  */
 export function newListingTemplateMessage(profileName: string | null): string {
   return [
@@ -95,8 +102,9 @@ export function newListingTemplateMessage(profileName: string | null): string {
     '• Number of bedrooms',
     '• Number of bathrooms',
     '• Monthly rent (LKR)',
-    '• A contact number',
     '• A few photos',
+    '',
+    'Tenants will contact you on this WhatsApp number, so there’s no need to send one.',
     '',
     'Sinhala or English is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
   ].join('\n');
@@ -182,14 +190,21 @@ export function publishedMessage(
 
 export function pendingReviewMessage(
   title: string,
-  editUrl?: string | null,
+  links?: Pick<ListingLinks, 'editUrl' | 'deleteUrl'> | null,
   opts: { photosOverCap?: number; photoCap?: number } = {}
 ): string {
-  const base = `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`;
-  const withEdit = editUrl
-    ? `${base}\n\n✏️ You can change the details meanwhile:\n${editUrl}`
-    : base;
-  return withEdit + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
+  const parts = [
+    `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`,
+  ];
+  if (links?.editUrl) parts.push('', '✏️ You can change the details meanwhile:', links.editUrl);
+  // The remove link belongs here, not only on publishedMessage. With the
+  // automated checks armed every intake lands pending, so publishedMessage —
+  // the only other message carrying a delete link — is never sent, and the
+  // approval notice is a bare public URL. Without this the landlord is never
+  // given one. Access links are reusable, so it keeps working once live, and a
+  // landlord who spots a mistake can pull the listing before anyone sees it.
+  if (links?.deleteUrl) parts.push('', '🗑️ Or remove it:', links.deleteUrl);
+  return parts.join('\n') + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
 }
 
 /** Photos sent after publish were added to the live listing (or queued first). */
