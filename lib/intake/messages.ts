@@ -84,6 +84,13 @@ export function receivedAckMessage(profileName: string | null): string {
  * wording, and they must not feel they have to. The rule parser handles
  * free-form Sinhala-English text, so the template guides without demanding a
  * format — nothing downstream assumes the reply mirrors this list.
+ *
+ * A contact number is deliberately NOT asked for. The sender's WhatsApp number
+ * is already attached to the listing as a VERIFIED contact (processIntake —
+ * possession is proven by WhatsApp itself), and the rule parser masks and
+ * discards phone numbers in the message body, so a typed number is silently
+ * thrown away. Asking would collect nothing and imply the typed number is what
+ * tenants see. The list says so explicitly instead.
  */
 export function newListingTemplateMessage(profileName: string | null): string {
   return [
@@ -95,8 +102,9 @@ export function newListingTemplateMessage(profileName: string | null): string {
     '• Number of bedrooms',
     '• Number of bathrooms',
     '• Monthly rent (LKR)',
-    '• A contact number',
     '• A few photos',
+    '',
+    'Tenants will contact you on this WhatsApp number, so there’s no need to send one.',
     '',
     'Sinhala or English is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
   ].join('\n');

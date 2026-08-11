@@ -92,13 +92,22 @@ describe('instant + status messages', () => {
       'bedrooms',
       'bathrooms',
       'Monthly rent',
-      'contact number',
       'photos',
     ]) {
       expect(m).toContain(field);
     }
     // Must reassure free-form replies — owners rarely follow the list exactly.
     expect(m).toMatch(/Sinhala or English/i);
+  });
+
+  // The sender's WhatsApp number is already attached as a VERIFIED contact and
+  // the parser discards typed phone numbers — asking for one collects nothing
+  // and implies the typed number is what tenants would see.
+  it('newListingTemplateMessage never asks for a contact number', () => {
+    const m = newListingTemplateMessage('Gayan');
+    expect(m).not.toMatch(/•.*contact number/i);
+    expect(m).not.toMatch(/phone number/i);
+    expect(m).toMatch(/contact you on this WhatsApp number/i);
   });
 
   it('newListingTemplateMessage stays clean without a profile name', () => {
