@@ -72,6 +72,36 @@ export function receivedAckMessage(profileName: string | null): string {
   return `Got it${profileName ? ', ' + profileName : ''}! We're putting your listing together — you'll hear from us here in a few minutes.`;
 }
 
+/**
+ * First-contact template sent when a brand-new submission is created. Mirrors
+ * the "please send us these details" pattern owners already expect from other
+ * WhatsApp businesses: it both acknowledges receipt AND tells them exactly what
+ * to include, cutting the needs_info back-and-forth. It replaces
+ * receivedAckMessage on the first-contact path so a greeting-only sender ("hi")
+ * and a full-listing sender both get something coherent.
+ *
+ * The closing line is deliberate: owners rarely reply in the listed order or
+ * wording, and they must not feel they have to. The rule parser handles
+ * free-form Sinhala-English text, so the template guides without demanding a
+ * format — nothing downstream assumes the reply mirrors this list.
+ */
+export function newListingTemplateMessage(profileName: string | null): string {
+  return [
+    `Thanks${profileName ? ' ' + profileName : ''}! 🏠 To list your property on Easy Rent, send us these details:`,
+    '',
+    '• Property type (house / apartment / room)',
+    '• Address',
+    '• Town / city',
+    '• Number of bedrooms',
+    '• Number of bathrooms',
+    '• Monthly rent (LKR)',
+    '• A contact number',
+    '• A few photos',
+    '',
+    'Sinhala or English is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
+  ].join('\n');
+}
+
 /** Ack for a reply that answers a "we still need…" ask. Sent once per round. */
 export function updateAckMessage(): string {
   return `Thanks — got it! Updating your listing now, give us a few minutes.`;
