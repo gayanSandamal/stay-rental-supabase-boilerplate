@@ -28,7 +28,8 @@
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:public": "playwright test public seo security",
-    "test:e2e:report": "playwright show-report e2e/.report"
+    "test:e2e:report": "playwright show-report e2e/.report",
+    "images:rewatermark": "npx tsx scripts/rewatermark-listing-photos.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
