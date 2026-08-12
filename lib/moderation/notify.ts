@@ -4,9 +4,9 @@
  * Ops always hear about a hold.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { landlords, listings } from '@/lib/db/schema';
+import { landlords, listingModerations, listings } from '@/lib/db/schema';
 import { createNotification, createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { whatsappIntakes } from '@/lib/db/schema';
@@ -108,7 +108,7 @@ export async function notifyModerationOutcome(
 
   const lines: string[] = [];
   if (isFirstPublish) {
-    lines.push(`🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`);
+    lines.push(firstPublishLine(listing));
     if (verdict.landlordReasons.length) lines.push('', ...verdict.landlordReasons);
   } else if (verdict.outcome === 'passed') {
     if (ctx.added > 0) {
@@ -124,7 +124,12 @@ export async function notifyModerationOutcome(
 
   if (intake?.fromNumber) {
     const sent = await whatsappAdapter.sendText(intake.fromNumber, message);
-    if (!sent) {
+    if (sent) {
+      // Only the go-live announcement is reconciled, so only it is recorded.
+      // Stamping on a photo-added follow-up would mark a listing announced
+      // whose owner never heard it went live.
+      if (isFirstPublish) await markLandlordNotified(listing.id);
+    } else {
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
         title: `Could not WhatsApp the owner of listing #${listing.id} — contact them manually`,
@@ -149,5 +154,100 @@ export async function notifyModerationOutcome(
       body: (verdict.landlordReasons.join(' ') || verdict.reasons.join(' ')).slice(0, 300),
       link: `/dashboard/listings/${listing.id}`,
     });
+    if (isFirstPublish) await markLandlordNotified(listing.id);
+  } else if (isFirstPublish) {
+    // Nobody to tell — an ops-owned listing with no landlord account. Record it
+    // anyway: the reconciler must not re-examine it on every tick forever.
+    await markLandlordNotified(listing.id);
+  }
+}
+
+/** The one line that says a listing went live. Shared with the reconciler. */
+function firstPublishLine(listing: Pick<ListingRow, 'id' | 'title'>): string {
+  return `🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`;
+}
+
+async function markLandlordNotified(listingId: number): Promise<void> {
+  await db
+    .update(listings)
+    .set({ landlordNotifiedAt: new Date() })
+    .where(eq(listings.id, listingId));
+}
+
+/**
+ * Deliver go-live announcements that never landed.
+ *
+ * The live path sends once, at the end of a time-bounded sweeper run, and a run
+ * that is killed mid-notify leaves a published listing whose owner was never
+ * told — permanently, since nothing retried. This is that retry.
+ *
+ * Scoped to listings published in the last `withinHours` so a permanently
+ * undeliverable number cannot be retried forever; past that window the ops
+ * notification is the backstop and a human takes over.
+ */
+export async function reconcileMissedAnnouncements(
+  limit = 5,
+  withinHours = 24
+): Promise<{ sent: number; failed: number }> {
+  const cutoff = new Date(Date.now() - withinHours * 60 * 60 * 1000);
+  const pending = await db.query.listings.findMany({
+    where: and(
+      isNull(listings.landlordNotifiedAt),
+      eq(listings.status, 'active'),
+      eq(listings.moderationStatus, 'passed'),
+      isNotNull(listings.publishedAt),
+      gt(listings.publishedAt, cutoff)
+    ),
+    limit,
+  });
+
+  let sent = 0;
+  let failed = 0;
+  for (const listing of pending) {
+    try {
+      const intake = await findIntakeForListing(listing.id).catch(() => null);
+      if (!intake?.fromNumber) {
+        // No WhatsApp origin: the in-app path either fired or there is nobody
+        // to tell. Either way it is not this reconciler's to chase.
+        await markLandlordNotified(listing.id);
+        continue;
+      }
+      // Re-use the reasons the failed run computed, so the sender gets the same
+      // message they should have had rather than a bare "it's live".
+      const reasons = await lastLandlordReasons(listing.id);
+      const message = [firstPublishLine(listing), ...(reasons.length ? ['', ...reasons] : [])].join(
+        '\n'
+      );
+      if (await whatsappAdapter.sendText(intake.fromNumber, message)) {
+        await markLandlordNotified(listing.id);
+        sent++;
+      } else {
+        failed++;
+      }
+    } catch (err) {
+      console.error('[moderation] announcement reconcile failed', listing.id, err);
+      failed++;
+    }
+  }
+  if (sent || failed) {
+    console.log(`[moderation] reconciled announcements — sent ${sent}, failed ${failed}`);
+  }
+  return { sent, failed };
+}
+
+/** Landlord-facing reasons from the listing's most recent recorded verdict. */
+async function lastLandlordReasons(listingId: number): Promise<string[]> {
+  const row = await db.query.listingModerations.findFirst({
+    where: eq(listingModerations.listingId, listingId),
+    orderBy: (t, { desc }) => [desc(t.createdAt)],
+  });
+  if (!row?.verdict) return [];
+  try {
+    const parsed = JSON.parse(row.verdict) as { landlordReasons?: unknown };
+    return Array.isArray(parsed.landlordReasons)
+      ? parsed.landlordReasons.filter((r): r is string => typeof r === 'string')
+      : [];
+  } catch {
+    return [];
   }
 }

@@ -45,7 +45,7 @@ import { checkText } from './text-check';
 import { combine, nextListingStatus, summarize } from './verdict';
 import { PROMPT_VERSION } from './prompts';
 import { MODERATION_IMAGE_MODEL } from './config';
-import { notifyModerationOutcome } from './notify';
+import { notifyModerationOutcome, reconcileMissedAnnouncements } from './notify';
 import type { ImageVerdict, ModerationPolicy, ModerationVerdict } from './types';
 
 export interface SweepCounts {
@@ -54,6 +54,9 @@ export interface SweepCounts {
   held: number;
   errored: number;
   skipped: number;
+  /** Go-live announcements delivered late by the reconcile pass. */
+  announced?: number;
+  announceFailed?: number;
 }
 
 type ListingRow = typeof listings.$inferSelect;
@@ -563,6 +566,18 @@ export async function sweepModerationQueue(): Promise<SweepCounts> {
         .where(eq(listings.id, listing.id))
         .catch(() => {});
     }
+  }
+
+  // Deliver go-live announcements a previous run published but never sent —
+  // its own step, after the batch, so a moderation failure above cannot skip it
+  // and it still runs on a tick with an empty queue (which is exactly when a
+  // missed announcement is waiting).
+  try {
+    const { sent, failed } = await reconcileMissedAnnouncements();
+    counts.announced = sent;
+    if (failed) counts.announceFailed = failed;
+  } catch (err) {
+    console.error('[moderation] announcement reconcile pass failed', err);
   }
 
   return counts;
