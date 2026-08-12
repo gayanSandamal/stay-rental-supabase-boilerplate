@@ -37,8 +37,18 @@ export const MODERATION_TIMEOUT_MS = Number(process.env.MODERATION_TIMEOUT_MS ??
 /** Listings claimed per cron run. Memory-bound (sharp decodes), not time-bound. */
 export const MODERATION_BATCH_SIZE = Number(process.env.MODERATION_BATCH_SIZE ?? 2);
 
-/** Leave the run before Vercel's maxDuration kills it mid-listing. */
-export const MODERATION_RUN_BUDGET_MS = Number(process.env.MODERATION_RUN_BUDGET_MS ?? 45_000);
+/**
+ * Leave the run before Vercel's maxDuration (60s) kills it mid-listing.
+ *
+ * This bounds the IMAGE loop only. Everything after it — the DB write, the
+ * audit rows, the ops notification and the landlord's WhatsApp message — is
+ * unbounded and runs on whatever time is left, which is why the gap to 60s has
+ * to be generous. At 45s it was not: listing #14 (2026-08-12) wrote both audit
+ * rows and then died inside notify, publishing a listing whose owner was never
+ * told. The reconcile pass now repairs that, but the cheaper fix is to not run
+ * out of clock in the first place.
+ */
+export const MODERATION_RUN_BUDGET_MS = Number(process.env.MODERATION_RUN_BUDGET_MS ?? 35_000);
 
 /** Give up and hold the listing after this many failed attempts. */
 export const MODERATION_MAX_ATTEMPTS = 3;

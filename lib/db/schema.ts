@@ -200,6 +200,9 @@ export const listings = pgTable('listings', {
   moderatedAt: timestamp('moderated_at'),
   moderationAttempts: integer('moderation_attempts').notNull().default(0),
   moderationLeaseUntil: timestamp('moderation_lease_until'),
+  // When the owner was told their listing went live. NULL on a published
+  // listing means the announcement never landed — the sweeper reconciles those.
+  landlordNotifiedAt: timestamp('landlord_notified_at'),
   photosManifest: text('photos_manifest'), // JSON array of PhotoManifestEntry
   archivedAt: timestamp('archived_at'), // set on archive; purged 30 days later
 });
