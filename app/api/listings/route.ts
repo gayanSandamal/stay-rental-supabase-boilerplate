@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingContactNumbers, userContactNumbers, users } from '@/lib/db/schema';
+import { normalizeLocation } from '@/lib/intake/parser/gazetteer';
 import { getUser, getActiveListingCountForLandlord } from '@/lib/db/queries';
 import { landlords } from '@/lib/db/schema';
 import { getLandlordPlanTier, getListingLimit } from '@/lib/landlord-plans';
@@ -177,13 +178,18 @@ export async function POST(request: NextRequest) {
     };
 
     // Build listing data - start with base fields
+    const listingLocation = normalizeLocation(city, district);
+
     const listingData: any = {
         landlordId,
         title,
         description: toStringOrNull(description),
         address,
-        city: city || 'Colombo',
-        district: toStringOrNull(district),
+        // The city column is matched with `eq` by the search filter, so a
+        // free-typed "colombo 7" would be permanently unfindable. Canonicalise
+        // known towns and derive their district; a genuine small town is kept.
+        city: listingLocation.city || 'Colombo',
+        district: listingLocation.district,
         latitude: toNumberOrNull(latitude),
         longitude: toNumberOrNull(longitude),
         propertyType: toStringOrNull(propertyType),

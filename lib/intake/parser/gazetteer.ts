@@ -346,3 +346,65 @@ export function matchDistrict(lowerText: string): District | null {
   }
   return null;
 }
+
+/**
+ * Every canonical town name, sorted — the option list for pickers and filters.
+ * Built from CITIES so the UI can never drift from what the matcher accepts,
+ * which is exactly how the old hardcoded 12-city filter dropdown ended up
+ * unable to find `Pannipitiya`, `Kolonnawa` or `Dehiwala`.
+ */
+export const CITY_NAMES: string[] = Array.from(new Set(CITIES.map((c) => c.name))).sort((a, b) =>
+  a.localeCompare(b)
+);
+
+export interface NormalizedLocation {
+  city: string;
+  district: string | null;
+  /** The town resolved to a gazetteer entry, rather than being kept as typed. */
+  known: boolean;
+}
+
+/** Title-case a free-typed place name without mangling "Ja-Ela" or "Ratnapura". */
+function titleCasePlace(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/(^|[\s\-'/])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
+/**
+ * Canonicalise a city/district pair as typed into a form field.
+ *
+ * Known town → the gazetteer's exact spelling, with its district derived (a
+ * town implies its district, so a hand-typed one is never trusted over it).
+ *
+ * Unknown town → kept, tidied, NOT rejected. Sri Lanka has thousands of small
+ * towns and `lib/moderation/location.ts` carries an explicit rule that an
+ * unfamiliar one is a soft note and never a hold; refusing it here would
+ * silently contradict that and cost real listings. The district is still
+ * resolved on its own so the listing lands in the right 25-way bucket, which is
+ * the axis search and grouping can actually rely on.
+ */
+export function normalizeLocation(
+  cityInput: string | null | undefined,
+  districtInput?: string | null
+): NormalizedLocation {
+  const rawCity = (cityInput ?? '').trim().replace(/\s+/g, ' ');
+  const rawDistrict = (districtInput ?? '').trim().replace(/\s+/g, ' ');
+  if (!rawCity) {
+    const only = rawDistrict ? matchDistrict(rawDistrict.toLowerCase()) : null;
+    return { city: '', district: only ?? (rawDistrict ? titleCasePlace(rawDistrict) : null), known: false };
+  }
+
+  const lower = rawCity.toLowerCase();
+  // isCityName is the exact-match pass (the field holds ONE place name);
+  // matchCity then catches the Colombo ward form, e.g. "colombo 07" → "Colombo 7".
+  const hit = isCityName(lower) ?? matchCity(lower);
+  if (hit) return { city: hit.city, district: hit.district, known: true };
+
+  const district = rawDistrict ? matchDistrict(rawDistrict.toLowerCase()) : null;
+  return {
+    city: titleCasePlace(rawCity),
+    district: district ?? (rawDistrict ? titleCasePlace(rawDistrict) : null),
+    known: false,
+  };
+}

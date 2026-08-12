@@ -9,6 +9,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { ParsedIntake, computeMissingFields } from './types';
 import { parseIntakeRules, RULES_VERSION } from './rule-parser';
 import { isLlmParserConfigured, parseIntakeWithLlm } from './llm-parser';
+import { normalizeLocation } from './gazetteer';
 
 export type { ParsedIntake } from './types';
 export { REQUIRED_FIELDS } from './types';
@@ -57,6 +58,16 @@ function mergeParsed(rule: ParsedIntake, llm: ParsedIntake): ParsedIntake {
     multiProperty: Boolean(rule.multiProperty || llm.multiProperty),
     parserMeta: { engine: 'rules+llm', rulesVersion: RULES_VERSION },
   };
+  // The rule parser can only ever emit a gazetteer town, because its city comes
+  // from matchCity. The LLM is under no such constraint — it is asked for a
+  // "Sri Lankan city" as free text, and it exists precisely to name towns the
+  // gazetteer misses. Left raw, that is how an uncanonical spelling reaches a
+  // column the search filter matches with `eq`. Normalising here canonicalises
+  // what IS known and derives the district, while still keeping a genuine small
+  // town the LLM found.
+  const location = normalizeLocation(merged.city, merged.district);
+  merged.city = location.city || null;
+  merged.district = location.district;
   // The rules compose a cityless title ("3BR House") when the gazetteer misses
   // the town; if the LLM recovered the city, retrofit it — otherwise the
   // listing publishes titled without its location.
