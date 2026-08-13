@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { loadLocations } from '@/lib/locations/store';
 import { intakeChannelAdapters } from '@/lib/intake/channels/registry';
 import { processSettledIntakes } from '@/lib/intake/process';
 
@@ -23,6 +24,9 @@ export async function GET(request: NextRequest) {
   }
 
   await loadFeatureFlags();
+  // Town catalogue for the matcher. Cached per instance behind a TTL, so
+  // this is a no-op after the first call — same contract as the flags above.
+  await loadLocations();
   if (!isFeatureEnabled('enableWhatsAppIntake')) {
     return NextResponse.json({ ok: true, skipped: 'flag off' });
   }

@@ -10,6 +10,7 @@ import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { loadLocations } from '@/lib/locations/store';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
 import { photoCap } from '@/lib/images/cap';
@@ -19,6 +20,9 @@ import { isModerationConfigured } from '@/lib/moderation/config';
 export async function POST(request: NextRequest) {
   try {
     await loadFeatureFlags();
+    // Town catalogue for the matcher. Cached per instance behind a TTL, so
+    // this is a no-op after the first call — same contract as the flags above.
+    await loadLocations();
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || request.headers.get('x-real-ip') || '127.0.0.1';
     const rl = checkRateLimit(ip, 'POST', '/api/listings');

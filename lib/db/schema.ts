@@ -348,6 +348,28 @@ export const intakeConversations = pgTable('intake_conversations', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+/**
+ * Sri Lankan places. Source of truth for the listing location picker, the
+ * WhatsApp town matcher (loaded into a cached in-process snapshot, see
+ * lib/locations/store.ts) and radius search via lat/lng.
+ */
+export const locations = pgTable('locations', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 120 }).notNull(),
+  /** Stored, not computed: lower(name) in a WHERE clause cannot use an index. */
+  nameLower: varchar('name_lower', { length: 120 }).notNull(),
+  district: varchar('district', { length: 50 }).notNull(),
+  province: varchar('province', { length: 50 }),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }),
+  /** Ranks the picker so common towns beat hamlets. */
+  population: integer('population'),
+  /** 'curated' = the hand-tuned list (aliases, wards) that must survive reseeds. */
+  source: varchar('source', { length: 16 }).notNull().default('csv'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Audit log action enum
 export const auditActionEnum = pgEnum('audit_action', [
   'listing_created',
