@@ -181,7 +181,7 @@ export default async function ListingEditPage({
                 <div className="flex items-center text-gray-600">
                   <MapPin className="h-5 w-5 mr-2 shrink-0" />
                   <span className="min-w-0">
-                    {listing.address}, {listing.city}
+                    {[listing.address, listing.city].filter(Boolean).join(", ")}
                     {/* district repeats the city for district capitals */}
                     {listing.district && listing.district !== listing.city && `, ${listing.district}`}
                   </span>

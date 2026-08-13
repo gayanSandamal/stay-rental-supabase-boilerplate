@@ -94,7 +94,10 @@ export const listingFormConfig: FormConfig = {
       label: 'Address',
       type: 'text',
       placeholder: 'Street address',
-      required: true,
+      // Optional when the town is one we recognise — plenty of landlords will
+      // not publish an exact address, and the API still rejects a listing that
+      // has neither. See computeMissingFields in lib/intake/parser/types.ts.
+      helpText: 'Optional if your town is in the list below.',
     },
     {
       name: 'city',

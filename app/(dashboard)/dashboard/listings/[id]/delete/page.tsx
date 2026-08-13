@@ -72,7 +72,7 @@ export default async function DeleteListingPage({
             <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
               <MapPin className="h-4 w-4 shrink-0" />
               <span className="min-w-0">
-                {listing.address}, {listing.city}
+                {[listing.address, listing.city].filter(Boolean).join(", ")}
               </span>
             </p>
             <p className="mt-1 text-sm font-medium text-slate-900">

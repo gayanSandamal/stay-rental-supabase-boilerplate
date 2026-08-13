@@ -38,6 +38,7 @@ const MIGRATIONS = [
   '0033_intake_location_pin.sql',
   '0034_moderation_coverage.sql',
   '0035_listing_landlord_notified.sql',
+  '0036_listing_address_optional.sql',
 ];
 
 function splitStatements(sql: string): string[] {

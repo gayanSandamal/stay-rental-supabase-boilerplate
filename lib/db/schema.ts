@@ -109,7 +109,8 @@ export const listings = pgTable('listings', {
   status: listingStatusEnum('status').notNull().default('pending'),
   
   // Location
-  address: text('address').notNull(),
+  // Nullable: a recognised town is location enough (migration 0036).
+  address: text('address'),
   city: varchar('city', { length: 100 }).notNull().default('Colombo'),
   district: varchar('district', { length: 100 }),
   latitude: decimal('latitude', { precision: 10, scale: 8 }),

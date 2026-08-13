@@ -453,7 +453,8 @@ const CASES: Array<{
       bedrooms: 5,
       bathrooms: 3,
       title: '5BR House in Kolonnawa',
-      missingFields: ['address', 'rentPerMonth'],
+      // No address asked for — Kolonnawa is a town we recognise.
+      missingFields: ['rentPerMonth'],
     },
   },
   {
@@ -528,11 +529,24 @@ describe('parseIntakeRules', () => {
 
   it('computes missingFields against the required set', () => {
     const parsed = parseIntakeRules('house in Nugegoda');
-    expect(parsed.missingFields).toContain('address');
     expect(parsed.missingFields).toContain('bedrooms');
     expect(parsed.missingFields).toContain('rentPerMonth');
     expect(parsed.missingFields).not.toContain('city');
     expect(parsed.missingFields).not.toContain('title');
+    // Nugegoda is a town we know, so no street address is demanded.
+    expect(parsed.missingFields).not.toContain('address');
+  });
+
+  it('requires an address only when the town is unrecognised', () => {
+    expect(parseIntakeRules('house in Nugegoda 2br 60000 per month').missingFields).toEqual([]);
+    // In free text an unknown town cannot be identified at all — there is no
+    // field saying which word is the town — so the city is missing too, and the
+    // address stays required. The city-known waiver is what makes the
+    // difference, not the presence of some string.
+    expect(parseIntakeRules('house in Zzyzx Village 2br 60000 per month').missingFields).toEqual([
+      'address',
+      'city',
+    ]);
   });
 
   it('tags parserMeta with the rules engine', () => {
@@ -572,4 +586,37 @@ describe('detectUpdateIntent', () => {
       expect(detectUpdateIntent(text)).toBe(false);
     });
   }
+});
+
+describe('typo-tolerant town matching', () => {
+  it('publishes a misspelt town with no address at all', () => {
+    // The exact submission that motivated this: a town, a typo, no street.
+    const p = parseIntakeRules('House for rent at Pannupitiya, 2 bedrooms, 60000 per month');
+    expect(p.city).toBe('Pannipitiya');
+    expect(p.district).toBe('Colombo');
+    expect(p.address).toBeNull();
+    // Nothing outstanding — a recognised town stands in for the address.
+    expect(p.missingFields).toEqual([]);
+    expect(p.citySuggestion).toMatchObject({ from: 'Pannupitiya', confident: true });
+  });
+
+  it('still demands an address when the town is not one we know', () => {
+    const p = parseIntakeRules('House for rent at Zzyzx Village, 2 bedrooms, 60000 per month');
+    expect(p.missingFields).toContain('address');
+  });
+
+  it('does not invent a town from ordinary listing words', () => {
+    const p = parseIntakeRules(
+      'House for rent, 2 bedrooms, 60000 per month, sandy beach nearby, parking, furnished'
+    );
+    expect(p.city).toBeNull();
+    expect(p.citySuggestion).toBeUndefined();
+    expect(p.missingFields).toContain('city');
+  });
+
+  it('leaves a correctly spelled town untouched', () => {
+    const p = parseIntakeRules('House for rent at Pannipitiya, 2 bedrooms, 60000 per month');
+    expect(p.city).toBe('Pannipitiya');
+    expect(p.citySuggestion).toBeUndefined();
+  });
 });

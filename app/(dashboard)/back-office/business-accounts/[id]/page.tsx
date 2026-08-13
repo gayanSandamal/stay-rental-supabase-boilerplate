@@ -175,7 +175,7 @@ export default async function BusinessAccountDetailPage({
                   className="block p-3 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
                 >
                   <p className="font-medium">{listing.title}</p>
-                  <p className="text-sm text-gray-500">{listing.address}</p>
+                  <p className="text-sm text-gray-500">{listing.address ?? listing.city}</p>
                 </Link>
               ))}
             </div>

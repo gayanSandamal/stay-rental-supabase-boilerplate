@@ -196,7 +196,10 @@ export default async function ListingDetailPage({
     url: listingUrl,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: listing.address,
+      // Omitted rather than null: Google rejects a PostalAddress with an empty
+      // streetAddress, and locality alone is a valid address for a listing
+      // published on its town.
+      streetAddress: listing.address ?? undefined,
       addressLocality: listing.city,
       addressRegion: listing.district ?? undefined,
       addressCountry: 'LK',
@@ -284,7 +287,7 @@ export default async function ListingDetailPage({
             </h1>
             <div className="flex items-center text-gray-600 mb-4">
               <MapPin className="h-5 w-5 mr-2" />
-              {listing.address}, {listing.city}
+              {[listing.address, listing.city].filter(Boolean).join(", ")}
               {/* district repeats the city for district capitals ("Gampaha, Gampaha") */}
               {listing.district && listing.district !== listing.city && `, ${listing.district}`}
             </div>

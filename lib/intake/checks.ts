@@ -1,6 +1,6 @@
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 export interface CheckResult {
@@ -57,10 +57,21 @@ export async function runIntakeChecks(parsed: ParsedIntake): Promise<CheckResult
   // Duplicate screen — mirrors the API's duplicate detection. Only live and
   // in-review listings count: relisting after expiry/rented/archive is the
   // normal lifecycle, not fraud.
+  // A listing published on its town alone has no address to compare, and
+  // `eq(address, NULL)` is never true in SQL — left as-is, the duplicate screen
+  // would silently switch itself off for exactly those listings and let one
+  // sender repost the same property indefinitely. Town + size + rent is the
+  // next-best identity when there is no street to match on.
   const dupe = await db.query.listings.findFirst({
     where: and(
-      eq(listings.address, parsed.address!),
       eq(listings.city, parsed.city!),
+      parsed.address
+        ? eq(listings.address, parsed.address)
+        : and(
+            isNull(listings.address),
+            eq(listings.bedrooms, parsed.bedrooms!),
+            eq(listings.rentPerMonth, String(parsed.rentPerMonth))
+          ),
       inArray(listings.status, ['active', 'pending'])
     ),
   });

@@ -58,7 +58,7 @@ export default async function BackOfficeListingsPage({
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
                       {listing.title}
                     </h3>
-                    <p className="text-sm text-gray-600 mb-2">{listing.address}</p>
+                    <p className="text-sm text-gray-600 mb-2">{listing.address ?? listing.city}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span>Status: {listing.status}</span>
                       {listing.createdBy && <span>Created by: {listing.createdBy}</span>}

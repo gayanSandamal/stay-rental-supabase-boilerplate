@@ -362,6 +362,8 @@ export interface NormalizedLocation {
   district: string | null;
   /** The town resolved to a gazetteer entry, rather than being kept as typed. */
   known: boolean;
+  /** Set when a misspelling was corrected, carrying what the sender wrote. */
+  corrected?: { from: string };
 }
 
 /** Title-case a free-typed place name without mangling "Ja-Ela" or "Ratnapura". */
@@ -401,10 +403,150 @@ export function normalizeLocation(
   const hit = isCityName(lower) ?? matchCity(lower);
   if (hit) return { city: hit.city, district: hit.district, known: true };
 
+  // Exact matching failed, so try for a misspelling. Safe here and NOT in a
+  // free-text scan: this argument is a location field, so it is already
+  // believed to be a place name rather than an arbitrary word.
+  const fuzzy = fuzzyCityName(rawCity);
+  if (fuzzy) {
+    return {
+      city: fuzzy.city,
+      district: fuzzy.district,
+      known: true,
+      corrected: { from: rawCity },
+    };
+  }
+
   const district = rawDistrict ? matchDistrict(rawDistrict.toLowerCase()) : null;
   return {
     city: titleCasePlace(rawCity),
     district: district ?? (rawDistrict ? titleCasePlace(rawDistrict) : null),
     known: false,
+  };
+}
+
+/* -------------------------------------------------------------------------
+ * Typo tolerance
+ *
+ * Landlords misspell their own town ("Pannupitiya" for "Pannipitiya"), and an
+ * unmatched town costs a whole listing: the city goes null, the submission
+ * lands in needs_info, and the sender is asked for something they already gave.
+ *
+ * The danger is the opposite failure. A wrong town is worse than no town,
+ * because nothing downstream ever questions it — so every guard below exists to
+ * make a false positive impossible rather than merely unlikely, and callers
+ * scanning free text must CONFIRM a suggestion rather than apply it.
+ * ---------------------------------------------------------------------- */
+
+/** Below this a single edit is most of the word: "sandy"→"Kandy", "gall"→"Galle". */
+const FUZZY_MIN_LENGTH = 6;
+/** Typos cluster in the middle and end; a wrong start means a different word. */
+const FUZZY_PREFIX_LENGTH = 3;
+/** A silent correction has to be near-certain — anything less gets confirmed. */
+const FUZZY_CONFIDENT_MIN_LENGTH = 8;
+
+/**
+ * Words that reach a matcher looking like place names but never are. Without
+ * this, "parking" sits one edit from a town and every listing mentioning it
+ * acquires a location.
+ */
+const FUZZY_STOP_WORDS = new Set([
+  'bedroom', 'bedrooms', 'bathroom', 'bathrooms', 'washroom', 'washrooms',
+  'kitchen', 'parking', 'garage', 'balcony', 'veranda', 'verandah',
+  'furnished', 'unfurnished', 'attached', 'upstairs', 'downstairs',
+  'spacious', 'modern', 'luxury', 'available', 'immediately', 'monthly',
+  'deposit', 'advance', 'perches', 'perch', 'square', 'storey', 'stories',
+  'annexe', 'apartment', 'apartments', 'property', 'house', 'houses',
+  'contact', 'whatsapp', 'number', 'please', 'thanks', 'message',
+  'electricity', 'internet', 'security', 'servant', 'quarters',
+]);
+
+/**
+ * Damerau-Levenshtein distance, abandoning the comparison once it cannot come
+ * in at or under `max`. The early exit matters: this runs against every
+ * gazetteer key for every candidate token.
+ */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const prev2 = new Array<number>(b.length + 1);
+  let prev = new Array<number>(b.length + 1);
+  let curr = new Array<number>(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  let prevPrev: number[] | null = null;
+
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    let rowMin = curr[0];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let value = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      // Transposition ("Pannipitiya" → "Pannpiitiya") is one slip, not two.
+      if (
+        prevPrev &&
+        i > 1 &&
+        j > 1 &&
+        a[i - 1] === b[j - 2] &&
+        a[i - 2] === b[j - 1]
+      ) {
+        value = Math.min(value, prevPrev[j - 2] + cost);
+      }
+      curr[j] = value;
+      if (value < rowMin) rowMin = value;
+    }
+    // Every remaining path only grows, so this can never recover.
+    if (rowMin > max) return max + 1;
+    prevPrev = prev;
+    prev = curr;
+    curr = prevPrev === prev2 ? prev2 : new Array<number>(b.length + 1);
+  }
+  return prev[b.length];
+}
+
+export interface FuzzyCityMatch {
+  city: string;
+  district: District;
+  distance: number;
+  /** Safe to apply without asking. Everything else must be confirmed. */
+  confident: boolean;
+}
+
+/**
+ * Nearest gazetteer town to a string that is already believed to BE a place
+ * name — a form field, or a token a caller has isolated from free text.
+ *
+ * Never call this on whole free text: it would happily match a word from the
+ * middle of a sentence. Returns null when any guard fails, and — deliberately —
+ * when two different towns tie, because a coin flip between Matara and Matale
+ * files the listing in the wrong district half the time.
+ */
+export function fuzzyCityName(input: string): FuzzyCityMatch | null {
+  const token = (input ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (token.length < FUZZY_MIN_LENGTH) return null;
+  if (FUZZY_STOP_WORDS.has(token)) return null;
+
+  const budget = token.length >= 10 ? 2 : 1;
+  const prefix = token.slice(0, FUZZY_PREFIX_LENGTH);
+
+  let best: { candidate: Candidate; distance: number } | null = null;
+  let ambiguous = false;
+
+  for (const candidate of CANDIDATES) {
+    if (candidate.key.length < FUZZY_MIN_LENGTH) continue;
+    if (!candidate.key.startsWith(prefix)) continue;
+    const distance = editDistance(token, candidate.key, budget);
+    if (distance > budget) continue;
+    if (!best || distance < best.distance) {
+      best = { candidate, distance };
+      ambiguous = false;
+    } else if (distance === best.distance && candidate.city !== best.candidate.city) {
+      ambiguous = true;
+    }
+  }
+
+  if (!best || ambiguous) return null;
+  return {
+    city: best.candidate.city,
+    district: best.candidate.district,
+    distance: best.distance,
+    confident: best.distance <= 1 && token.length >= FUZZY_CONFIDENT_MIN_LENGTH,
   };
 }
