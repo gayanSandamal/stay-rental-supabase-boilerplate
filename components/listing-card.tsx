@@ -100,7 +100,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   </h3>
                   <div className="flex items-center text-slate-500 text-sm mt-1 gap-1">
                     <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span className="truncate">{listing.address}, {listing.city}</span>
+                    <span className="truncate">{[listing.address, listing.city].filter(Boolean).join(", ")}</span>
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
@@ -227,7 +227,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
           </h3>
           <div className="flex items-center text-slate-500 text-xs mb-3 gap-1">
             <MapPin className="h-3 w-3 flex-shrink-0" />
-            <span className="truncate">{listing.address}, {listing.city}</span>
+            <span className="truncate">{[listing.address, listing.city].filter(Boolean).join(", ")}</span>
           </div>
 
           <div className="flex items-center gap-3 text-sm text-slate-700 mb-4">

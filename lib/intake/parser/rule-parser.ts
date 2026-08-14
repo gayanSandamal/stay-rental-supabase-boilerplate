@@ -7,7 +7,7 @@
  */
 
 import { ParsedIntake, computeMissingFields } from './types';
-import { matchCity, matchAllCities, matchDistrict, isCityName } from './gazetteer';
+import { matchCity, matchAllCities, matchDistrict, isCityName, fuzzyCityName } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
 export const RULES_VERSION = 5;
@@ -470,6 +470,43 @@ export function detectUpdateIntent(messageText: string): boolean {
   return parseIntakeRules(text).address == null;
 }
 
+/**
+ * Words worth testing as a misspelt town. Deliberately narrow: only tokens that
+ * could be a place name at all, taken from the whole message because landlords
+ * write the town anywhere ("house for rent Pannupitiya", "at Pannupitiya, 2br").
+ *
+ * Nothing here is applied on its own — `parseIntakeRules` records a suggestion
+ * and leaves `city` null, so a bad guess costs a confirmation prompt rather
+ * than a listing filed under the wrong town.
+ */
+function cityCandidateTokens(original: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of original.split(/[^\p{L}\p{M}]+/u)) {
+    const token = raw.trim();
+    // Numbers and short words are excluded by fuzzyCityName's own guards, but
+    // skipping them here keeps the loop off ~90% of a typical message.
+    if (token.length < 6) continue;
+    const key = token.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(token);
+  }
+  return out;
+}
+
+function suggestCity(original: string): ParsedIntake['citySuggestion'] {
+  for (const token of cityCandidateTokens(original)) {
+    const hit = fuzzyCityName(token);
+    // A token that already IS a known town would have been caught by matchCity;
+    // reaching here with distance 0 means it was rejected as a road name, so
+    // suggesting it would relitigate that decision.
+    if (!hit || hit.distance === 0) continue;
+    return { city: hit.city, district: hit.district, from: token, confident: hit.confident };
+  }
+  return undefined;
+}
+
 export function parseIntakeRules(messageText: string): ParsedIntake {
   const original = normalize(messageText ?? '');
   const masked = maskPhones(original);
@@ -482,6 +519,14 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
   const cityMatch = matchCity(lower);
   let city = cityMatch?.city ?? null;
   let district: string | null = cityMatch?.district ?? matchDistrict(lower);
+  // Only worth looking for a misspelling when no town matched outright.
+  const citySuggestion = city ? undefined : suggestCity(original);
+  if (citySuggestion?.confident) {
+    // A single edit on a long word with a matching prefix is a typo, not a
+    // different place — correcting it silently saves a needless round trip.
+    city = citySuggestion.city;
+    district = citySuggestion.district;
+  }
   const addressResult = extractAddress(masked, city);
   if (addressResult?.cityOverride) {
     city = addressResult.cityOverride.city;
@@ -509,6 +554,9 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
     suspicious: suspicion.suspicious,
     suspicionReason: suspicion.reason,
     multiProperty,
+    // Kept even once applied: the back office can see what was corrected, and
+    // an unapplied one is what the confirmation prompt is built from.
+    citySuggestion,
     parserMeta: { engine: 'rules', rulesVersion: RULES_VERSION },
   };
   parsed.missingFields = computeMissingFields(parsed);

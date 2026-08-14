@@ -184,6 +184,13 @@ export async function processIntake(
       needsInfoMessage(intake.profileName, parsed.missingFields, check.reason, {
         unsupportedMedia: intake.hasUnsupportedMedia,
         understood: summarizeUnderstood(parsed),
+        // Only when the town is still the blocker: an unconfirmed suggestion is
+        // pointless noise if we already know where the property is. Confident
+        // ones were applied by the parser and never reach here.
+        citySuggestion:
+          parsed.missingFields.includes('city') && parsed.citySuggestion
+            ? { city: parsed.citySuggestion.city, from: parsed.citySuggestion.from }
+            : null,
       })
     );
     if (!sent) {

@@ -5,8 +5,10 @@ import {
   DISTRICTS,
   matchCity,
   matchDistrict,
+  fuzzyCityName,
   normalizeLocation,
 } from '@/lib/intake/parser/gazetteer';
+import { computeMissingFields } from '@/lib/intake/parser/types';
 
 describe('gazetteer data', () => {
   it('has all 25 districts', () => {
@@ -195,5 +197,90 @@ describe('CITY_NAMES', () => {
     for (const town of ['Pannipitiya', 'Kolonnawa', 'Dehiwala', 'Nugegoda']) {
       expect(CITY_NAMES).toContain(town);
     }
+  });
+});
+
+describe('fuzzyCityName', () => {
+  it('corrects the misspellings landlords actually send', () => {
+    expect(fuzzyCityName('Pannupitiya')?.city).toBe('Pannipitiya');
+    expect(fuzzyCityName('Nugegoada')?.city).toBe('Nugegoda');
+    expect(fuzzyCityName('Maharagame')?.city).toBe('Maharagama');
+    expect(fuzzyCityName('battaramula')?.city).toBe('Battaramulla');
+  });
+
+  // The load-bearing test. A wrong town is worse than no town, because nothing
+  // downstream questions it — every one of these sits within an edit or two of
+  // a real place name and must never match.
+  it('refuses everything that merely looks like a town', () => {
+    for (const word of [
+      'sandy', 'randy', 'gall', 'matter', 'bedroom', 'bedrooms', 'parking',
+      'furnished', 'upstairs', 'kitchen', 'balcony', 'property', 'contact',
+      'monthly', 'deposit', 'security',
+    ]) {
+      expect(fuzzyCityName(word), word).toBeNull();
+    }
+  });
+
+  it('will not guess on a word too short to be sure about', () => {
+    expect(fuzzyCityName('kandi')).toBeNull(); // 5 chars — under the floor
+  });
+
+  it('requires the start of the word to match', () => {
+    // One edit from "Gampaha", but the first letters differ, so it is a
+    // different word rather than a typo of this one.
+    expect(fuzzyCityName('Zampaha')).toBeNull();
+  });
+
+  it('only marks a long single-edit fix as confident', () => {
+    expect(fuzzyCityName('Pannupitiya')?.confident).toBe(true);
+    const short = fuzzyCityName('Matarra'); // 7 chars → correctable, not certain
+    if (short) expect(short.confident).toBe(false);
+  });
+
+  it('leaves an exact name alone at distance 0', () => {
+    expect(fuzzyCityName('Pannipitiya')).toMatchObject({ city: 'Pannipitiya', distance: 0 });
+  });
+});
+
+describe('normalizeLocation with typos', () => {
+  it('canonicalises a misspelt town and reports what was corrected', () => {
+    const out = normalizeLocation('Pannupitiya');
+    expect(out).toMatchObject({ city: 'Pannipitiya', district: 'Colombo', known: true });
+    expect(out.corrected).toEqual({ from: 'Pannupitiya' });
+  });
+
+  it('is idempotent — a corrected name normalises to itself', () => {
+    const once = normalizeLocation('Pannupitiya');
+    const twice = normalizeLocation(once.city);
+    expect(twice.city).toBe(once.city);
+    expect(twice.corrected).toBeUndefined();
+  });
+
+  it('still keeps a genuine unknown town rather than forcing a match', () => {
+    const out = normalizeLocation('Zzyzx Village');
+    expect(out.known).toBe(false);
+    expect(out.city).toBe('Zzyzx Village');
+  });
+});
+
+describe('address requirement', () => {
+  const base = {
+    title: 'x', propertyType: null, address: null, district: null,
+    bedrooms: 2, bathrooms: null, rentPerMonth: 60000, description: null,
+    missingFields: [], suspicious: false, suspicionReason: null,
+  };
+
+  it('waives the address for a town we recognise', () => {
+    expect(computeMissingFields({ ...base, city: 'Pannipitiya' } as any)).toEqual([]);
+  });
+
+  it('waives it for a misspelt town too, since that still resolves', () => {
+    expect(computeMissingFields({ ...base, city: 'Pannupitiya' } as any)).toEqual([]);
+  });
+
+  // The safety valve: something must locate the property, so an unknown town
+  // still has to come with a street.
+  it('keeps requiring it for a town we do not know', () => {
+    expect(computeMissingFields({ ...base, city: 'Zzyzx Village' } as any)).toEqual(['address']);
   });
 });

@@ -5,7 +5,7 @@ import { normalizeLocation } from '@/lib/intake/parser/gazetteer';
 import { getUser, getActiveListingCountForLandlord } from '@/lib/db/queries';
 import { landlords } from '@/lib/db/schema';
 import { getLandlordPlanTier, getListingLimit } from '@/lib/landlord-plans';
-import { eq, and, inArray, or, sql } from 'drizzle-orm';
+import { eq, and, inArray, isNull, or, sql } from 'drizzle-orm';
 import { businessAccountMembers } from '@/lib/db/schema';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -70,10 +70,22 @@ export async function POST(request: NextRequest) {
       exclusive,
     } = body;
 
-    // Validate required fields
-    if (!title || !address || !city || !bedrooms || !rentPerMonth) {
+    // Resolved up front because the address requirement depends on it.
+    const listingLocation = normalizeLocation(city, district);
+
+    // Validate required fields. A recognised town stands in for a street
+    // address — landlords often will not publish one, and refusing the listing
+    // does not produce an address, it just loses the listing. An unknown town
+    // still needs one so nothing is published with no usable location.
+    if (!title || !city || !bedrooms || !rentPerMonth) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+    if (!address && !listingLocation.known) {
+      return NextResponse.json(
+        { error: 'Add a street address, or use a town we recognise' },
         { status: 400 }
       );
     }
@@ -178,13 +190,11 @@ export async function POST(request: NextRequest) {
     };
 
     // Build listing data - start with base fields
-    const listingLocation = normalizeLocation(city, district);
-
     const listingData: any = {
         landlordId,
         title,
         description: toStringOrNull(description),
-        address,
+        address: address || null,
         // The city column is matched with `eq` by the search filter, so a
         // free-typed "colombo 7" would be permanently unfindable. Canonicalise
         // known towns and derive their district; a genuine small town is kept.
@@ -269,8 +279,13 @@ export async function POST(request: NextRequest) {
 
     // Duplicate listing detection
     if (isFeatureEnabled('enableDuplicateDetection')) {
+      // `eq(address, NULL)` never matches, so a town-only listing would slip
+      // past this screen entirely — fall back to matching on the town alone
+      // (plus bedrooms below), which is all the identity such a listing has.
       const duplicateConditions = [
-        eq(listings.address, listingData.address),
+        listingData.address
+          ? eq(listings.address, listingData.address)
+          : isNull(listings.address),
         eq(listings.city, listingData.city),
       ];
       if (listingData.bedrooms) {

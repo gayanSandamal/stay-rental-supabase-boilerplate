@@ -1,8 +1,9 @@
 /**
- * Shared parser contract for the intake pipeline. Dependency-free by design —
- * these types are consumed by the pure rule parser (unit-tested without any
- * Next/DB setup) and by the flag-gated LLM fallback.
+ * Shared parser contract for the intake pipeline. Consumed by the pure rule
+ * parser (unit-tested without any Next/DB setup) and by the flag-gated LLM
+ * fallback, so it depends on nothing beyond the equally pure gazetteer.
  */
+import { normalizeLocation } from './gazetteer';
 
 export interface ParsedIntake {
   title: string | null;
@@ -25,6 +26,14 @@ export interface ParsedIntake {
    * so checks route this back to the sender to split.
    */
   multiProperty?: boolean;
+  /**
+   * A town the message probably meant but misspelled. Advisory only — `city`
+   * stays null and `missingFields` still reports it, because this comes from
+   * fuzzy-matching free text and a wrong town is worse than a missing one.
+   * `confident` suggestions may be applied outright; the rest are put to the
+   * sender before anything publishes.
+   */
+  citySuggestion?: { city: string; district: string; from: string; confident: boolean };
   /** Diagnostics: which engine produced the payload (persisted in parsedPayload). */
   parserMeta?: { engine: 'rules' | 'rules+llm'; rulesVersion: number; llmFailed?: boolean };
 }
@@ -38,7 +47,15 @@ export const REQUIRED_FIELDS = [
 ] as const;
 
 export function computeMissingFields(parsed: ParsedIntake): string[] {
-  return REQUIRED_FIELDS.filter((f) => parsed[f] == null);
+  return REQUIRED_FIELDS.filter((f) => {
+    if (parsed[f] != null) return false;
+    // A recognised town is location enough to publish. Plenty of landlords will
+    // not put their exact address in a public ad, and insisting on one does not
+    // produce an address — it loses the listing. An UNKNOWN town still requires
+    // it, so nothing is ever published with no reliable location at all.
+    if (f === 'address' && parsed.city && normalizeLocation(parsed.city).known) return false;
+    return true;
+  });
 }
 
 /**

@@ -49,9 +49,21 @@ export function needsInfoMessage(
   profileName: string | null,
   missingFields: string[],
   fallbackReason: string | null,
-  opts: { unsupportedMedia?: boolean; understood?: string | null } = {}
+  opts: {
+    unsupportedMedia?: boolean;
+    understood?: string | null;
+    /** A town we think they misspelled, when we are not sure enough to apply it. */
+    citySuggestion?: { city: string; from: string } | null;
+  } = {}
 ): string {
   const greeting = `Thanks${profileName ? ' ' + profileName : ''}!`;
+  // Asked as a question, never applied silently: this suggestion came from
+  // fuzzy-matching free text, and filing a listing under the wrong town is a
+  // mistake nobody downstream would ever catch.
+  if (opts.citySuggestion) {
+    const { city, from } = opts.citySuggestion;
+    return `${greeting} Did you mean ${city}? You wrote "${from}". Reply ${city} to confirm, or tell us the correct town.`;
+  }
   // Acknowledge what WAS understood before asking for more — the ask alone
   // reads as "the bot ignored my message".
   const echo = opts.understood ? ` Got it — ${opts.understood}.` : '';
