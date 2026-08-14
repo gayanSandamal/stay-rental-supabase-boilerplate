@@ -1,4 +1,5 @@
 import { FormConfig } from '@/components/form-builder';
+import { CITY_NAMES, DISTRICTS } from '@/lib/intake/parser/gazetteer';
 
 export const listingFormConfig: FormConfig = {
   title: 'Create New Listing',
@@ -101,13 +102,25 @@ export const listingFormConfig: FormConfig = {
       type: 'text',
       required: true,
       defaultValue: 'Colombo',
+      // Type-ahead over the gazetteer, but still free text: Sri Lanka has far
+      // more towns than the 173 we know, and lib/moderation/location.ts treats
+      // an unfamiliar one as a soft note rather than a problem. Whatever is
+      // typed is canonicalised on save, so "colombo 7" cannot become a bucket
+      // the `eq`-matched city filter is unable to find.
+      suggestions: CITY_NAMES,
+      helpText: 'Start typing to pick a known town, or enter your own.',
     },
     {
       name: 'district',
       label: 'District',
-      type: 'text',
-      placeholder: 'e.g., Colombo',
-      helpText: 'Optional - helps with location-based searches',
+      type: 'select',
+      // A closed set of 25, and filled in automatically from a known town on
+      // save — only worth touching when the town is one we do not know.
+      options: [
+        { label: 'Auto (from city)', value: '' },
+        ...DISTRICTS.map((name) => ({ label: name, value: name })),
+      ],
+      helpText: 'Left blank we derive it from the city. Set it if your town is not listed.',
     },
 
     // Pricing & Terms Section

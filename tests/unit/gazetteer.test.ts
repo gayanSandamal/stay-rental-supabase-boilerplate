@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CITIES, DISTRICTS, matchCity, matchDistrict } from '@/lib/intake/parser/gazetteer';
+import {
+  CITIES,
+  CITY_NAMES,
+  DISTRICTS,
+  matchCity,
+  matchDistrict,
+  normalizeLocation,
+} from '@/lib/intake/parser/gazetteer';
 
 describe('gazetteer data', () => {
   it('has all 25 districts', () => {
@@ -111,5 +118,82 @@ describe('matchDistrict', () => {
 
   it('returns null when no district appears', () => {
     expect(matchDistrict('a nice quiet neighbourhood')).toBeNull();
+  });
+});
+
+describe('normalizeLocation', () => {
+  it('canonicalises spelling and casing of a known town', () => {
+    expect(normalizeLocation('COLOMBO')).toEqual({
+      city: 'Colombo',
+      district: 'Colombo',
+      known: true,
+    });
+    expect(normalizeLocation('  pannipitiya ')).toEqual({
+      city: 'Pannipitiya',
+      district: 'Colombo',
+      known: true,
+    });
+  });
+
+  it('normalises a Colombo ward written any which way', () => {
+    expect(normalizeLocation('colombo 07').city).toBe('Colombo 7');
+    expect(normalizeLocation('Colombo-7').city).toBe('Colombo 7');
+  });
+
+  it('resolves an alias to its canonical name', () => {
+    expect(normalizeLocation('mt lavinia').city).toBe('Mount Lavinia');
+  });
+
+  // A town implies its district, so a hand-typed one must never win: that is
+  // how "Nugegoda, Gampaha" would otherwise land in the wrong 25-way bucket.
+  it('derives the district from the town, overriding a wrong one', () => {
+    expect(normalizeLocation('Nugegoda', 'Gampaha').district).toBe('Colombo');
+  });
+
+  // Sri Lanka has thousands of small towns; lib/moderation/location.ts treats an
+  // unfamiliar one as a soft note, never a hold. Normalising must not tighten that.
+  it('keeps a town it does not know rather than dropping it', () => {
+    const out = normalizeLocation('Some Tiny Village', 'gampaha');
+    expect(out.city).toBe('Some Tiny Village');
+    expect(out.district).toBe('Gampaha');
+    expect(out.known).toBe(false);
+  });
+
+  it('does not mangle hyphenated names', () => {
+    expect(normalizeLocation('ja-ela').city).toBe('Ja-Ela');
+  });
+
+  it('still resolves a district when the city is blank', () => {
+    expect(normalizeLocation('', 'kandy')).toEqual({
+      city: '',
+      district: 'Kandy',
+      known: false,
+    });
+  });
+
+  it('is idempotent — normalising twice changes nothing', () => {
+    for (const input of ['colombo 07', 'mt lavinia', 'Some Tiny Village', 'ja-ela']) {
+      const once = normalizeLocation(input);
+      const twice = normalizeLocation(once.city, once.district);
+      expect(twice.city).toBe(once.city);
+      expect(twice.district).toBe(once.district);
+    }
+  });
+});
+
+describe('CITY_NAMES', () => {
+  it('feeds the pickers from the same list the matcher accepts', () => {
+    expect(CITY_NAMES.length).toBeGreaterThan(150);
+    // Every option offered must round-trip, or the UI can offer a value the
+    // filter's eq() will never match — the exact defect this replaced.
+    for (const name of CITY_NAMES) {
+      expect(normalizeLocation(name).city).toBe(name);
+    }
+  });
+
+  it('covers the towns the intake pipeline actually produces', () => {
+    for (const town of ['Pannipitiya', 'Kolonnawa', 'Dehiwala', 'Nugegoda']) {
+      expect(CITY_NAMES).toContain(town);
+    }
   });
 });

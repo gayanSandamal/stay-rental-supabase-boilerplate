@@ -40,6 +40,8 @@ export interface FormFieldConfig {
   required?: boolean;
   defaultValue?: string | number | boolean | string[];
   options?: FieldOption[]; // For select fields
+  /** Type-ahead suggestions for a text input that still accepts free text. */
+  suggestions?: string[];
   min?: number;
   max?: number;
   step?: number;
@@ -167,6 +169,7 @@ export function FormField({
   required,
   defaultValue,
   options,
+  suggestions,
   min,
   max,
   step,
@@ -311,21 +314,36 @@ export function FormField({
         );
 
       default:
+        // A datalist gives type-ahead over a known list while still accepting
+        // anything typed — the exact shape needed for Sri Lankan towns, where
+        // the gazetteer covers the common ones but small towns must not be
+        // blocked. Whatever is typed is canonicalised server-side on save.
         return (
-          <Input
-            id={fieldId}
-            name={name}
-            type={type}
-            placeholder={placeholder}
-            required={required}
-            disabled={disabled}
-            min={min}
-            max={max}
-            step={step}
-            value={displayValue || ''}
-            onChange={(e) => handleChange(e.target.value)}
-            className={cn(error && 'border-red-500', inputClassName)}
-          />
+          <>
+            <Input
+              id={fieldId}
+              name={name}
+              type={type}
+              placeholder={placeholder}
+              required={required}
+              disabled={disabled}
+              min={min}
+              max={max}
+              step={step}
+              list={suggestions?.length ? `${fieldId}-suggestions` : undefined}
+              autoComplete={suggestions?.length ? 'off' : undefined}
+              value={displayValue || ''}
+              onChange={(e) => handleChange(e.target.value)}
+              className={cn(error && 'border-red-500', inputClassName)}
+            />
+            {suggestions?.length ? (
+              <datalist id={`${fieldId}-suggestions`}>
+                {suggestions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            ) : null}
+          </>
         );
     }
   };

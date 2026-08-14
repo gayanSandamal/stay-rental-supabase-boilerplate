@@ -1,4 +1,5 @@
 import { FormConfig } from '@/components/form-builder';
+import { CITY_NAMES, DISTRICTS } from '@/lib/intake/parser/gazetteer';
 
 export const filterFormConfig: FormConfig = {
   title: 'Filter Listings',
@@ -18,27 +19,28 @@ export const filterFormConfig: FormConfig = {
       name: 'city',
       label: 'City',
       type: 'select',
+      // Built from the gazetteer, never hand-listed. The old hardcoded 12 could
+      // not name Pannipitiya, Kolonnawa or Dehiwala — towns the intake pipeline
+      // itself produces — so most listings were unreachable by city filter. An
+      // "Other" option was worse than useless: it submitted the literal string
+      // "other", which `eq(city, …)` can never match, so it always found zero.
       options: [
         { label: 'Any City', value: '' },
-        { label: 'Colombo', value: 'Colombo' },
-        { label: 'Kandy', value: 'Kandy' },
-        { label: 'Galle', value: 'Galle' },
-        { label: 'Negombo', value: 'Negombo' },
-        { label: 'Jaffna', value: 'Jaffna' },
-        { label: 'Anuradhapura', value: 'Anuradhapura' },
-        { label: 'Ratnapura', value: 'Ratnapura' },
-        { label: 'Matara', value: 'Matara' },
-        { label: 'Kurunegala', value: 'Kurunegala' },
-        { label: 'Batticaloa', value: 'Batticaloa' },
-        { label: 'Trincomalee', value: 'Trincomalee' },
-        { label: 'Other', value: 'other' },
+        ...CITY_NAMES.map((name) => ({ label: name, value: name })),
       ],
+      helpText: 'Not listed? Filter by district instead.',
     },
     {
       name: 'district',
       label: 'District',
-      type: 'text',
-      placeholder: 'e.g., Colombo District, Gampaha',
+      type: 'select',
+      // The reliable axis: 25 districts, a closed set, and every gazetteer town
+      // carries one. A small town missing from the city list is still findable
+      // here.
+      options: [
+        { label: 'Any District', value: '' },
+        ...DISTRICTS.map((name) => ({ label: name, value: name })),
+      ],
     },
     {
       name: 'locationRadius',

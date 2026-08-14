@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingContactNumbers, userContactNumbers, businessAccountMembers, users, whatsappIntakes } from '@/lib/db/schema';
+import { normalizeLocation } from '@/lib/intake/parser/gazetteer';
 import { getUser } from '@/lib/db/queries';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
@@ -325,13 +326,17 @@ export async function PUT(
       return str === '' ? null : str;
     };
 
+    const editLocation = normalizeLocation(body.city, body.district);
+
     // Prepare update data (only allow editing of listing content, not status/approval fields)
     const updates: any = {
       title: body.title,
       description: toStringOrNull(body.description),
       address: body.address,
-      city: body.city || 'Colombo',
-      district: toStringOrNull(body.district),
+      // Same canonicalisation as create: an edit must not be able to reintroduce
+      // a spelling the `eq`-matched city filter can never find.
+      city: editLocation.city || 'Colombo',
+      district: editLocation.district,
       latitude: toNumberOrNull(body.latitude),
       longitude: toNumberOrNull(body.longitude),
       propertyType: toStringOrNull(body.propertyType),
