@@ -10,6 +10,7 @@ import { CircleIcon, Loader2 } from 'lucide-react';
 import { signIn, signUp } from './actions';
 import { ActionState } from '@/lib/auth/middleware';
 import { SignedUpBanner } from '@/components/signed-up-banner';
+import { WhatsAppSignInLink } from '@/components/whatsapp-signin-link';
 
 interface LoginProps {
   mode?: 'signin' | 'signup';
@@ -122,6 +123,9 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
           </div>
         </form>
 
+        {/* WhatsApp landlords have no password to type into the form above. */}
+        {mode === 'signin' && <WhatsAppSignInLink className="mt-6" />}
+
         <div className="mt-6">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -136,8 +140,11 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
 
           <div className="mt-6">
             <Link
+              // `redirect` can itself carry a query string (e.g.
+              // /dashboard/listings/new?mode=quick), so it has to be encoded —
+              // raw, everything after its `?` is parsed as params of this page.
               href={`${mode === 'signin' ? '/sign-up' : '/sign-in'}${
-                redirect ? `?redirect=${redirect}` : ''
+                redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''
               }${priceId ? `&priceId=${priceId}` : ''}${plan ? `&plan=${plan}` : ''}`}
               className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-600"
             >
