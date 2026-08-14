@@ -60,6 +60,16 @@
   body {
     font-family: "Manrope", Arial, Helvetica, sans-serif;
   }
+
+  /* Swipable tracks (e.g. the property image carousel) scroll horizontally but
+     should not show a scrollbar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
