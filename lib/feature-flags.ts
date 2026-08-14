@@ -44,10 +44,10 @@ export const featureFlagDefaults = {
   // otherwise, so default-ON is safe. Kill here if WhatsApp volume overwhelms ops.
   enableWhatsAppConcierge: true,
 
-  // The 60-second quick-list form (/dashboard/listings/quick-new): 6 required
-  // fields create a normal pending listing; ops enriches details during the
-  // verification call. Off → entry points hide and the page falls back to the
-  // full form.
+  // The 60-second quick-list form (/dashboard/listings/new?mode=quick): 6
+  // required fields create a normal pending listing; ops enriches details
+  // during the verification call. Off → entry points hide, the quick/full
+  // toggle is not rendered, and the page always opens in full mode.
   enableQuickList: true,
 
   // WhatsApp Business intake pipeline (webhook + processing cron). Dormant
@@ -210,7 +210,7 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   },
   enableQuickList: {
     label: '60-second quick-list form',
-    description: 'The 6-field quick listing form. Listings created are normal pending listings; ops enriches details during verification. Off hides entry points and redirects the page to the full form.',
+    description: 'The 6-field quick mode of the create-listing page (/dashboard/listings/new?mode=quick). Listings created are normal pending listings; ops enriches details during verification. Off hides the entry points and the quick/full toggle, and the page always opens in full mode.',
     group: 'Marketing',
     appWide: true,
     public: true,

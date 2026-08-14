@@ -163,9 +163,11 @@ export default function ListYourPropertyPage() {
   const conciergeAvailable =
     isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink();
 
-  // Anonymous visitors sign up first; the redirect preserves the funnel.
+  // Anonymous visitors sign up first; the redirect preserves the funnel. The
+  // destination carries its own query string, so it MUST be encoded — raw, the
+  // `?mode=quick` would read as a parameter of /sign-up instead.
   const primaryCtaHref = quickListEnabled
-    ? '/sign-up?redirect=/dashboard/listings/quick-new'
+    ? `/sign-up?redirect=${encodeURIComponent('/dashboard/listings/new?mode=quick')}`
     : '/sign-up';
 
   const faqs = buildFaqs(conciergeAvailable);

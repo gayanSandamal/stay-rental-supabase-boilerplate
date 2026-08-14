@@ -343,7 +343,7 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
               <div className="flex flex-wrap gap-3 sm:justify-center">
                 {quickListEnabled ? (
                   <Link
-                    href="/dashboard/listings/quick-new"
+                    href="/dashboard/listings/new?mode=quick"
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition-colors"
                   >
                     List it in 60 seconds

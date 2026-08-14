@@ -75,9 +75,11 @@ Top‑level route group: `app/(dashboard)/dashboard/**` → URLs under `/dashboa
   - Shows current user’s listings (plus more if admin/ops).
   - Actions like edit, archive, delete, approval/re‑review flows for admin/ops.
 
-- **`/dashboard/listings/new`**  
-  Create new listing:
-  - Rich listing builder (`listing-form-with-builder`, `create-listing-form`).
+- **`/dashboard/listings/new`** (`?mode=quick` | `?mode=full`)  
+  Create new listing — the single create route; `?mode=` chooses the depth:
+  - `full` (the default, and the fallback whenever `enableQuickList` is off) — the rich listing builder (`listing-form-with-builder`), every section including photos.
+  - `quick` — the 60‑second form: six fields, ops enriches the rest on the verification call. Marketing/tenant‑recruitment CTAs link here explicitly.
+  - A toggle in the form switches between the two without losing anything typed (one `FormBuilder` instance; the quick fields are a subset of the full ones). The legacy `/dashboard/listings/quick-new` URL 308‑redirects to `?mode=quick` (see `redirects()` in `next.config.ts`).
   - On first listing creation, a `tenant` is auto‑upgraded to `landlord`.
 
 - **`/dashboard/listings/[id]`**  

@@ -98,13 +98,22 @@ test.describe('Landlord conversion surfaces', () => {
     await expect(page.getByText(/own a property in/i).first()).toBeVisible();
     // Quick-list (or fallback) CTA present
     await expect(
-      page.locator('a[href="/dashboard/listings/quick-new"], a[href="/list-your-property"]').first()
+      page
+        .locator(
+          'a[href="/dashboard/listings/new?mode=quick"], a[href="/list-your-property"]'
+        )
+        .first()
     ).toBeVisible();
   });
 
-  test('anon quick-new visit bounces to sign-in preserving redirect', async ({ page }) => {
+  test('legacy quick-new URL redirects, then bounces to sign-in preserving the mode', async ({
+    page,
+  }) => {
+    // 308 to /dashboard/listings/new?mode=quick, then middleware → sign-in.
     await page.goto('/dashboard/listings/quick-new');
     await expect(page).toHaveURL(/\/sign-in\?redirect=/);
+    const redirectParam = new URL(page.url()).searchParams.get('redirect');
+    expect(redirectParam).toBe('/dashboard/listings/new?mode=quick');
   });
 });
 
