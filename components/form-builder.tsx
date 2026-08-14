@@ -77,6 +77,30 @@ export function FormBuilder({ config }: FormBuilderProps) {
     }
   }, [config.defaultValues]);
 
+  // `initializeFormData` only runs on mount, so fields that appear later —
+  // when the caller swaps the field set, e.g. the listing form switching from
+  // quick to full — would never receive their `defaultValue`. Seed the missing
+  // ones whenever the field set itself changes.
+  //
+  // Keyed on the joined field NAMES, not on `config.fields`: callers rebuild
+  // that array every render, and an identity-keyed effect would fire on every
+  // render and fight the user's typing.
+  const fieldSignature = config.fields.map((f) => f.name).join(',');
+  useEffect(() => {
+    setFormData((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      config.fields.forEach((field) => {
+        if (next[field.name] === undefined && field.defaultValue !== undefined) {
+          next[field.name] = field.defaultValue;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldSignature]);
+
   const updateField = (name: string, value: any) => {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };

@@ -31,7 +31,7 @@ export function LandlordCrossSellBanner() {
   if (!visible) return null;
 
   const listHref = quickListEnabled
-    ? '/dashboard/listings/quick-new'
+    ? '/dashboard/listings/new?mode=quick'
     : '/list-your-property';
 
   return (

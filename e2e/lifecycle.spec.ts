@@ -108,9 +108,9 @@ test.describe.serial('Listing lifecycle (mutating)', () => {
     test.setTimeout(60_000);
     const tag = `E2E Lifecycle quicklist ${Date.now()}`;
     await login(page, landlord!.email, landlord!.password);
-    await page.goto('/dashboard/listings/quick-new');
-    // Flag off → page redirects to the full form; treat as skip, not failure.
-    if (!page.url().includes('quick-new')) {
+    await page.goto('/dashboard/listings/new?mode=quick');
+    // Flag off → the page renders the full form instead; treat as skip, not failure.
+    if ((await page.getByRole('button', { name: /submit my listing/i }).count()) === 0) {
       test.skip(true, 'enableQuickList is off on this target');
     }
     await page.fill('input[name="title"]', tag);
@@ -125,5 +125,25 @@ test.describe.serial('Listing lifecycle (mutating)', () => {
     // It lands in the dashboard as pending.
     await page.goto('/dashboard/listings?status=pending');
     await expect(page.getByText(tag).first()).toBeVisible();
+  });
+
+  test('switching quick → full keeps what was already typed', async ({ page }) => {
+    await login(page, landlord!.email, landlord!.password);
+    await page.goto('/dashboard/listings/new?mode=quick');
+    const fullTab = page.getByRole('button', { name: /full details/i });
+    if ((await fullTab.count()) === 0) {
+      test.skip(true, 'enableQuickList is off on this target');
+    }
+
+    const tag = `E2E Lifecycle toggle ${Date.now()}`;
+    await page.fill('input[name="title"]', tag);
+    await page.fill('input[name="rentPerMonth"]', '77000');
+    await fullTab.click();
+
+    await expect(page).toHaveURL(/mode=full/);
+    await expect(page.locator('input[name="title"]')).toHaveValue(tag);
+    await expect(page.locator('input[name="rentPerMonth"]')).toHaveValue('77000');
+    // Fields revealed by the switch still get their defaults.
+    await expect(page.locator('input[name="depositMonths"]')).toHaveValue('3');
   });
 });

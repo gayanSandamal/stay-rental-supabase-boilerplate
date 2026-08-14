@@ -4,8 +4,22 @@
     {
       "name": "scratch-preview",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8931", "--directory", "/private/tmp/claude-502/-Users-gayansandamal-Documents-Sandamal-stay-rental-supabase/2533b4f8-c1c0-48b3-b47f-ee1168d7731a/scratchpad"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8931",
+        "--directory",
+        "/private/tmp/claude-502/-Users-gayansandamal-Documents-Sandamal-stay-rental-supabase/2533b4f8-c1c0-48b3-b47f-ee1168d7731a/scratchpad"
+      ],
       "port": 8931
+    },
+    {
+      "name": "easyrent-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev"
+      ],
+      "port": 3000
     }
   ]
 }

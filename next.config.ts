@@ -119,6 +119,18 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        // The 60-second form used to live on its own route. It is now a mode of
+        // the single create-listing page; this keeps old links and bookmarks
+        // (and the sign-in/sign-up `redirect` funnel) landing on the quick form.
+        source: '/dashboard/listings/quick-new',
+        destination: '/dashboard/listings/new?mode=quick',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     // Baseline security headers. NOTE: a full Content-Security-Policy is
     // intentionally omitted — it needs its own testing pass to avoid breaking
