@@ -43,3 +43,27 @@ export function formatWhatsAppDisplay(): string | null {
   const m = number.match(/^(\d{2})(\d{2})(\d{3})(\d{4})$/);
   return m ? `+${m[1]} ${m[2]} ${m[3]} ${m[4]}` : `+${number}`;
 }
+
+/**
+ * The exact word the intake bot's LINK command answers to. Kept in sync with
+ * LINK_RE in lib/intake/commands.ts — the deep link below prefills it, so if
+ * the two ever drift the button silently stops working.
+ */
+const SIGN_IN_MESSAGE = 'LINK';
+
+/**
+ * wa.me deep link that prefills the LINK command, for landlords who arrived via
+ * WhatsApp and have no password to sign in with.
+ *
+ * The user has to press send themselves, and that is the point rather than a
+ * limitation: Meta only permits a free-form message inside the 24-hour window
+ * opened by the customer's own last message, so a site that pushed the link
+ * OUT would be rejected (error 131047) for precisely the dormant landlord this
+ * exists to help. Their tap opens the window, and the bot's existing reply
+ * carries the links back.
+ */
+export function getSignInWhatsAppLink(): string | null {
+  const number = getWhatsAppSupportNumber();
+  if (!number) return null;
+  return `https://wa.me/${number}?text=${encodeURIComponent(SIGN_IN_MESSAGE)}`;
+}

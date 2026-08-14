@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { requestPasswordReset } from '../actions';
 import type { ActionState } from '@/lib/auth/middleware';
+import { WhatsAppSignInLink } from '@/components/whatsapp-signin-link';
 
 export default function ForgotPasswordPage() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -78,6 +79,10 @@ export default function ForgotPasswordPage() {
             </Button>
           </div>
         </form>
+
+        {/* A WhatsApp landlord's reset email goes to a placeholder domain nobody
+            reads, so the form above can never help them. */}
+        <WhatsAppSignInLink className="mt-6" />
 
         <div className="mt-6 text-center text-sm text-gray-600">
           <Link
