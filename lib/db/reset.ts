@@ -111,6 +111,7 @@ async function reset() {
     '0034_moderation_coverage.sql',
     '0035_listing_landlord_notified.sql',
     '0036_listing_address_optional.sql',
+    '0037_locations.sql',
   ];
 
   function splitStatements(sql: string): string[] {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { loadLocations } from '@/lib/locations/store';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import {
   markWhatsAppRead,
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not configured' }, { status: 503 });
   }
   await loadFeatureFlags();
+  // Town catalogue for the matcher. Cached per instance behind a TTL, so
+  // this is a no-op after the first call — same contract as the flags above.
+  await loadLocations();
   if (!isFeatureEnabled('enableWhatsAppIntake')) {
     // Ack so Meta doesn't retry-storm while the flag is off; nothing stored.
     return NextResponse.json({ ok: true, ignored: true });

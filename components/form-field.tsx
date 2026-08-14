@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImageUploader } from '@/components/image-uploader';
@@ -42,6 +44,12 @@ export interface FormFieldConfig {
   options?: FieldOption[]; // For select fields
   /** Type-ahead suggestions for a text input that still accepts free text. */
   suggestions?: string[];
+  /**
+   * Endpoint for live type-ahead, used instead of `suggestions` when the list
+   * is too large to ship. Queried as `${suggestionsUrl}?q=…`, expecting
+   * `{ results: { name, district }[] }`.
+   */
+  suggestionsUrl?: string;
   min?: number;
   max?: number;
   step?: number;
@@ -170,6 +178,7 @@ export function FormField({
   defaultValue,
   options,
   suggestions,
+  suggestionsUrl,
   min,
   max,
   step,
@@ -220,6 +229,40 @@ export function FormField({
       onChange(newValue);
     }
   };
+
+  // Live type-ahead. The town catalogue is ~16k names — far too much to send to
+  // a browser — so the list is fetched per keystroke instead of bundled.
+  const [remoteSuggestions, setRemoteSuggestions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!suggestionsUrl) return;
+    const q = String(displayValue ?? '').trim();
+    if (q.length < 2) {
+      setRemoteSuggestions([]);
+      return;
+    }
+    // Debounced, and every in-flight response is discarded once the value moves
+    // on, so a slow reply cannot repopulate the list under a later query.
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${suggestionsUrl}?q=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setRemoteSuggestions(
+          (data.results ?? []).map((r: { name: string }) => r.name).filter(Boolean)
+        );
+      } catch {
+        // Offline or rate-limited: the field stays plain free text, which works.
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [suggestionsUrl, displayValue]);
+
+  const activeSuggestions = suggestionsUrl ? remoteSuggestions : suggestions;
 
   const renderInput = () => {
     switch (type) {
@@ -330,15 +373,15 @@ export function FormField({
               min={min}
               max={max}
               step={step}
-              list={suggestions?.length ? `${fieldId}-suggestions` : undefined}
-              autoComplete={suggestions?.length ? 'off' : undefined}
+              list={activeSuggestions?.length ? `${fieldId}-suggestions` : undefined}
+              autoComplete={activeSuggestions?.length ? 'off' : undefined}
               value={displayValue || ''}
               onChange={(e) => handleChange(e.target.value)}
               className={cn(error && 'border-red-500', inputClassName)}
             />
-            {suggestions?.length ? (
+            {activeSuggestions?.length ? (
               <datalist id={`${fieldId}-suggestions`}>
-                {suggestions.map((s) => (
+                {activeSuggestions.map((s) => (
                   <option key={s} value={s} />
                 ))}
               </datalist>

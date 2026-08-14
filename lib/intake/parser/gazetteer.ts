@@ -290,7 +290,8 @@ export function matchCity(lowerText: string): { city: string; district: District
       return { city: c.city, district: c.district };
     }
   }
-  return null;
+  // Curated list exhausted — try the ~16k-strong DB catalogue.
+  return extendedScan(lowerText);
 }
 
 /**
@@ -307,7 +308,7 @@ export function isCityName(lowerText: string): { city: string; district: Distric
   for (const c of CANDIDATES) {
     if (c.key === t) return { city: c.city, district: c.district };
   }
-  return null;
+  return extendedExact(t);
 }
 
 /**
@@ -542,10 +543,126 @@ export function fuzzyCityName(input: string): FuzzyCityMatch | null {
     }
   }
 
+  // A curated hit wins outright: those spellings are the ones the app already
+  // stores, and several have no CSV equivalent at all.
+  if (best && !ambiguous) {
+    return {
+      city: best.candidate.city,
+      district: best.candidate.district,
+      distance: best.distance,
+      confident: best.distance <= 1 && token.length >= FUZZY_CONFIDENT_MIN_LENGTH,
+    };
+  }
+  // Ambiguity among curated names is not resolved by looking at more names —
+  // it means we genuinely cannot tell, and guessing is the one outcome worth
+  // avoiding.
+  if (ambiguous) return null;
+  return extendedFuzzy(token);
+}
+
+/* -------------------------------------------------------------------------
+ * Extended catalogue (lib/locations/store.ts pushes this in)
+ *
+ * The 173 curated entries above stay the built-in baseline: pure, always
+ * present, and what the unit tests run against with no database. The `locations`
+ * table adds ~16k more towns and villages on top, exactly as feature flags layer
+ * DB overrides over code defaults.
+ *
+ * Deliberately NOT wired into CANDIDATE_RES. matchCity tests one regex per
+ * candidate against the whole message, so 16k of them would be ~50x the work on
+ * every intake. The extension is a Map keyed by name instead, probed with word
+ * n-grams from the message — O(words), not O(catalogue).
+ * ---------------------------------------------------------------------- */
+
+export interface ExtendedLocation {
+  name: string;
+  district: string;
+}
+
+let extendedByName: Map<string, ExtendedLocation> | null = null;
+/** Bucketed by first 3 chars so fuzzy matching never scans all 16k. */
+let extendedByPrefix: Map<string, ExtendedLocation[]> | null = null;
+
+export function setExtendedLocations(entries: ExtendedLocation[] | null): void {
+  if (!entries?.length) {
+    extendedByName = null;
+    extendedByPrefix = null;
+    return;
+  }
+  const byName = new Map<string, ExtendedLocation>();
+  const byPrefix = new Map<string, ExtendedLocation[]>();
+  for (const e of entries) {
+    const key = e.name.trim().toLowerCase();
+    if (!key || byName.has(key)) continue;
+    byName.set(key, e);
+    if (key.length >= FUZZY_MIN_LENGTH) {
+      const p = key.slice(0, FUZZY_PREFIX_LENGTH);
+      const bucket = byPrefix.get(p);
+      if (bucket) bucket.push(e);
+      else byPrefix.set(p, [e]);
+    }
+  }
+  extendedByName = byName;
+  extendedByPrefix = byPrefix;
+}
+
+export function extendedLocationCount(): number {
+  return extendedByName?.size ?? 0;
+}
+
+/** Whole-string lookup in the extended catalogue. */
+function extendedExact(lower: string): { city: string; district: District } | null {
+  const hit = extendedByName?.get(lower.trim());
+  return hit ? { city: hit.name, district: hit.district as District } : null;
+}
+
+/**
+ * Longest word n-gram of the message that names a place. Runs only after the
+ * curated regex pass has failed, so the road-name and ward rules above still
+ * decide anything they can.
+ */
+function extendedScan(lowerText: string): { city: string; district: District } | null {
+  if (!extendedByName) return null;
+  const words = lowerText.split(/[^\p{L}\p{M}\d]+/u).filter(Boolean);
+  // Longest first: "nuwara eliya" must beat "nuwara".
+  for (const size of [3, 2, 1]) {
+    for (let i = 0; i + size <= words.length; i++) {
+      const phrase = words.slice(i, i + size).join(' ');
+      if (phrase.length < 4) continue;
+      const hit = extendedByName.get(phrase);
+      if (!hit) continue;
+      // Same rule the curated pass uses: "Negombo Road" is not Negombo.
+      const after = lowerText.indexOf(phrase) + phrase.length;
+      if (isRoadNameMention(lowerText, after)) continue;
+      return { city: hit.name, district: hit.district as District };
+    }
+  }
+  return null;
+}
+
+/** Nearest extended-catalogue name, under the same guards as fuzzyCityName. */
+function extendedFuzzy(token: string): FuzzyCityMatch | null {
+  if (!extendedByPrefix) return null;
+  const bucket = extendedByPrefix.get(token.slice(0, FUZZY_PREFIX_LENGTH));
+  if (!bucket) return null;
+  const budget = token.length >= 10 ? 2 : 1;
+  let best: { entry: ExtendedLocation; distance: number } | null = null;
+  let ambiguous = false;
+  for (const entry of bucket) {
+    const key = entry.name.toLowerCase();
+    const distance = editDistance(token, key, budget);
+    if (distance > budget) continue;
+    if (!best || distance < best.distance) {
+      best = { entry, distance };
+      ambiguous = false;
+    } else if (distance === best.distance && entry.name !== best.entry.name) {
+      ambiguous = true;
+    }
+  }
   if (!best || ambiguous) return null;
   return {
-    city: best.candidate.city,
-    district: best.candidate.district,
+    city: best.entry.name,
+    district: best.entry.district as District,
     distance: best.distance,
     confident: best.distance <= 1 && token.length >= FUZZY_CONFIDENT_MIN_LENGTH,
   };

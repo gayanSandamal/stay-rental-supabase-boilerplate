@@ -7,6 +7,7 @@ import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
+import { loadLocations } from '@/lib/locations/store';
 import {
   adoptOrphanPhotos,
   derivePhotos,
@@ -268,6 +269,9 @@ export async function PUT(
   try {
     // Flags are read below (moderation queueing); the snapshot must be loaded first.
     await loadFeatureFlags();
+    // Town catalogue for the matcher. Cached per instance behind a TTL, so
+    // this is a no-op after the first call — same contract as the flags above.
+    await loadLocations();
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

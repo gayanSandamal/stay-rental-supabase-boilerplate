@@ -1,5 +1,5 @@
 import { FormConfig } from '@/components/form-builder';
-import { CITY_NAMES, DISTRICTS } from '@/lib/intake/parser/gazetteer';
+import { DISTRICTS } from '@/lib/intake/parser/gazetteer';
 
 export const listingFormConfig: FormConfig = {
   title: 'Create New Listing',
@@ -105,13 +105,13 @@ export const listingFormConfig: FormConfig = {
       type: 'text',
       required: true,
       defaultValue: 'Colombo',
-      // Type-ahead over the gazetteer, but still free text: Sri Lanka has far
-      // more towns than the 173 we know, and lib/moderation/location.ts treats
-      // an unfamiliar one as a soft note rather than a problem. Whatever is
-      // typed is canonicalised on save, so "colombo 7" cannot become a bucket
-      // the `eq`-matched city filter is unable to find.
-      suggestions: CITY_NAMES,
-      helpText: 'Start typing to pick a known town, or enter your own.',
+      // Live search over the whole ~16k-place catalogue, but still free text.
+      // Sri Lanka has more villages than any list holds, and
+      // lib/moderation/location.ts treats an unfamiliar town as a soft note
+      // rather than a problem. Whatever is typed is canonicalised on save, so
+      // "colombo 7" cannot become a bucket the `eq`-matched filter never finds.
+      suggestionsUrl: '/api/locations/search',
+      helpText: 'Start typing to pick your town, or enter your own.',
     },
     {
       name: 'district',
