@@ -18,6 +18,8 @@ import { SiteFooter } from '@/components/site-footer';
 import { WhatsAppConciergeButton } from '@/components/whatsapp-concierge-button';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getConciergeWhatsAppLink } from '@/lib/site-config';
+import { getUser } from '@/lib/db/queries';
+import { accountGatedHref } from '@/lib/auth/cta';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -87,12 +89,28 @@ const benefits = [
   },
 ];
 
-const steps = [
-  {
-    number: '1',
-    title: 'Sign Up',
-    description: 'Create your free landlord account in under a minute.',
-  },
+// Step 1 depends on whether the reader already has an account — telling a
+// signed-in landlord to go and create one is the same dead end as pointing
+// their CTA at /sign-up.
+function buildSteps(isSignedIn: boolean) {
+  return [
+    isSignedIn
+      ? {
+          number: '1',
+          title: 'Open the Form',
+          description:
+            "You're already signed in — start from the button above and go straight to the listing form.",
+        }
+      : {
+          number: '1',
+          title: 'Sign Up',
+          description: 'Create your free landlord account in under a minute.',
+        },
+    ...restOfSteps,
+  ];
+}
+
+const restOfSteps = [
   {
     number: '2',
     title: 'Submit Your Property',
@@ -157,18 +175,18 @@ function buildFaqs(conciergeAvailable: boolean) {
 // without a rebuild.
 export const dynamic = 'force-dynamic';
 
-export default function ListYourPropertyPage() {
+export default async function ListYourPropertyPage() {
+  const user = await getUser();
   const founding = isFeatureEnabled('showFoundingStageCopy');
   const quickListEnabled = isFeatureEnabled('enableQuickList');
   const conciergeAvailable =
     isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink();
 
-  // Anonymous visitors sign up first; the redirect preserves the funnel. The
-  // destination carries its own query string, so it MUST be encoded — raw, the
-  // `?mode=quick` would read as a parameter of /sign-up instead.
-  const primaryCtaHref = quickListEnabled
-    ? `/sign-up?redirect=${encodeURIComponent('/dashboard/listings/new?mode=quick')}`
-    : '/sign-up';
+  // Where every "list your property" CTA on this page is ultimately headed.
+  const listingFormHref = quickListEnabled
+    ? '/dashboard/listings/new?mode=quick'
+    : '/dashboard/listings/new';
+  const primaryCtaHref = accountGatedHref(!!user, listingFormHref);
 
   const faqs = buildFaqs(conciergeAvailable);
   const faqJsonLd = {
@@ -228,7 +246,7 @@ export default function ListYourPropertyPage() {
                 href={primaryCtaHref}
                 className="btn-primary-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-teal-800/25"
               >
-                Get Started Free
+                {user ? 'List Your Property' : 'Get Started Free'}
                 <ArrowRight className="h-5 w-5" />
               </Link>
               {conciergeAvailable && (
@@ -239,12 +257,15 @@ export default function ListYourPropertyPage() {
                   className="px-8 py-3.5 rounded-xl text-base"
                 />
               )}
-              <Link
-                href="/sign-in"
-                className="px-8 py-3.5 rounded-xl text-slate-100 font-semibold text-base border border-white/30 hover:border-white/50 hover:text-white hover:bg-white/10 transition-all duration-200"
-              >
-                Already have an account? Sign in
-              </Link>
+              {/* Only for visitors who might not have an account yet. */}
+              {!user && (
+                <Link
+                  href="/sign-in"
+                  className="px-8 py-3.5 rounded-xl text-slate-100 font-semibold text-base border border-white/30 hover:border-white/50 hover:text-white hover:bg-white/10 transition-all duration-200"
+                >
+                  Already have an account? Sign in
+                </Link>
+              )}
             </div>
           </div>
 
@@ -406,7 +427,7 @@ export default function ListYourPropertyPage() {
             </ScrollReveal>
 
             <ScrollReveal stagger className="space-y-8">
-              {steps.map((step) => (
+              {buildSteps(!!user).map((step) => (
                 <div key={step.number} className="flex gap-6 items-start">
                   <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-2xl flex items-center justify-center text-xl font-bold shadow-lg shadow-teal-800/20">
                     {step.number}

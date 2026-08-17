@@ -4,26 +4,35 @@ import { ShieldCheck, Mail, Phone, Gift } from 'lucide-react';
 import { formatWhatsAppDisplay, getWhatsAppSupportNumber } from '@/lib/site-config';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { EasyRentMark } from '@/components/brand/easy-rent-logo';
+import { getUser } from '@/lib/db/queries';
 
-const FOOTER_LINKS = {
-  Renters: [
-    { href: '/listings', label: 'Browse Listings' },
-    { href: '/listings?type=apartment', label: 'Apartments' },
-    { href: '/listings?type=house', label: 'Houses' },
-    { href: '/listings?type=room', label: 'Rooms' },
-  ],
-  Landlords: [
-    { href: '/list-your-property', label: 'List Your Property' },
-    { href: '/sign-in', label: 'Landlord Login' },
-    { href: '/dashboard', label: 'Manage Listings' },
-  ],
-  Company: [
-    { href: '/#how-it-works', label: 'How It Works' },
-    { href: '/how-to-use', label: 'How to Use' },
-    { href: '/sign-in', label: 'Sign In' },
-    { href: '/sign-up', label: 'Create Account' },
-  ],
-};
+// Sign-in / create-account links only make sense to visitors without a
+// session; for everyone else they are dead ends dressed up as navigation.
+function buildFooterLinks(isSignedIn: boolean) {
+  return {
+    Renters: [
+      { href: '/listings', label: 'Browse Listings' },
+      { href: '/listings?type=apartment', label: 'Apartments' },
+      { href: '/listings?type=house', label: 'Houses' },
+      { href: '/listings?type=room', label: 'Rooms' },
+    ],
+    Landlords: [
+      { href: '/list-your-property', label: 'List Your Property' },
+      ...(isSignedIn ? [] : [{ href: '/sign-in', label: 'Landlord Login' }]),
+      { href: '/dashboard', label: 'Manage Listings' },
+    ],
+    Company: [
+      { href: '/#how-it-works', label: 'How It Works' },
+      { href: '/how-to-use', label: 'How to Use' },
+      ...(isSignedIn
+        ? [{ href: '/dashboard', label: 'My Dashboard' }]
+        : [
+            { href: '/sign-in', label: 'Sign In' },
+            { href: '/sign-up', label: 'Create Account' },
+          ]),
+    ],
+  };
+}
 
 type FooterVariant = 'default' | 'landlord';
 
@@ -31,9 +40,13 @@ interface SiteFooterProps {
   variant?: FooterVariant;
 }
 
-export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
+export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
   const isLandlord = variant === 'landlord';
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
+  // Every page rendering this footer is already `force-dynamic`, so reading the
+  // session here costs nothing and saves threading a prop through all of them.
+  const user = await getUser();
+  const footerLinks = buildFooterLinks(!!user);
 
   return (
     <footer
@@ -131,7 +144,7 @@ export function SiteFooter({ variant = 'default' }: SiteFooterProps) {
           </div>
 
           {/* Links */}
-          {Object.entries(FOOTER_LINKS).map(([group, links]) => (
+          {Object.entries(footerLinks).map(([group, links]) => (
             <div key={group}>
               <h4 className="text-xs font-bold tracking-widest text-slate-300 uppercase mb-4">{group}</h4>
               <ul className="space-y-2.5">
