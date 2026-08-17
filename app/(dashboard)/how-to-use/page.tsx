@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getUser } from '@/lib/db/queries';
 import {
   Home,
   Building2,
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   LogIn,
   UserPlus,
+  LayoutDashboard,
 } from 'lucide-react';
 import { ScrollReveal } from '@/components/scroll-reveal';
 import { SiteFooter } from '@/components/site-footer';
@@ -169,7 +171,8 @@ const LANDLORD_STEPS: Step[] = [
 // Premium steps at request time rather than being baked in at build.
 export const dynamic = 'force-dynamic';
 
-export default function HowToUsePage() {
+export default async function HowToUsePage() {
+  const user = await getUser();
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
   const renterSteps = pricingEnabled
     ? RENTER_STEPS
@@ -675,26 +678,43 @@ export default function HowToUsePage() {
                   <span className="font-semibold text-sm text-amber-900">List Property</span>
                   <span className="text-xs text-amber-600/70">Free to list</span>
                 </Link>
-                <Link
-                  href="/sign-up"
-                  className="group flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-teal-50 hover:border-teal-200 hover:shadow-md transition-all duration-200 text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-slate-700 group-hover:bg-teal-700 flex items-center justify-center group-hover:scale-110 transition-all">
-                    <UserPlus className="h-5 w-5 text-white" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-800">Create Account</span>
-                  <span className="text-xs text-slate-500">Free sign up</span>
-                </Link>
-                <Link
-                  href="/sign-in"
-                  className="group flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:shadow-md transition-all duration-200 text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-slate-200 group-hover:bg-slate-300 flex items-center justify-center group-hover:scale-110 transition-all">
-                    <LogIn className="h-5 w-5 text-slate-600" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-800">Sign In</span>
-                  <span className="text-xs text-slate-500">Existing users</span>
-                </Link>
+                {/* Account cards are for visitors without one. Signed in, both
+                    are dead ends — offer the dashboard instead. */}
+                {user ? (
+                  <Link
+                    href="/dashboard"
+                    className="group flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-teal-50 hover:border-teal-200 hover:shadow-md transition-all duration-200 text-center"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-700 group-hover:bg-teal-700 flex items-center justify-center group-hover:scale-110 transition-all">
+                      <LayoutDashboard className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm text-slate-800">My Dashboard</span>
+                    <span className="text-xs text-slate-500">Manage your listings</span>
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href="/sign-up"
+                      className="group flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-teal-50 hover:border-teal-200 hover:shadow-md transition-all duration-200 text-center"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-slate-700 group-hover:bg-teal-700 flex items-center justify-center group-hover:scale-110 transition-all">
+                        <UserPlus className="h-5 w-5 text-white" />
+                      </div>
+                      <span className="font-semibold text-sm text-slate-800">Create Account</span>
+                      <span className="text-xs text-slate-500">Free sign up</span>
+                    </Link>
+                    <Link
+                      href="/sign-in"
+                      className="group flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:shadow-md transition-all duration-200 text-center"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-slate-200 group-hover:bg-slate-300 flex items-center justify-center group-hover:scale-110 transition-all">
+                        <LogIn className="h-5 w-5 text-slate-600" />
+                      </div>
+                      <span className="font-semibold text-sm text-slate-800">Sign In</span>
+                      <span className="text-xs text-slate-500">Existing users</span>
+                    </Link>
+                  </>
+                )}
                 <a
                   href="mailto:support@easyrent.lk"
                   className="group col-span-2 sm:col-span-1 flex flex-col items-center gap-2.5 px-4 py-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:shadow-md transition-all duration-200 text-center"
