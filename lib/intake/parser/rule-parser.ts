@@ -7,7 +7,15 @@
  */
 
 import { ParsedIntake, computeMissingFields } from './types';
-import { matchCity, matchAllCities, matchDistrict, isCityName, fuzzyCityName } from './gazetteer';
+import {
+  matchCity,
+  matchAllCities,
+  matchDistrict,
+  isCityName,
+  fuzzyCityName,
+  fuzzyCityCandidates,
+  isDecisiveCandidate,
+} from './gazetteer';
 import { scoreSuspicion } from './scam';
 
 export const RULES_VERSION = 5;
@@ -521,11 +529,23 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
   let district: string | null = cityMatch?.district ?? matchDistrict(lower);
   // Only worth looking for a misspelling when no town matched outright.
   const citySuggestion = city ? undefined : suggestCity(original);
-  if (citySuggestion?.confident) {
-    // A single edit on a long word with a matching prefix is a typo, not a
-    // different place — correcting it silently saves a needless round trip.
-    city = citySuggestion.city;
-    district = citySuggestion.district;
+  let cityCandidates: ParsedIntake['cityCandidates'];
+  let cityTyped: string | undefined;
+  if (!city && citySuggestion) {
+    cityTyped = citySuggestion.from;
+    const shortlist = fuzzyCityCandidates(citySuggestion.from);
+    if (isDecisiveCandidate(citySuggestion.from, shortlist)) {
+      // One town is far enough ahead to be a typo rather than a choice.
+      city = shortlist[0].city;
+      district = shortlist[0].district;
+    } else if (shortlist.length) {
+      // Two or more plausible towns: the sender settles it, not us.
+      cityCandidates = shortlist.map((c) => ({
+        city: c.city,
+        district: c.district,
+        similarity: c.similarity,
+      }));
+    }
   }
   const addressResult = extractAddress(masked, city);
   if (addressResult?.cityOverride) {
@@ -557,6 +577,8 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
     // Kept even once applied: the back office can see what was corrected, and
     // an unapplied one is what the confirmation prompt is built from.
     citySuggestion,
+    cityCandidates,
+    cityTyped,
     parserMeta: { engine: 'rules', rulesVersion: RULES_VERSION },
   };
   parsed.missingFields = computeMissingFields(parsed);

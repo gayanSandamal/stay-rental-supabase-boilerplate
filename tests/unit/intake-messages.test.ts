@@ -4,6 +4,9 @@ import {
   listingLiveNoLinksMessage,
   listingPendingNoLinksMessage,
   manualReviewMessage,
+  cityChoiceMessage,
+  cityChosenMessage,
+  cityKeptMessage,
   needsInfoMessage,
   newListingTemplateMessage,
   photosMissedMessage,
@@ -259,5 +262,36 @@ describe('photosAddedMessage', () => {
     const m = photosAddedMessage('X', 1, 0, { overCap: 2 });
     expect(m).toContain('photo limit');
     expect(m).not.toMatch(/send .* again/);
+  });
+});
+
+describe('town disambiguation copy', () => {
+  const choices = [
+    { city: 'Gampaha', district: 'Gampaha' },
+    { city: 'Gampola', district: 'Kandy' },
+  ];
+
+  it('numbers every option and always offers to keep their spelling', () => {
+    const m = cityChoiceMessage('Gayan', 'Gampaga', choices);
+    expect(m).toContain('1. Gampaha (Gampaha District)');
+    expect(m).toContain('2. Gampola (Kandy District)');
+    // The escape hatch is the last number, so a town we have never heard of
+    // can never trap the sender in the menu.
+    expect(m).toContain('3. Keep "Gampaga" as I typed it');
+    expect(m).toContain('1 to 3');
+  });
+
+  it('quotes back exactly what they typed, so a wrong reading is visible', () => {
+    expect(cityChoiceMessage(null, 'Udugampola', choices)).toContain('"Udugampola"');
+  });
+
+  it('confirms the choice with its district, not just the name', () => {
+    expect(cityChosenMessage('Gampola', 'Kandy')).toContain('Gampola, Kandy District');
+  });
+
+  it('tells a keeper their spelling stands and is being reviewed', () => {
+    const m = cityKeptMessage('Gampaga');
+    expect(m).toContain('"Gampaga"');
+    expect(m).toMatch(/town list/i);
   });
 });

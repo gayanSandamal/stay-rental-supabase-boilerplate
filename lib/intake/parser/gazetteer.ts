@@ -667,3 +667,122 @@ function extendedFuzzy(token: string): FuzzyCityMatch | null {
     confident: best.distance <= 1 && token.length >= FUZZY_CONFIDENT_MIN_LENGTH,
   };
 }
+
+/* -------------------------------------------------------------------------
+ * Disambiguation
+ *
+ * fuzzyCityName answers "which town is this" and refuses when two are equally
+ * close. Refusing is right when nobody can be asked, but on WhatsApp there IS
+ * someone to ask — so this returns the shortlist instead and lets the sender
+ * settle it.
+ * ---------------------------------------------------------------------- */
+
+/** Similarity as a share of the longer string: "gampaga"/"gampaha" = 6/7 ≈ 0.86. */
+export function nameSimilarity(a: string, b: string): number {
+  const x = a.trim().toLowerCase();
+  const y = b.trim().toLowerCase();
+  if (!x || !y) return 0;
+  const longest = Math.max(x.length, y.length);
+  // Budget capped at the whole string; below the floor the score is useless anyway.
+  const distance = editDistance(x, y, longest);
+  return 1 - distance / longest;
+}
+
+export interface CityCandidate {
+  city: string;
+  district: District;
+  similarity: number;
+  /** Edit distance, kept because it decides auto-apply where a ratio cannot. */
+  distance: number;
+  /** From the hand-tuned list — a real town rather than a hamlet. */
+  curated: boolean;
+}
+
+/** Below this a "match" shares so little with the input it would only confuse. */
+const CANDIDATE_MIN_SIMILARITY = 0.6;
+/**
+ * Shorter than fuzzyCityName's floor on purpose. That floor exists because a
+ * single edit on a short word is too weak to act on SILENTLY; here the sender
+ * confirms, so "Kandi" can safely be offered Kandy/Kanda/Kande to choose from.
+ */
+const CANDIDATE_MIN_LENGTH = 4;
+/**
+ * A shortlist has to fit in a chat message and stay decidable at a glance.
+ * A raw 0.6 cut returns 171 candidates for "Pannupitiya" against the full
+ * catalogue, which is not a question anyone can answer.
+ */
+const CANDIDATE_LIMIT = 3;
+/**
+ * Auto-apply needs a long word, a single edit, and daylight over the runner-up.
+ *
+ * Length carries most of the weight, and a ratio alone cannot express why:
+ * "Pannupitiya" → Pannipitiya is one letter in eleven and unmistakable, while
+ * "Gampaga" → Gampaha is one letter in seven and could as easily have been
+ * Gampola. Both score highly; only the first is safe to apply unasked.
+ */
+const CANDIDATE_CONFIDENT_MIN_LENGTH = 8;
+const CANDIDATE_CONFIDENT_MARGIN = 0.06;
+
+/**
+ * Towns the input might mean, best first.
+ *
+ * Deduplicated by NAME: 1,610 names occur in more than one district, so a raw
+ * list offers "Gampaha" twice and asks the sender to choose between two
+ * identical-looking options. The better-ranked district wins (curated first,
+ * then population — see lib/locations/store.ts).
+ */
+export function fuzzyCityCandidates(input: string, limit = CANDIDATE_LIMIT): CityCandidate[] {
+  const token = (input ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (token.length < CANDIDATE_MIN_LENGTH || FUZZY_STOP_WORDS.has(token)) return [];
+
+  const bestByName = new Map<string, CityCandidate>();
+  const consider = (city: string, district: District, curated: boolean) => {
+    const key = city.toLowerCase();
+    const longest = Math.max(token.length, key.length);
+    const distance = editDistance(token, key, longest);
+    const similarity = 1 - distance / longest;
+    if (similarity < CANDIDATE_MIN_SIMILARITY) return;
+    const seen = bestByName.get(key);
+    if (!seen || similarity > seen.similarity) {
+      bestByName.set(key, { city, district, similarity, distance, curated });
+    }
+  };
+
+  for (const c of CANDIDATES) consider(c.city, c.district, true);
+  const bucket = extendedByPrefix?.get(token.slice(0, FUZZY_PREFIX_LENGTH));
+  if (bucket) for (const e of bucket) consider(e.name, e.district as District, false);
+
+  return [...bestByName.values()]
+    .sort(
+      (a, b) =>
+        b.similarity - a.similarity ||
+        // Ties are common and alphabetical order is meaningless to a reader:
+        // for "Gampaga", Ampara and Gampola both score 0.71, and only one of
+        // them looks like what was typed. Shared opening letters decide it.
+        commonPrefixLength(token, b.city.toLowerCase()) -
+          commonPrefixLength(token, a.city.toLowerCase()) ||
+        Number(b.curated) - Number(a.curated) ||
+        a.city.localeCompare(b.city)
+    )
+    .slice(0, limit);
+}
+
+function commonPrefixLength(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < max && a[i] === b[i]) i++;
+  return i;
+}
+
+/**
+ * True when the leader can be applied without asking. Every part matters: a
+ * long input, a single edit, and a clear gap to the runner-up.
+ */
+export function isDecisiveCandidate(input: string, candidates: CityCandidate[]): boolean {
+  if (!candidates.length) return false;
+  const [first, second] = candidates;
+  const token = (input ?? '').trim();
+  if (token.length < CANDIDATE_CONFIDENT_MIN_LENGTH) return false;
+  if (first.distance > 1) return false;
+  return !second || first.similarity - second.similarity >= CANDIDATE_CONFIDENT_MARGIN;
+}
