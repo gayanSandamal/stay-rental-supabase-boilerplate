@@ -60,7 +60,12 @@ export function parseMenuPick(text: string | null | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-export type ConversationState = 'idle' | 'delete_pick' | 'delete_confirm';
+export type ConversationState =
+  | 'idle'
+  | 'delete_pick'
+  | 'delete_confirm'
+  /** Offered a numbered list of towns; waiting for the sender to pick one. */
+  | 'confirm_city';
 
 export interface ConversationPayload {
   /** Listing ids in menu order, so "2" always means the same listing. */
@@ -70,6 +75,12 @@ export interface ConversationPayload {
   chosenTitle?: string;
   /** Reprompt counter, so a confused sender isn't looped forever. */
   attempts?: number;
+  /** Towns offered for confirm_city, in menu order so "2" is stable. */
+  cityChoices?: Array<{ city: string; district: string }>;
+  /** Exactly what the sender typed, for the "keep it" option and the ops queue. */
+  cityTyped?: string;
+  /** The submission the answer belongs to. */
+  cityIntakeId?: number;
 }
 
 export interface Conversation {

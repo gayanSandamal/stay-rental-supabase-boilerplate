@@ -76,7 +76,11 @@ export interface AppendOutcome {
     /** A location pin arrived within 48h of publish: saved onto that listing. */
     | 'location_saved'
     /** RESTORE command matched a recently chat-archived listing — ops take it. */
-    | 'restore_request';
+    | 'restore_request'
+    /** confirm_city: the sender picked a town, or kept their own spelling. */
+    | 'city_chosen'
+    | 'city_kept'
+    | 'city_choice_unclear';
   intakeId?: number;
   /** attach_media / edit_link / delete / location_saved: the listing concerned. */
   listingId?: number | null;
@@ -87,6 +91,12 @@ export interface AppendOutcome {
   listingStatus?: string;
   /** appended/created: a location pin was stored on the intake. */
   pinStored?: boolean;
+  /** city_chosen/city_kept: what to use, and what they originally typed. */
+  chosenCity?: string;
+  chosenDistrict?: string;
+  typedCity?: string;
+  /** city_choice_unclear: how many options were on offer. */
+  choiceCount?: number;
   /**
    * appended: this message reopened a needs_info session — i.e. it answers a
    * "we still need…" ask. At most one message per round flips the status back
@@ -295,6 +305,35 @@ export async function appendToIntake(
         await clearConversation(tx, msg.channel, msg.senderId);
         await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
         return { action: 'command_cancelled' } as const;
+      }
+
+      if (convo.state === 'confirm_city') {
+        const choices = convo.payload.cityChoices ?? [];
+        const typed = convo.payload.cityTyped ?? '';
+        const pick = parseMenuPick(msg.text);
+        // The list is choices + one "keep what I typed" row, so the last
+        // number is always the escape hatch for a town we do not know.
+        const keepOption = choices.length + 1;
+        if (pick == null || pick < 1 || pick > keepOption) {
+          await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+          return { action: 'city_choice_unclear', choiceCount: keepOption } as const;
+        }
+        await clearConversation(tx, msg.channel, msg.senderId);
+        await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+        if (pick === keepOption) {
+          // Their spelling stands. Reopening the intake lets the processing job
+          // publish it, and ops get the name to consider for the catalogue.
+          await reopenIntakeForCity(tx, convo.payload.cityIntakeId, typed, null);
+          return { action: 'city_kept', typedCity: typed } as const;
+        }
+        const chosen = choices[pick - 1];
+        await reopenIntakeForCity(tx, convo.payload.cityIntakeId, chosen.city, chosen.district);
+        return {
+          action: 'city_chosen',
+          chosenCity: chosen.city,
+          chosenDistrict: chosen.district,
+          typedCity: typed,
+        } as const;
       }
 
       if (convo.state === 'delete_pick') {
@@ -688,4 +727,32 @@ export async function appendToIntake(
   });
 
   return base;
+}
+
+/**
+ * Record the sender's town choice and put the submission back in the queue.
+ *
+ * The override is stored rather than appended to the message text because the
+ * "keep what I typed" case is, by definition, a name the matcher will not
+ * recognise on a re-parse — so the choice has to survive as data, not as words.
+ */
+async function reopenIntakeForCity(
+  tx: Parameters<typeof setConversation>[0],
+  intakeId: number | undefined,
+  city: string,
+  district: string | null
+): Promise<void> {
+  if (!intakeId) return;
+  await tx
+    .update(whatsappIntakes)
+    .set({
+      cityOverride: city,
+      districtOverride: district,
+      // Back to `received` so the next cron tick picks it up, exactly as a
+      // needs_info reply does.
+      status: 'received',
+      processedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(whatsappIntakes.id, intakeId));
 }

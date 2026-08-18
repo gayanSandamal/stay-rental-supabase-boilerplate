@@ -34,6 +34,14 @@ export interface ParsedIntake {
    * sender before anything publishes.
    */
   citySuggestion?: { city: string; district: string; from: string; confident: boolean };
+  /**
+   * Towns the message might have meant, best first, when none was certain.
+   * Surfaced to the sender as a numbered menu — `city` stays null until they
+   * pick, because a wrong town is worse than an unanswered question.
+   */
+  cityCandidates?: Array<{ city: string; district: string; similarity: number }>;
+  /** What they actually typed, for the "keep my spelling" option. */
+  cityTyped?: string;
   /** Diagnostics: which engine produced the payload (persisted in parsedPayload). */
   parserMeta?: { engine: 'rules' | 'rules+llm'; rulesVersion: number; llmFailed?: boolean };
 }

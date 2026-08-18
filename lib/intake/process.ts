@@ -20,14 +20,15 @@ import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { isModerationConfigured } from '@/lib/moderation/config';
 import {
-  locationRequestPrompt,
+  cityChoiceMessage,
   manualReviewMessage,
   needsInfoMessage,
   pendingReviewMessage,
   publishedMessage,
   summarizeUnderstood,
 } from './messages';
-import { sendWhatsAppLocationRequest, sendWhatsAppText } from './channels/whatsapp/send';
+import { sendWhatsAppText } from './channels/whatsapp/send';
+import { setConversation } from './commands';
 import type { ChannelAdapter } from './channels/types';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
@@ -165,6 +166,12 @@ export async function processIntake(
   const parsed = await parseIntake(intake.messageText ?? '');
   const pin = parsePin(intake.locationPin);
   applyLocationPin(parsed, pin);
+  // A town the sender picked from the menu is final — it beats the parse and
+  // the pin, because they were shown the options and chose one.
+  if (intake.cityOverride) {
+    parsed.city = intake.cityOverride;
+    parsed.district = intake.districtOverride ?? parsed.district;
+  }
 
   const check = await runIntakeChecks(parsed);
 
@@ -179,6 +186,31 @@ export async function processIntake(
         updatedAt: new Date(),
       })
       .where(eq(whatsappIntakes.id, intake.id));
+    // A shortlist of plausible towns is a question with a right answer, so ask
+    // it directly instead of the generic "we still need the town" — the sender
+    // replies with a digit rather than retyping the name they already misspelt.
+    if (parsed.cityCandidates?.length && parsed.cityTyped && adapter.channel === 'whatsapp') {
+      await db.transaction(async (tx) => {
+        await setConversation(tx, adapter.channel, intake.fromNumber, 'confirm_city', {
+          cityChoices: parsed.cityCandidates!.map((c) => ({ city: c.city, district: c.district })),
+          cityTyped: parsed.cityTyped,
+          cityIntakeId: intake.id,
+        });
+      });
+      const asked = await adapter.sendText(
+        intake.fromNumber,
+        cityChoiceMessage(
+          intake.profileName,
+          parsed.cityTyped,
+          parsed.cityCandidates.map((c) => ({ city: c.city, district: c.district }))
+        )
+      );
+      if (!asked) {
+        await notifyOps(intake.id, `Could not ask WhatsApp sender to confirm the town`);
+      }
+      return 'needs_info';
+    }
+
     const sent = await adapter.sendText(
       intake.fromNumber,
       needsInfoMessage(intake.profileName, parsed.missingFields, check.reason, {
@@ -199,14 +231,6 @@ export async function processIntake(
         intake.id,
         `Could not reach WhatsApp sender for intake #${intake.id} (needs info: ${check.reason})`
       );
-    } else if (
-      isFeatureEnabled('enableWhatsAppRichReplies') &&
-      adapter.channel === 'whatsapp' &&
-      !pin &&
-      parsed.missingFields.some((f) => f === 'address' || f === 'city')
-    ) {
-      // A native pin answers the hardest field to type — offer the button.
-      await sendWhatsAppLocationRequest(intake.fromNumber, locationRequestPrompt());
     }
     return 'needs_info';
   }

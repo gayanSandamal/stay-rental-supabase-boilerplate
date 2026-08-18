@@ -5,7 +5,9 @@ import {
   DISTRICTS,
   matchCity,
   matchDistrict,
+  fuzzyCityCandidates,
   fuzzyCityName,
+  isDecisiveCandidate,
   normalizeLocation,
 } from '@/lib/intake/parser/gazetteer';
 import { computeMissingFields } from '@/lib/intake/parser/types';
@@ -282,5 +284,55 @@ describe('address requirement', () => {
   // still has to come with a street.
   it('keeps requiring it for a town we do not know', () => {
     expect(computeMissingFields({ ...base, city: 'Zzyzx Village' } as any)).toEqual(['address']);
+  });
+});
+
+describe('town disambiguation', () => {
+  // Built-ins only here (no DB), which is enough: Gampaha and Gampola are both
+  // curated, and they are the pair the sender has to choose between.
+  it('asks rather than guessing between two plausible towns', () => {
+    const c = fuzzyCityCandidates('Gampaga');
+    expect(c.map((x) => x.city)).toContain('Gampaha');
+    expect(c.map((x) => x.city)).toContain('Gampola');
+    expect(isDecisiveCandidate('Gampaga', c)).toBe(false);
+  });
+
+  // The tie-break that makes the menu readable: at equal similarity, the town
+  // that starts like the input wins. Without it "Ampara" outranks "Gampola"
+  // for "Gampaga" purely on alphabetical order.
+  it('ranks a shared opening ahead of an alphabetical accident', () => {
+    const c = fuzzyCityCandidates('Gampaga');
+    const gampola = c.findIndex((x) => x.city === 'Gampola');
+    const ampara = c.findIndex((x) => x.city === 'Ampara');
+    if (ampara !== -1) expect(gampola).toBeLessThan(ampara);
+  });
+
+  it('applies a long single-letter typo without asking', () => {
+    const c = fuzzyCityCandidates('Pannupitiya');
+    expect(c[0].city).toBe('Pannipitiya');
+    expect(isDecisiveCandidate('Pannupitiya', c)).toBe(true);
+  });
+
+  // Short inputs are never auto-applied — one letter in five is too little to
+  // be sure — but they are still worth offering as a choice.
+  it('offers short near-misses without applying them', () => {
+    const c = fuzzyCityCandidates('Kandi');
+    expect(c[0].city).toBe('Kandy');
+    expect(isDecisiveCandidate('Kandi', c)).toBe(false);
+  });
+
+  it('never offers a shortlist longer than the menu can carry', () => {
+    expect(fuzzyCityCandidates('Pannupitiya').length).toBeLessThanOrEqual(3);
+  });
+
+  it('offers nothing for ordinary listing words', () => {
+    for (const w of ['parking', 'bedroom', 'furnished', 'kitchen']) {
+      expect(fuzzyCityCandidates(w), w).toEqual([]);
+    }
+  });
+
+  it('lists each town once even when the name repeats across districts', () => {
+    const names = fuzzyCityCandidates('Gampaga').map((c) => c.city);
+    expect(new Set(names).size).toBe(names.length);
   });
 });

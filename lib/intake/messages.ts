@@ -367,3 +367,46 @@ export function helpMessage(): string {
 export function manualReviewPendingMessage(): string {
   return `Thanks — got it. Our team is reviewing this submission and will get back to you here shortly.`;
 }
+
+export interface CityChoice {
+  city: string;
+  district: string;
+}
+
+/**
+ * Numbered menu for a town we could not identify with certainty.
+ *
+ * Numbered rather than free text because a reply of "1" cannot itself be
+ * misread, whereas re-typing the town invites the same misspelling again. The
+ * final option is always "keep what I typed", so a landlord in a village the
+ * catalogue has never heard of is never trapped in the menu.
+ */
+export function cityChoiceMessage(
+  profileName: string | null,
+  typed: string,
+  choices: CityChoice[]
+): string {
+  const lines = [
+    `Thanks${profileName ? ' ' + profileName : ''}! We couldn't find "${typed}" — did you mean:`,
+    '',
+  ];
+  choices.forEach((c, i) => lines.push(`${i + 1}. ${c.city} (${c.district} District)`));
+  lines.push(`${choices.length + 1}. Keep "${typed}" as I typed it`);
+  lines.push('', `Just reply with a number — 1 to ${choices.length + 1}.`);
+  return lines.join('\n');
+}
+
+/** Confirms the pick and says what happens next, so the reply is never a dead end. */
+export function cityChosenMessage(city: string, district: string): string {
+  return `📍 Got it — ${city}, ${district} District. Putting your listing together now.`;
+}
+
+/** They kept their own spelling: it is used as-is and our team takes a look. */
+export function cityKeptMessage(typed: string): string {
+  return `📍 Got it — we'll use "${typed}". Our team will add it to our town list shortly.`;
+}
+
+/** The reply was not one of the offered numbers. */
+export function cityChoiceUnclearMessage(max: number): string {
+  return `Sorry — please reply with just a number from 1 to ${max}.`;
+}

@@ -22,6 +22,9 @@ import {
   locationReceivedMessage,
   locationSavedMessage,
   noListingsMessage,
+  cityChoiceUnclearMessage,
+  cityChosenMessage,
+  cityKeptMessage,
   manualReviewPendingMessage,
   photosAddedMessage,
   photosFailedMessage,
@@ -281,6 +284,26 @@ async function handleInbound(
       await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage());
     } else if (outcome.action === 'no_listings') {
       await whatsappAdapter.sendText(message.senderId, noListingsMessage());
+    } else if (outcome.action === 'city_chosen') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        cityChosenMessage(outcome.chosenCity!, outcome.chosenDistrict!)
+      );
+    } else if (outcome.action === 'city_kept') {
+      await whatsappAdapter.sendText(message.senderId, cityKeptMessage(outcome.typedCity ?? ''));
+      // The catalogue is missing a town landlords actually use. Ops decide
+      // whether it joins the shared list — user text never enters it directly.
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `New town to review: "${outcome.typedCity}" — not in the location catalogue`,
+        body: 'A landlord kept their own spelling. Add it to locations if it is a real town.',
+        link: '/back-office/whatsapp-intakes',
+      });
+    } else if (outcome.action === 'city_choice_unclear') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        cityChoiceUnclearMessage(outcome.choiceCount ?? 0)
+      );
     } else if (outcome.action === 'help') {
       await whatsappAdapter.sendText(message.senderId, helpMessage());
     } else if (outcome.action === 'link_reissue') {
