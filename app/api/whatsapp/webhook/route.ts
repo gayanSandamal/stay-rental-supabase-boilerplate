@@ -30,9 +30,12 @@ import {
   photosFailedMessage,
   photosMissedMessage,
   newListingTemplateMessage,
+  numberVerifiedMessage,
   receivedAckMessage,
   restoreRequestedMessage,
   updateAckMessage,
+  verifyCodeUnusableMessage,
+  verifyWrongSenderMessage,
 } from '@/lib/intake/messages';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { hasListingDetail } from '@/lib/intake/parser/types';
@@ -144,7 +147,22 @@ async function handleInbound(
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
 
-    if (outcome.action === 'created') {
+    if (outcome.action === 'number_verified') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        numberVerifiedMessage(outcome.verifiedPhone ?? 'your number')
+      );
+    } else if (outcome.action === 'verify_failed') {
+      // `wrong_sender` gets its own copy because it is the one failure that is
+      // a security signal rather than a mistake — and the one whose message
+      // must not name the number the code was issued for.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        outcome.verifyFailure === 'wrong_sender'
+          ? verifyWrongSenderMessage()
+          : verifyCodeUnusableMessage(outcome.verifyFailure ?? 'not_found')
+      );
+    } else if (outcome.action === 'created') {
       // First contact for this submission: without an instant reply the sender
       // hears NOTHING until the settle window + cron tick (~5 minutes).
       //

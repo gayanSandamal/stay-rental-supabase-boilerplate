@@ -410,3 +410,50 @@ export function cityKeptMessage(typed: string): string {
 export function cityChoiceUnclearMessage(max: number): string {
   return `Sorry — please reply with just a number from 1 to ${max}.`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Contact-number verification (see lib/auth/phone-verification.ts)            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Possession proven. Names the number back so the landlord can see WHICH of
+ * their numbers this was — several landlords run an office line and a mobile.
+ */
+export function numberVerifiedMessage(phone: string): string {
+  return [
+    `✅ Verified — ${phone} is now confirmed on Easy Rent.`,
+    '',
+    'Renters will see a “Verified” badge next to it on your listings. Nothing else to do.',
+  ].join('\n');
+}
+
+/**
+ * Right code, wrong sender.
+ *
+ * Deliberately says nothing about which number the code was for. Whoever is
+ * holding this code may have picked it up from a screenshot or a forwarded
+ * message, and naming the target would hand them the other half of it.
+ */
+export function verifyWrongSenderMessage(): string {
+  return [
+    "That code was issued for a different phone number, so we can't confirm it from this one.",
+    '',
+    'Please send it from the phone you are verifying — the code has to come from that number itself.',
+  ].join('\n');
+}
+
+/** Expired, spent, or unknown — all point back to the same fresh-code action. */
+export function verifyCodeUnusableMessage(
+  reason: 'expired' | 'not_found' | 'already_used' | 'too_many_attempts'
+): string {
+  if (reason === 'already_used') {
+    return 'That number is already verified — nothing more to do. 👍';
+  }
+  const lead =
+    reason === 'expired'
+      ? 'That code has expired.'
+      : reason === 'too_many_attempts'
+        ? 'That code has been tried too many times.'
+        : "We don't recognise that code.";
+  return `${lead}\n\nOpen your Easy Rent dashboard, go to your contact numbers and tap “Verify on WhatsApp” for a fresh one.`;
+}

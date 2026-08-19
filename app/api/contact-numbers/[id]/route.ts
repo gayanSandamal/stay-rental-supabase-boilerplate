@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { userContactNumbers, businessAccountMembers } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
+import { normalizePhone } from '@/lib/auth/phone-verification';
 import { eq, and } from 'drizzle-orm';
 
 export async function PUT(
@@ -88,6 +89,19 @@ export async function PUT(
 
     if (phoneNumber !== undefined) {
       updates.phoneNumber = phoneNumber.trim();
+      // Verification is a claim about SPECIFIC digits. Editing them to anything
+      // else has to drop it, or the badge earned on a number you hold could be
+      // walked over to a number you don't — which is exactly the trust signal
+      // renters are being asked to rely on. Compared normalized so that
+      // reformatting the same number ("0771234567" → "+94 77 123 4567") is not
+      // punished as a change.
+      const before = normalizePhone(contactNumber.phoneNumber);
+      const after = normalizePhone(updates.phoneNumber);
+      if (contactNumber.verified && (!before || !after || before !== after)) {
+        updates.verified = false;
+        updates.verifiedAt = null;
+        updates.verifiedBy = null;
+      }
     }
     if (isWhatsApp !== undefined) {
       updates.isWhatsApp = Boolean(isWhatsApp);

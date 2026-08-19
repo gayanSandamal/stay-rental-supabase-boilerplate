@@ -41,6 +41,7 @@ const MIGRATIONS = [
   '0036_listing_address_optional.sql',
   '0037_locations.sql',
   '0038_intake_city_override.sql',
+  '0039_phone_verifications.sql',
 ];
 
 function splitStatements(sql: string): string[] {

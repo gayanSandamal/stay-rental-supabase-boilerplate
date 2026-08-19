@@ -559,14 +559,23 @@ export default async function ListingDetailPage({
                   </h4>
 
                   {(() => {
-                    const verifiedContacts = listing.contactNumbers?.filter((lc) => {
-                      const c = lc.contactNumber;
-                      return c && c.isActive && c.verified;
-                    }) ?? [];
-
-                    const activeContacts = verifiedContacts.length > 0
-                      ? verifiedContacts
-                      : (listing.contactNumbers?.filter((lc) => lc.contactNumber?.isActive) ?? []);
+                    // Every active number, verified first.
+                    //
+                    // This used to show ONLY the verified ones whenever any
+                    // were verified, falling back to all when none were. That
+                    // silently hid a landlord's second number the moment their
+                    // first became verified — a WhatsApp landlord (verified at
+                    // intake) who added an office line in the dashboard lost it
+                    // from the page without any indication. The badge is the
+                    // trust signal; hiding a number the landlord deliberately
+                    // published is not ours to do.
+                    const activeContacts = [...(listing.contactNumbers ?? [])]
+                      .filter((lc) => lc.contactNumber?.isActive)
+                      .sort(
+                        (a, b) =>
+                          Number(Boolean(b.contactNumber?.verified)) -
+                          Number(Boolean(a.contactNumber?.verified))
+                      );
 
                     const publisherPhone = listing.landlord?.user?.phone ?? null;
 
