@@ -31,11 +31,14 @@ import {
   auditLogs,
   businessAccounts,
   featureFlags,
+  imageModerationCache,
+  intakeConversations,
   landlords,
   listings,
   savedSearches,
   userContactNumbers,
   users,
+  whatsappIntakes,
 } from '../lib/db/schema';
 import { getSupabaseAdmin, STORAGE_BUCKET } from '../lib/supabase';
 import { parsePhotos } from '../lib/images/manifest';
@@ -113,10 +116,10 @@ async function main() {
       fail(`--keep ${email} matches no account. Check the spelling before running this.`);
     }
   }
-  if (doomed.length === 0) {
-    console.log('Nothing to delete.\n');
-    process.exit(0);
-  }
+  // NOTE: no early exit on `doomed.length === 0`. Intake rows are keyed by phone
+  // number and survive a user wipe, so "no accounts left to delete" does NOT mean
+  // there is no work — a re-run after an accounts-only wipe still has to clear
+  // the conversation state that was left behind.
 
   // The guard that the 0001 incident earned (see CLAUDE.md): never leave the
   // platform with nobody who can reach the back office.
@@ -153,8 +156,35 @@ async function main() {
       .join(', ');
     console.log(`  #${String(u.id).padEnd(4)} ${u.email.padEnd(40)} (${flags})`);
   }
+  // Intake rows are keyed by PHONE NUMBER, not user_id, so no foreign key ever
+  // pulls them along. Deleting the accounts alone leaves live conversation state
+  // behind: the next message from that number resumes a session whose landlord
+  // no longer exists, and the sender gets an update-ack instead of a fresh
+  // start. Numbers belonging to KEPT users are preserved.
+  const keptNumbers = kept
+    .map((u) => u.waPhone?.replace(/^\+/, ''))
+    .filter((n): n is string => Boolean(n));
+  const allIntakes = await db
+    .select({ id: whatsappIntakes.id, fromNumber: whatsappIntakes.fromNumber })
+    .from(whatsappIntakes);
+  const doomedIntakes = allIntakes
+    .filter((r) => !keptNumbers.includes(r.fromNumber))
+    .map((r) => r.id);
+  const allConvos = await db
+    .select({ id: intakeConversations.id, fromNumber: intakeConversations.fromNumber })
+    .from(intakeConversations);
+  const doomedConvos = allConvos
+    .filter((r) => !keptNumbers.includes(r.fromNumber))
+    .map((r) => r.id);
+
   console.log(`\nCascade: ${landlordRows.length} landlord record(s), ${listingRows.length} listing(s), ${photoPaths.length} stored photo(s)`);
+  console.log(`Intake:  ${doomedIntakes.length} whatsapp_intake(s), ${doomedConvos.length} conversation-state row(s)`);
   console.log(`Preserved: ${kept.map((u) => `#${u.id} ${u.email}`).join(', ')}\n`);
+
+  if (doomed.length === 0 && doomedIntakes.length === 0 && doomedConvos.length === 0) {
+    console.log('Nothing to do — no accounts and no intake state to clear.\n');
+    process.exit(0);
+  }
 
   if (!confirm) {
     console.log('Dry run — nothing was changed. Re-run with --confirm to execute.\n');
@@ -189,6 +219,18 @@ async function main() {
 
   await db.delete(savedSearches).where(inArray(savedSearches.userId, doomedIds));
 
+  // Intake state. Order is safe rather than significant: whatsapp_intakes
+  // .listing_id is SET NULL, so the listings delete above has already detached
+  // these rows; here we remove the rows themselves.
+  if (doomedIntakes.length) {
+    await db.delete(whatsappIntakes).where(inArray(whatsappIntakes.id, doomedIntakes));
+    console.log(`  Deleted ${doomedIntakes.length} whatsapp_intake(s)`);
+  }
+  if (doomedConvos.length) {
+    await db.delete(intakeConversations).where(inArray(intakeConversations.id, doomedConvos));
+    console.log(`  Deleted ${doomedConvos.length} conversation-state row(s)`);
+  }
+
   // 3. Null every NO ACTION reference. Without this the delete below throws.
   //    Note these targets can belong to KEPT users too (an admin who verified
   //    someone else's listing), so they are matched on the doomed ids only.
@@ -219,6 +261,12 @@ async function main() {
     .update(featureFlags)
     .set({ updatedBy: null })
     .where(inArray(featureFlags.updatedBy, doomedIds));
+  // Easy to miss: overridden_by is NO ACTION too, so an admin who has ever
+  // overridden an image verdict blocks the delete outright.
+  await db
+    .update(imageModerationCache)
+    .set({ overriddenBy: null })
+    .where(inArray(imageModerationCache.overriddenBy, doomedIds));
   // The audit trail deliberately OUTLIVES the account — the row stays, only the
   // attribution is dropped. Same choice hard-delete-user.ts makes.
   await db.update(auditLogs).set({ userId: null }).where(inArray(auditLogs.userId, doomedIds));
