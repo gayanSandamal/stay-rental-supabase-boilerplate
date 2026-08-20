@@ -85,22 +85,43 @@ describe('instant + status messages', () => {
     expect(receivedAckMessage(null)).not.toContain(', !');
   });
 
-  it('newListingTemplateMessage lists the required fields and greets by name', () => {
+  it('newListingTemplateMessage offers every required field as a fillable line', () => {
     const m = newListingTemplateMessage('Gayan');
     expect(m).toContain('Thanks Gayan!');
     for (const field of [
       'Property type',
       'Address',
       'Town / city',
-      'bedrooms',
-      'bathrooms',
+      'Bedrooms',
+      'Bathrooms',
       'Monthly rent',
-      'photos',
+      'Photos',
     ]) {
       expect(m).toContain(field);
     }
-    // Must reassure free-form replies — owners rarely follow the list exactly.
-    expect(m).toMatch(/Sinhala or English/i);
+    // Must reassure free-form replies — owners rarely follow the form exactly.
+    expect(m).toMatch(/any language is fine/i);
+  });
+
+  // The form is round-tripped through the rule parser, so its shape is a
+  // contract and not just copy. See the header comment on the message and the
+  // round-trip cases in rule-parser.test.ts.
+  it('newListingTemplateMessage puts the English label immediately before the dash', () => {
+    const m = newListingTemplateMessage('Gayan');
+    // extractCount tries the English patterns FIRST, so an English label
+    // adjacent to the value is what makes the filled form parse.
+    for (const label of ['Property type', 'Address', 'Town / city', 'Bedrooms', 'Bathrooms']) {
+      expect(m).toContain(`${label} - `);
+    }
+  });
+
+  it('newListingTemplateMessage separates languages with · so / stays free', () => {
+    const m = newListingTemplateMessage(null);
+    // '/' is load-bearing inside labels ("Town / city") and inside real
+    // addresses ("45/2"); reusing it as the language separator would make the
+    // form ambiguous to read and to parse.
+    expect(m).toContain('කාමර · அறைகள் · Bedrooms - ');
+    expect(m).toMatch(/විස්තර · விவரம் · About the place/);
   });
 
   // The sender's WhatsApp number is already attached as a VERIFIED contact and

@@ -172,16 +172,22 @@ async function handleInbound(
       // senders who opened with "hi" or photos alone; anyone who already
       // described a property gets the plain ack, and the processing job follows
       // with a needs-info reply naming only the gaps.
-      if (rich) {
-        await whatsappAdapter.sendText(
-          message.senderId,
-          batchHasDetail
-            ? receivedAckMessage(message.senderName)
-            : newListingTemplateMessage(message.senderName)
-        );
-      } else if (outcome.pinStored) {
-        // Pin acks are unconditional (pins were silently dropped before this
-        // existed) — with rich off, nothing else acknowledges a first-contact pin.
+      //
+      // Sent regardless of `rich`. Read receipts, typing indicators and
+      // tappable buttons are genuinely "rich"; a plain-text reply to someone
+      // who just said "hi" is not. Gating it meant that with the flag off —
+      // the default — a first-time sender got NOTHING back at all, which is
+      // the worst possible outcome for the one message that has to convert.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        batchHasDetail
+          ? receivedAckMessage(message.senderName)
+          : newListingTemplateMessage(message.senderName)
+      );
+      if (!rich && outcome.pinStored) {
+        // Unchanged: with rich on, the reply above is the only first-contact
+        // message, so this stays the flag-off path rather than becoming a
+        // second message for everyone.
         await whatsappAdapter.sendText(message.senderId, locationReceivedMessage());
       }
     } else if (outcome.action === 'appended' || outcome.action === 'appended_manual') {

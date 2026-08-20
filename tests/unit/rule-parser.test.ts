@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseIntakeRules, detectUpdateIntent } from '@/lib/intake/parser/rule-parser';
+import { newListingTemplateMessage } from '@/lib/intake/messages';
 
 // Table-driven corpus. `expected` is a partial — only listed keys are asserted.
 const CASES: Array<{
@@ -618,5 +619,100 @@ describe('typo-tolerant town matching', () => {
     const p = parseIntakeRules('House for rent at Pannipitiya, 2 bedrooms, 60000 per month');
     expect(p.city).toBe('Pannipitiya');
     expect(p.citySuggestion).toBeUndefined();
+  });
+});
+
+/**
+ * Round-trip of the fill-in form we send on first contact.
+ *
+ * The template in lib/intake/messages.ts is not just copy — whatever the
+ * landlord fills in comes straight back here as parser input. These cases drive
+ * the REAL message rather than a hardcoded copy of it, so rewording the form
+ * without checking the parser fails loudly instead of silently dropping fields.
+ */
+describe('intake template round-trip', () => {
+  /** Fill the real template by appending values after the English labels. */
+  const fill = (values: Record<string, string>): string => {
+    let out = newListingTemplateMessage('Gayan');
+    for (const [label, value] of Object.entries(values)) {
+      const needle = `${label} - `;
+      // Guard: a renamed label must fail here, not silently skip the fill.
+      expect(out).toContain(needle);
+      out = out.replace(needle, `${label} - ${value}`);
+    }
+    return out;
+  };
+
+  it('extracts every field from a fully completed form', () => {
+    const p = parseIntakeRules(
+      fill({
+        'Property type': 'house',
+        Address: 'No. 45/2, Temple Road',
+        'Town / city': 'Nugegoda',
+        Bedrooms: '3',
+        Bathrooms: '2',
+        'Monthly rent (LKR)': '85,000',
+        'About the place': 'Quiet lane, close to the school',
+      })
+    );
+    expect(p.propertyType).toBe('house');
+    expect(p.city).toBe('Nugegoda');
+    expect(p.district).toBe('Colombo');
+    expect(p.bedrooms).toBe(3);
+    expect(p.bathrooms).toBe(2);
+    expect(p.rentPerMonth).toBe(85000);
+    expect(p.missingFields).toEqual([]);
+    expect(p.suspicious).toBe(false);
+  });
+
+  it('does not let the bathrooms line bleed into the bedroom count', () => {
+    // The bathrooms label is "නාන කාමර", and කාමර is itself a bedroom keyword
+    // that /(\d+)\s*(?:kamara|කාමර)/gu will match across a newline. The
+    // bedrooms line sits immediately above it, ending in a digit.
+    const p = parseIntakeRules(
+      fill({ 'Town / city': 'Kandy', Bedrooms: '3', Bathrooms: '2', 'Monthly rent (LKR)': '60000' })
+    );
+    expect(p.bedrooms).toBe(3);
+    expect(p.bathrooms).toBe(2);
+  });
+
+  it('reads bathrooms alone without inventing a bedroom count', () => {
+    // Sharpest form of the same hazard: nothing above the bathrooms line, so a
+    // stray match on කාමර would have nothing legitimate outranking it.
+    const p = parseIntakeRules(fill({ 'Town / city': 'Kandy', Bathrooms: '2' }));
+    expect(p.bathrooms).toBe(2);
+    expect(p.bedrooms).toBeNull();
+    expect(p.missingFields).toContain('bedrooms');
+  });
+
+  it('keeps the filled fields when the form is only partly completed', () => {
+    const p = parseIntakeRules(
+      fill({ 'Town / city': 'Maharagama', Bedrooms: '2' }) // rent deliberately blank
+    );
+    expect(p.city).toBe('Maharagama');
+    expect(p.bedrooms).toBe(2);
+    expect(p.rentPerMonth).toBeNull();
+    expect(p.missingFields).toContain('rentPerMonth');
+  });
+
+  it('extracts nothing from a form sent back untouched', () => {
+    // Our own label text is now parser input, and the gazetteer fuzzy-matches —
+    // so "නගරය"/"நகரம்" must not be mistaken for a real town.
+    const p = parseIntakeRules(newListingTemplateMessage('Gayan'));
+    expect(p.bedrooms).toBeNull();
+    expect(p.bathrooms).toBeNull();
+    expect(p.rentPerMonth).toBeNull();
+    expect(p.city).toBeNull();
+    expect(p.suspicious).toBe(false);
+    expect(p.citySuggestion?.confident).not.toBe(true);
+  });
+
+  it('accepts native-script values against the English labels', () => {
+    const p = parseIntakeRules(
+      fill({ 'Town / city': 'මහරගම', Bedrooms: '3', 'Monthly rent (LKR)': '55000' })
+    );
+    expect(p.city).toBe('Maharagama');
+    expect(p.bedrooms).toBe(3);
+    expect(p.rentPerMonth).toBe(55000);
   });
 });

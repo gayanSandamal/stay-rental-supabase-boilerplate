@@ -104,21 +104,50 @@ export function receivedAckMessage(profileName: string | null): string {
  * thrown away. Asking would collect nothing and imply the typed number is what
  * tenants see. The list says so explicitly instead.
  */
+/**
+ * The fill-in form a first-time sender completes in place and sends back.
+ *
+ * THIS COPY IS PARSER INPUT, not just human text. Whatever the landlord returns
+ * goes straight to `parseIntakeRules`, so the layout is constrained by
+ * lib/intake/parser/rule-parser.ts and cannot be reworded freely:
+ *
+ * 1. The ENGLISH label must sit immediately before the dash. `extractCount`
+ *    returns the first pattern that matches in list order, and the English
+ *    patterns (`/(?:bed\s?rooms?|beds?)\s*[:\-]?\s*(\d+)/`) are listed first —
+ *    so an English label adjacent to the value always wins the race.
+ * 2. That ordering also defuses a live hazard: `/(\d+)\s*(?:kamara|කාමර)/gu`
+ *    matches digits, then ANY whitespace including a newline, then කාමර. Native
+ *    labels at the start of a line sit exactly where a previous line's number
+ *    could bleed into them. Keeping the correct English match first means the
+ *    bleed never gets a chance to fire. tests/unit/rule-parser.test.ts pins it.
+ * 3. The language separator is `·`, NOT `/` — `/` collides with the label
+ *    "Town / city" and with real addresses like "45/2".
+ *
+ * No title line: composeTitle() builds one from bedrooms + type + city.
+ * No contact-number line: the sender's number is already attached as a verified
+ * contact, and the parser discards typed numbers, so asking collects nothing
+ * and implies the typed number is what tenants would see.
+ */
 export function newListingTemplateMessage(profileName: string | null): string {
   return [
-    `Thanks${profileName ? ' ' + profileName : ''}! 🏠 To list your property on Easy Rent, send us these details:`,
+    `Thanks${profileName ? ' ' + profileName : ''}! 🏠`,
     '',
-    '• Property type (house / apartment / room)',
-    '• Address',
-    '• Town / city',
-    '• Number of bedrooms',
-    '• Number of bathrooms',
-    '• Monthly rent (LKR)',
-    '• A few photos',
+    'නිවසක් ලැයිස්තුගත කරන්න · வீட்டைப் பதிவு செய்ய · To list your property —',
+    'fill this in and send it back:',
+    '',
+    'වර්ගය · வகை · Property type - ',
+    'ලිපිනය · முகவரி · Address - ',
+    'නගරය · நகரம் · Town / city - ',
+    'කාමර · அறைகள் · Bedrooms - ',
+    'නාන කාමර · குளியலறை · Bathrooms - ',
+    'මාසික කුලිය · மாத வாடகை · Monthly rent (LKR) - ',
+    'විස්තර · விவரம் · About the place - ',
+    '',
+    '📷 ඡායාරූප · புகைப்படங்கள் · Photos — send a few',
+    '',
+    'Any language is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
     '',
     'Tenants will contact you on this WhatsApp number, so there’s no need to send one.',
-    '',
-    'Sinhala or English is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
   ].join('\n');
 }
 
