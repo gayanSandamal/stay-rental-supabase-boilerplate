@@ -15,6 +15,11 @@ import {
   type ConversationPayload,
 } from './commands';
 import type { NormalizedInboundMessage } from './channels/types';
+import {
+  extractVerificationCode,
+  redeemPhoneVerification,
+  type RedeemFailure,
+} from '@/lib/auth/phone-verification';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { capHeadroom, photoCap } from '@/lib/images/cap';
 import {
@@ -80,7 +85,14 @@ export interface AppendOutcome {
     /** confirm_city: the sender picked a town, or kept their own spelling. */
     | 'city_chosen'
     | 'city_kept'
-    | 'city_choice_unclear';
+    | 'city_choice_unclear'
+    /**
+     * A contact-number verification code (see lib/auth/phone-verification.ts).
+     * Never listing content, so it is answered before anything else and never
+     * enters an intake session.
+     */
+    | 'number_verified'
+    | 'verify_failed';
   intakeId?: number;
   /** attach_media / edit_link / delete / location_saved: the listing concerned. */
   listingId?: number | null;
@@ -97,6 +109,10 @@ export interface AppendOutcome {
   typedCity?: string;
   /** city_choice_unclear: how many options were on offer. */
   choiceCount?: number;
+  /** number_verified: the number now confirmed, for the reply. */
+  verifiedPhone?: string;
+  /** verify_failed: why, so the webhook picks the right copy. */
+  verifyFailure?: RedeemFailure;
   /**
    * appended: this message reopened a needs_info session — i.e. it answers a
    * "we still need…" ask. At most one message per round flips the status back
@@ -245,6 +261,41 @@ export async function appendToIntake(
   msg: NormalizedInboundMessage,
   persistMedia: (mediaId: string) => Promise<string | null>
 ): Promise<AppendOutcome> {
+  // ---- contact-number verification ----------------------------------------
+  // Answered FIRST, and outside the sender lock.
+  //
+  // First, because the prefilled text is short and carries no property detail:
+  // left to fall through it would either seed a junk intake or be eaten as a
+  // stray reply by a pending delete/city confirmation. The code shape is
+  // unmistakable, so matching it can never swallow a real submission.
+  //
+  // Outside the lock, for the same reason phase 2 downloads media outside it —
+  // this does its own writes on another connection, and nesting that inside a
+  // held transaction serializes the pool for no benefit. It touches no intake
+  // row, so it needs none of the lock's guarantees.
+  //
+  // Redelivery is safe without the intake_conversations dedup the commands use:
+  // redemption consumes the row, so Meta re-sending the same message resolves
+  // to `already_used`, whose reply ("already verified 👍") is exactly right.
+  const verifyCode = extractVerificationCode(msg.text);
+  if (verifyCode) {
+    const e164 = msg.senderId.startsWith('+') ? msg.senderId : `+${msg.senderId}`;
+    const result = await redeemPhoneVerification({ code: verifyCode, senderE164: e164 });
+    return result.ok
+      ? {
+          action: 'number_verified',
+          verifiedPhone: result.value.phoneNumber,
+          mediaStored: 0,
+          mediaFailed: 0,
+        }
+      : {
+          action: 'verify_failed',
+          verifyFailure: result.reason,
+          mediaStored: 0,
+          mediaFailed: 0,
+        };
+  }
+
   const outcome = await withSenderLock(msg.channel, msg.senderId, async (tx) => {
     const recent = await tx.query.whatsappIntakes.findMany({
       where: and(

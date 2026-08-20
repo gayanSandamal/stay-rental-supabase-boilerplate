@@ -31,6 +31,11 @@ const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
   // through to the 60/min default — six images a request, ~360 images a minute.
   'POST:/api/upload': { maxRequests: 20, windowMs: 60_000 },
   'POST:/api/contact-numbers': { maxRequests: 10, windowMs: 60_000 },
+  // Minting verification codes. Tighter than adding a number: re-issuing more
+  // than a handful a minute is never a real workflow, and each mint invalidates
+  // the previous code — so a spammer could otherwise keep rotating the code out
+  // from under a landlord who is mid-send.
+  'POST:/api/contact-numbers/[id]/verify': { maxRequests: 5, windowMs: 60_000 },
   'POST:/api/business-accounts': { maxRequests: 5, windowMs: 60_000 },
   'default': { maxRequests: 60, windowMs: 60_000 },
 };

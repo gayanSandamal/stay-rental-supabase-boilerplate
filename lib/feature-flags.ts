@@ -60,6 +60,15 @@ export const featureFlagDefaults = {
   // instead (recommended fallback if scam/junk listings appear).
   autoPublishWhatsAppIntakes: true,
 
+  // Self-service "prove you hold this number" for contact numbers added on the
+  // WEBSITE (60-second form, full form, settings). Numbers arriving through the
+  // WhatsApp intake are verified at insert; this is the only route to verified
+  // for every other path. Rides on the intake webhook, so it is doubly dormant:
+  // also needs enableWhatsAppIntake ON plus NEXT_PUBLIC_WHATSAPP_SUPPORT set —
+  // the button hides itself otherwise. OFF only stops NEW codes being minted;
+  // codes already in a landlord's chat stay redeemable so nobody is stranded.
+  enablePhoneVerification: true,
+
   // LLM fallback for the deterministic intake rule parser: when required
   // fields are still missing after rule parsing, ask a model for ONLY those
   // fields and merge the fill-ins (rule values always win). Runs on
@@ -229,6 +238,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     group: 'Platform',
     appWide: true,
     public: false,
+  },
+  enablePhoneVerification: {
+    label: 'Self-service phone verification',
+    description:
+      'Lets landlords verify a contact number added on the website by sending a prefilled code from that number over WhatsApp — the same possession proof the intake pipeline already relies on. Requires the WhatsApp intake pipeline ON and NEXT_PUBLIC_WHATSAPP_SUPPORT set; the button hides itself otherwise. Turning this off stops new codes being issued but still honours codes already sitting in landlords’ chats.',
+    group: 'Platform',
+    appWide: true,
+    public: true,
   },
   enableLlmParserFallback: {
     label: 'LLM parser fallback (intake)',

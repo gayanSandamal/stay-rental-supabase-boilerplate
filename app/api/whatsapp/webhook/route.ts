@@ -30,9 +30,12 @@ import {
   photosFailedMessage,
   photosMissedMessage,
   newListingTemplateMessage,
+  numberVerifiedMessage,
   receivedAckMessage,
   restoreRequestedMessage,
   updateAckMessage,
+  verifyCodeUnusableMessage,
+  verifyWrongSenderMessage,
 } from '@/lib/intake/messages';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { hasListingDetail } from '@/lib/intake/parser/types';
@@ -144,7 +147,22 @@ async function handleInbound(
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
 
-    if (outcome.action === 'created') {
+    if (outcome.action === 'number_verified') {
+      await whatsappAdapter.sendText(
+        message.senderId,
+        numberVerifiedMessage(outcome.verifiedPhone ?? 'your number')
+      );
+    } else if (outcome.action === 'verify_failed') {
+      // `wrong_sender` gets its own copy because it is the one failure that is
+      // a security signal rather than a mistake — and the one whose message
+      // must not name the number the code was issued for.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        outcome.verifyFailure === 'wrong_sender'
+          ? verifyWrongSenderMessage()
+          : verifyCodeUnusableMessage(outcome.verifyFailure ?? 'not_found')
+      );
+    } else if (outcome.action === 'created') {
       // First contact for this submission: without an instant reply the sender
       // hears NOTHING until the settle window + cron tick (~5 minutes).
       //
@@ -154,16 +172,22 @@ async function handleInbound(
       // senders who opened with "hi" or photos alone; anyone who already
       // described a property gets the plain ack, and the processing job follows
       // with a needs-info reply naming only the gaps.
-      if (rich) {
-        await whatsappAdapter.sendText(
-          message.senderId,
-          batchHasDetail
-            ? receivedAckMessage(message.senderName)
-            : newListingTemplateMessage(message.senderName)
-        );
-      } else if (outcome.pinStored) {
-        // Pin acks are unconditional (pins were silently dropped before this
-        // existed) — with rich off, nothing else acknowledges a first-contact pin.
+      //
+      // Sent regardless of `rich`. Read receipts, typing indicators and
+      // tappable buttons are genuinely "rich"; a plain-text reply to someone
+      // who just said "hi" is not. Gating it meant that with the flag off —
+      // the default — a first-time sender got NOTHING back at all, which is
+      // the worst possible outcome for the one message that has to convert.
+      await whatsappAdapter.sendText(
+        message.senderId,
+        batchHasDetail
+          ? receivedAckMessage(message.senderName)
+          : newListingTemplateMessage(message.senderName)
+      );
+      if (!rich && outcome.pinStored) {
+        // Unchanged: with rich on, the reply above is the only first-contact
+        // message, so this stays the flag-off path rather than becoming a
+        // second message for everyone.
         await whatsappAdapter.sendText(message.senderId, locationReceivedMessage());
       }
     } else if (outcome.action === 'appended' || outcome.action === 'appended_manual') {

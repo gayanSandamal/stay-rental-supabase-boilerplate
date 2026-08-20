@@ -331,6 +331,43 @@ export const landlordAccessTokens = pgTable('landlord_access_tokens', {
 });
 
 /**
+ * Pending "prove you hold this number" challenges for contact numbers added
+ * through the website (the 60-second form, the full form, account settings).
+ *
+ * The code is only a CORRELATION token, never the proof: possession is proven
+ * by the inbound WhatsApp message's sender number, which Meta has already
+ * verified. So the code is stored sha256-only like every other credential here,
+ * and matching it is not sufficient — `expectedPhone` must equal the sender.
+ *
+ * One live row per contact number: minting again supersedes the previous
+ * challenge rather than accumulating guessable codes.
+ */
+export const phoneVerifications = pgTable('phone_verifications', {
+  id: serial('id').primaryKey(),
+  contactNumberId: integer('contact_number_id')
+    .notNull()
+    .references(() => userContactNumbers.id, { onDelete: 'cascade' })
+    .unique(),
+  /** Who asked. Audit trail + the notification target on success. */
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  codeHash: text('code_hash').notNull().unique(),
+  /**
+   * The contact number in E.164 AS OF minting. Denormalized on purpose: if the
+   * landlord edits the number after minting, the challenge must not silently
+   * transfer to the new digits — a stale row simply stops matching.
+   */
+  expectedPhone: varchar('expected_phone', { length: 20 }).notNull(),
+  channel: text('channel').notNull().default('whatsapp'),
+  expiresAt: timestamp('expires_at').notNull(),
+  /** Wrong-sender attempts, so a leaked code can't be brute-forced from numbers. */
+  attempts: integer('attempts').notNull().default(0),
+  consumedAt: timestamp('consumed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/**
  * Per-sender conversation state for multi-step commands (today: the delete
  * confirmation). Separate from whatsapp_intakes, which models one property
  * submission. `handledMessageIds` stops Meta redelivery re-running a command.
@@ -645,6 +682,17 @@ export const listingModerationsRelations = relations(listingModerations, ({ one 
   }),
 }));
 
+export const phoneVerificationsRelations = relations(phoneVerifications, ({ one }) => ({
+  contactNumber: one(userContactNumbers, {
+    fields: [phoneVerifications.contactNumberId],
+    references: [userContactNumbers.id],
+  }),
+  user: one(users, {
+    fields: [phoneVerifications.userId],
+    references: [users.id],
+  }),
+}));
+
 // Notifications table (in-app notification center)
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),
@@ -694,6 +742,8 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type LandlordAccessToken = typeof landlordAccessTokens.$inferSelect;
 export type NewLandlordAccessToken = typeof landlordAccessTokens.$inferInsert;
+export type PhoneVerification = typeof phoneVerifications.$inferSelect;
+export type NewPhoneVerification = typeof phoneVerifications.$inferInsert;
 export type IntakeConversation = typeof intakeConversations.$inferSelect;
 export type NewIntakeConversation = typeof intakeConversations.$inferInsert;
 export type ListingModeration = typeof listingModerations.$inferSelect;

@@ -104,21 +104,50 @@ export function receivedAckMessage(profileName: string | null): string {
  * thrown away. Asking would collect nothing and imply the typed number is what
  * tenants see. The list says so explicitly instead.
  */
+/**
+ * The fill-in form a first-time sender completes in place and sends back.
+ *
+ * THIS COPY IS PARSER INPUT, not just human text. Whatever the landlord returns
+ * goes straight to `parseIntakeRules`, so the layout is constrained by
+ * lib/intake/parser/rule-parser.ts and cannot be reworded freely:
+ *
+ * 1. The ENGLISH label must sit immediately before the dash. `extractCount`
+ *    returns the first pattern that matches in list order, and the English
+ *    patterns (`/(?:bed\s?rooms?|beds?)\s*[:\-]?\s*(\d+)/`) are listed first —
+ *    so an English label adjacent to the value always wins the race.
+ * 2. That ordering also defuses a live hazard: `/(\d+)\s*(?:kamara|කාමර)/gu`
+ *    matches digits, then ANY whitespace including a newline, then කාමර. Native
+ *    labels at the start of a line sit exactly where a previous line's number
+ *    could bleed into them. Keeping the correct English match first means the
+ *    bleed never gets a chance to fire. tests/unit/rule-parser.test.ts pins it.
+ * 3. The language separator is `·`, NOT `/` — `/` collides with the label
+ *    "Town / city" and with real addresses like "45/2".
+ *
+ * No title line: composeTitle() builds one from bedrooms + type + city.
+ * No contact-number line: the sender's number is already attached as a verified
+ * contact, and the parser discards typed numbers, so asking collects nothing
+ * and implies the typed number is what tenants would see.
+ */
 export function newListingTemplateMessage(profileName: string | null): string {
   return [
-    `Thanks${profileName ? ' ' + profileName : ''}! 🏠 To list your property on Easy Rent, send us these details:`,
+    `Thanks${profileName ? ' ' + profileName : ''}! 🏠`,
     '',
-    '• Property type (house / apartment / room)',
-    '• Address',
-    '• Town / city',
-    '• Number of bedrooms',
-    '• Number of bathrooms',
-    '• Monthly rent (LKR)',
-    '• A few photos',
+    'නිවසක් ලැයිස්තුගත කරන්න · வீட்டைப் பதிவு செய்ய · To list your property —',
+    'fill this in and send it back:',
+    '',
+    'වර්ගය · வகை · Property type - ',
+    'ලිපිනය · முகவரி · Address - ',
+    'නගරය · நகரம் · Town / city - ',
+    'කාමර · அறைகள் · Bedrooms - ',
+    'නාන කාමර · குளியலறை · Bathrooms - ',
+    'මාසික කුලිය · மாத வாடகை · Monthly rent (LKR) - ',
+    'විස්තර · விவரம் · About the place - ',
+    '',
+    '📷 ඡායාරූප · புகைப்படங்கள் · Photos — send a few',
+    '',
+    'Any language is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
     '',
     'Tenants will contact you on this WhatsApp number, so there’s no need to send one.',
-    '',
-    'Sinhala or English is fine, and you can send it in one message or a few — we’ll put it together and reply here.',
   ].join('\n');
 }
 
@@ -409,4 +438,51 @@ export function cityKeptMessage(typed: string): string {
 /** The reply was not one of the offered numbers. */
 export function cityChoiceUnclearMessage(max: number): string {
   return `Sorry — please reply with just a number from 1 to ${max}.`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Contact-number verification (see lib/auth/phone-verification.ts)            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Possession proven. Names the number back so the landlord can see WHICH of
+ * their numbers this was — several landlords run an office line and a mobile.
+ */
+export function numberVerifiedMessage(phone: string): string {
+  return [
+    `✅ Verified — ${phone} is now confirmed on Easy Rent.`,
+    '',
+    'Renters will see a “Verified” badge next to it on your listings. Nothing else to do.',
+  ].join('\n');
+}
+
+/**
+ * Right code, wrong sender.
+ *
+ * Deliberately says nothing about which number the code was for. Whoever is
+ * holding this code may have picked it up from a screenshot or a forwarded
+ * message, and naming the target would hand them the other half of it.
+ */
+export function verifyWrongSenderMessage(): string {
+  return [
+    "That code was issued for a different phone number, so we can't confirm it from this one.",
+    '',
+    'Please send it from the phone you are verifying — the code has to come from that number itself.',
+  ].join('\n');
+}
+
+/** Expired, spent, or unknown — all point back to the same fresh-code action. */
+export function verifyCodeUnusableMessage(
+  reason: 'expired' | 'not_found' | 'already_used' | 'too_many_attempts'
+): string {
+  if (reason === 'already_used') {
+    return 'That number is already verified — nothing more to do. 👍';
+  }
+  const lead =
+    reason === 'expired'
+      ? 'That code has expired.'
+      : reason === 'too_many_attempts'
+        ? 'That code has been tried too many times.'
+        : "We don't recognise that code.";
+  return `${lead}\n\nOpen your Easy Rent dashboard, go to your contact numbers and tap “Verify on WhatsApp” for a fresh one.`;
 }

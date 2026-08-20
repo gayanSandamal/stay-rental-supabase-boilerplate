@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, X, Phone, MessageCircle } from 'lucide-react';
+import { Plus, X, Phone, MessageCircle, BadgeCheck, ShieldCheck } from 'lucide-react';
 import useSWR from 'swr';
 import { AlertDialog } from '@/components/alert-dialog';
+import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
+import { getWhatsAppSupportNumber } from '@/lib/site-config';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -16,6 +18,7 @@ type ContactNumber = {
   isWhatsApp: boolean;
   label: string | null;
   isActive: boolean;
+  verified: boolean;
 };
 
 interface ContactNumberSelectorProps {
@@ -40,6 +43,14 @@ export function ContactNumberSelector({
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  /** Which number is mid-mint, so only its own button shows a spinner. */
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
+
+  // Verification rides on the WhatsApp intake number. With no number configured
+  // there is nowhere to send the code, so the button hides itself rather than
+  // failing on tap — the same contract as the concierge CTAs.
+  const verificationEnabled =
+    useFeatureFlag('enablePhoneVerification') && Boolean(getWhatsAppSupportNumber());
 
   // Fetch existing contact numbers
   const { data, mutate } = useSWR<{ contactNumbers: ContactNumber[] }>(
@@ -102,12 +113,15 @@ export function ContactNumberSelector({
       // Add the new contact number to selected values
       onChange([...value, result.contactNumber.id]);
 
-      // Show notification about verification requirement
+      // Point at the button that now actually does something. The old copy here
+      // asked landlords to "SMS/WhatsApp Platform Support to manually verify" —
+      // there was no mechanism behind that on either side.
       setSuccessMessage(
-        'Contact number added successfully!\n\n' +
-        'IMPORTANT: Please SMS/WhatsApp Platform Support using this newly added contact number ' +
-        `(${result.contactNumber.phoneNumber}) to manually verify it. ` +
-        'Your listing will require verification before approval.'
+        verificationEnabled
+          ? `${result.contactNumber.phoneNumber} was added.\n\n` +
+              'Tap "Verify on WhatsApp" next to it to get the Verified badge — it opens ' +
+              'WhatsApp with a code already typed, and you just press send from that phone.'
+          : `${result.contactNumber.phoneNumber} was added.`
       );
       setShowSuccessDialog(true);
 
@@ -124,6 +138,53 @@ export function ContactNumberSelector({
       setShowErrorDialog(true);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  /**
+   * Mint a challenge and hand off to WhatsApp.
+   *
+   * The window is opened from inside the click handler's own async chain
+   * because Safari and most in-app browsers only honour window.open when they
+   * can attribute it to a user gesture — opening it after the await would be
+   * swallowed as a popup on exactly the phones this feature is for.
+   */
+  const handleVerify = async (contactNumber: ContactNumber) => {
+    setVerifyingId(contactNumber.id);
+    const handoff = window.open('', '_blank');
+    try {
+      const response = await fetch(`/api/contact-numbers/${contactNumber.id}/verify`, {
+        method: 'POST',
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not start verification');
+
+      if (result.alreadyVerified) {
+        handoff?.close();
+        mutate();
+        return;
+      }
+
+      if (handoff) {
+        handoff.location.href = result.link;
+      } else {
+        // Popup blocked — same-tab navigation still gets them there.
+        window.location.href = result.link;
+      }
+
+      setSuccessMessage(
+        `WhatsApp should now be open with a code ready to send.\n\n` +
+          `Press send from ${contactNumber.phoneNumber} — that is what proves the number is yours. ` +
+          `You'll get a confirmation back in the chat.\n\n` +
+          `If WhatsApp didn't open, message ${result.code} to our support number from that phone.`
+      );
+      setShowSuccessDialog(true);
+    } catch (error: any) {
+      handoff?.close();
+      setErrorMessage(error.message || 'Could not start verification');
+      setShowErrorDialog(true);
+    } finally {
+      setVerifyingId(null);
     }
   };
 
@@ -172,7 +233,7 @@ export function ContactNumberSelector({
                   className="w-4 h-4 text-teal-700 border-gray-300 rounded focus:ring-teal-600"
                 />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Phone className="h-4 w-4 text-gray-500" />
                     <span className="font-medium">{contactNumber.phoneNumber}</span>
                     {contactNumber.label && (
@@ -180,8 +241,14 @@ export function ContactNumberSelector({
                         ({contactNumber.label})
                       </span>
                     )}
+                    {contactNumber.verified && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded">
+                        <BadgeCheck className="h-3 w-3" />
+                        Verified
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <label className="flex items-center gap-1 text-sm text-gray-600">
                       <input
                         type="checkbox"
@@ -195,6 +262,22 @@ export function ContactNumberSelector({
                       <MessageCircle className="h-3 w-3" />
                       <span>WhatsApp</span>
                     </label>
+                    {verificationEnabled && !contactNumber.verified && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVerify(contactNumber);
+                        }}
+                        disabled={verifyingId === contactNumber.id}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 disabled:opacity-50"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {verifyingId === contactNumber.id
+                          ? 'Opening WhatsApp…'
+                          : 'Verify on WhatsApp'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
