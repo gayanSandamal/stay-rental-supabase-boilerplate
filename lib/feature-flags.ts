@@ -69,6 +69,13 @@ export const featureFlagDefaults = {
   // codes already in a landlord's chat stay redeemable so nobody is stranded.
   enablePhoneVerification: true,
 
+  // Strip phone numbers from a listing's description during moderation unless
+  // the number is one the owner has VERIFIED. An unverified number in prose is
+  // the one route by which an unverified — possibly someone else's — number
+  // reaches a renter, and it routes around the verified badge the marketplace
+  // is built on. Deterministic, no model call. OFF leaves descriptions as sent.
+  scrubUnverifiedContacts: true,
+
   // LLM fallback for the deterministic intake rule parser: when required
   // fields are still missing after rule parsing, ask a model for ONLY those
   // fields and merge the fill-ins (rule values always win). Runs on
@@ -235,6 +242,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'Auto-publish WhatsApp intakes',
     description:
       'Publish intake listings automatically once the automated approval checks pass (see "Automated listing approval"), with no human review — including for first-time landlords. OFF routes every intake to pending for one-tap approval instead.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  scrubUnverifiedContacts: {
+    label: 'Remove unverified numbers from descriptions',
+    description:
+      "During automated moderation, strip phone numbers from a listing's description unless the owner has verified that number. The landlord is told in the same message that reports dropped photos. Deterministic — no model call. Off leaves descriptions exactly as the sender wrote them.",
     group: 'Platform',
     appWide: true,
     public: false,

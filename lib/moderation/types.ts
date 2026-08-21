@@ -94,6 +94,12 @@ export interface ModerationVerdict {
   processingFallbacks?: number;
   /** First processing failure of the run, ops-facing. */
   processingError?: string;
+  /**
+   * Unverified phone numbers stripped from the description. Carried on the
+   * verdict rather than written directly so persist() owns every write to the
+   * row, and so notify() can tell the landlord in the same message as the rest.
+   */
+  descriptionScrub?: { cleaned: string; removed: number };
 }
 
 /** Flags the policy layer reads. Passed in so verdict.ts stays pure. */

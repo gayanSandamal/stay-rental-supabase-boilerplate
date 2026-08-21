@@ -795,3 +795,68 @@ describe('labelled city lines', () => {
     ).toBeNull();
   });
 });
+
+/**
+ * The listing description.
+ *
+ * composeDescription used to return the whole normalized message, truncated.
+ * Since the message is the ACCUMULATED session — every message the sender ever
+ * sent in that intake, whitespace-collapsed — a live listing's description read:
+ *
+ *   "Hi A house for rent at Pulunyandala 15, Mill road, Pulunyandala 2 bedrooms
+ *    1 bathroom WIFI and Solar 45000 වර්ගය · வகை · Property type - house …"
+ *
+ * The template made it worse by adding trilingual label scaffolding — while at
+ * the same time asking the sender for a description explicitly and then
+ * ignoring the answer.
+ */
+describe('listing description', () => {
+  const TRANSCRIPT = [
+    'Hi',
+    'A house for rent at Pulunyandala',
+    '15, Mill road, Pulunyandala',
+    '2 bedrooms',
+    '1 bathroom',
+    'WIFI and Solar',
+    '45000',
+    'වර්ගය · வகை · Property type -  house',
+    'ලිපිනය · முகவரி · Address - 15, Mill road, Puluyandala',
+    'නගරය · நகரம் · Town / city - Puluyandala',
+    'කාමර · அறைகள் · Bedrooms - 2',
+    'නාන කාමර · குளியலறை · Bathrooms - 1',
+    'මාසික කුලිය · மாத வாடகை · Monthly rent (LKR) - 45000',
+    'විස්තර · விவரம் · About the place - Luxury house with Wifi and Solar energy backup closer to Puluyandala Clock Tower (100m)',
+  ].join('\n');
+
+  it("uses the sender's own About line, not the transcript", () => {
+    const d = parseIntakeRules(TRANSCRIPT).description;
+    expect(d).toBe('Luxury house with Wifi and Solar energy backup closer to Puluyandala Clock Tower (100m)');
+    // None of the scaffolding may survive into a published listing.
+    expect(d).not.toMatch(/Property type|Bedrooms -|·/);
+  });
+
+  it('never publishes label scaffolding when About is left blank', () => {
+    const d = parseIntakeRules(TRANSCRIPT.replace(/About the place - .*/, 'About the place - '))
+      .description;
+    // Falls back to the prose the sender wrote BEFORE the form…
+    expect(d).toContain('A house for rent at Pulunyandala');
+    // …with no label wreckage on either side of the cut.
+    expect(d).not.toMatch(/·|වර්ගය|Property type/);
+  });
+
+  it('returns nothing rather than scaffolding for a bare unfilled form', () => {
+    const formOnly = TRANSCRIPT.split('\n').slice(7).join('\n').replace(/About the place - .*/, 'About the place - ');
+    // process.ts then substitutes the concierge line, which beats label soup.
+    expect(parseIntakeRules(formOnly).description).toBeNull();
+  });
+
+  it('leaves an ordinary free-form message exactly as it was', () => {
+    const text = 'Lovely 3 bedroom house in Nugegoda with a big garden and parking for two cars. 85000 per month.';
+    expect(parseIntakeRules(text).description).toBe(text);
+  });
+
+  it('drops the template footer if the sender pastes it back', () => {
+    const withFooter = TRANSCRIPT + '\n\n📷 ඡායාරූප · புகைப்படங்கள் · Photos — send a few';
+    expect(parseIntakeRules(withFooter).description).not.toMatch(/📷|Photos/);
+  });
+});
