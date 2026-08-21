@@ -16,9 +16,15 @@
  * PUT /api/listings/[id].
  */
 
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { listings, listingModerations, whatsappIntakes } from '@/lib/db/schema';
+import {
+  landlords,
+  listings,
+  listingModerations,
+  userContactNumbers,
+  whatsappIntakes,
+} from '@/lib/db/schema';
 import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { processListingImage } from '@/lib/images/process';
@@ -42,6 +48,7 @@ import {
 } from './config';
 import { checkImage } from './image-check';
 import { checkText } from './text-check';
+import { contactRemovedLine, scrubContactNumbers } from './contact-scrub';
 import { combine, nextListingStatus, summarize } from './verdict';
 import { PROMPT_VERSION } from './prompts';
 import { MODERATION_IMAGE_MODEL } from './config';
@@ -125,6 +132,39 @@ function ensureManifest(listing: ListingRow): PhotoManifestEntry[] {
  *   expired — with nothing written and nothing learned. Partial progress every
  *   two minutes beats a run that never finishes.
  */
+
+/**
+ * Contact numbers this listing's owner has actually verified, in whatever form
+ * they were stored — scrubContactNumbers normalizes before comparing.
+ *
+ * Covers both scopes a contact number can live in: the landlord's own user, and
+ * the business account a listing may be published under.
+ */
+async function verifiedNumbersFor(listing: ListingRow): Promise<string[]> {
+  try {
+    const scopes = [];
+    const landlord = await db.query.landlords.findFirst({
+      where: eq(landlords.id, listing.landlordId),
+      columns: { userId: true },
+    });
+    if (landlord?.userId) scopes.push(eq(userContactNumbers.userId, landlord.userId));
+    if (listing.businessAccountId) {
+      scopes.push(eq(userContactNumbers.businessAccountId, listing.businessAccountId));
+    }
+    if (!scopes.length) return [];
+    const rows = await db
+      .select({ phoneNumber: userContactNumbers.phoneNumber })
+      .from(userContactNumbers)
+      .where(and(eq(userContactNumbers.verified, true), or(...scopes)));
+    return rows.map((r) => r.phoneNumber);
+  } catch (err) {
+    // Fail CLOSED on the allow-list: an empty list removes every number, which
+    // is the safe direction — publishing an unverified number is the harm.
+    console.error('[moderation] verified-number lookup failed', err);
+    return [];
+  }
+}
+
 export async function moderateListing(
   listing: ListingRow,
   deadline = Number.POSITIVE_INFINITY
@@ -243,6 +283,22 @@ export async function moderateListing(
     existingKeptUrls: alreadyKept.map((e) => e.p ?? e.o),
     cappedOutUrls: cappedOut.map((e) => e.o),
   });
+
+  // --- unverified contact numbers -----------------------------------------
+  // Deterministic and provider-independent, so it runs whatever the image and
+  // text stages concluded — including on an `error` outcome, where leaving an
+  // unverified number published while we retry would be the wrong way to fail.
+  if (isFeatureEnabled('scrubUnverifiedContacts')) {
+    const allowed = await verifiedNumbersFor(listing);
+    const scrub = scrubContactNumbers(listing.description, allowed);
+    if (scrub.removed.length) {
+      verdict.descriptionScrub = { cleaned: scrub.cleaned, removed: scrub.removed.length };
+      verdict.landlordReasons.push(contactRemovedLine(scrub.removed.length));
+      verdict.reasons.push(
+        `${scrub.removed.length} unverified contact number(s) removed from the description`
+      );
+    }
+  }
 
   // --- apply verdicts to the manifest ------------------------------------
   const byUrl = new Map(imageVerdicts.map((v) => [v.originalUrl, v]));
@@ -425,6 +481,11 @@ async function persist(
       moderatedAt: now,
       moderationLeaseUntil: null,
       updatedAt: now,
+      // Every branch below spreads `base`, so a stripped number never survives
+      // because of the outcome the listing happened to land on.
+      ...(verdict.descriptionScrub
+        ? { description: verdict.descriptionScrub.cleaned }
+        : {}),
     };
 
     const nextStatus = nextListingStatus({
