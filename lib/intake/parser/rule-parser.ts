@@ -446,10 +446,76 @@ function composeTitle(args: {
     .join(' ');
 }
 
+/**
+ * Labels the intake template puts on its lines. Used to recognise a filled
+ * template and to find where its scaffolding begins.
+ */
+const TEMPLATE_LABEL_RE =
+  /\b(?:property type|address|town \/ city|bedrooms|bathrooms|monthly rent(?:\s*\(lkr\))?|about the place)\b\s*[-:]/gi;
+
+/** Trailing copy of the template, which is not part of anyone's description. */
+const TEMPLATE_FOOTER_RE =
+  /(?:📷|any language is fine|tenants will contact you|send a few)/i;
+
+/**
+ * The sender's own words from the template's "About the place" line.
+ *
+ * The template asks for a description explicitly, so when it is filled in that
+ * value IS the description — far better than the transcript, which is what the
+ * listing used to get. Anchored on the English label, for the same reason the
+ * city reader is: the template puts English against the dash by design.
+ */
+export function extractLabelledDescription(original: string): string | null {
+  const m = original.match(/\babout the place\b\s*[-:]\s*([\s\S]+)$/i);
+  if (!m) return null;
+  let value = m[1];
+  // The sender may have pasted the template's closing copy back with it.
+  const footer = value.search(TEMPLATE_FOOTER_RE);
+  if (footer > -1) value = value.slice(0, footer);
+  value = value.trim();
+  return value.length >= 2 ? value : null;
+}
+
+/**
+ * The listing description.
+ *
+ * Order matters. A filled "About the place" wins outright. Failing that, a
+ * message that is clearly a filled template gets its scaffolding cut away
+ * rather than published: dumping the raw transcript put trilingual labels,
+ * duplicated field values and the sender's opening "Hi" into the description
+ * on the live listing. Anything that is not a template keeps the original
+ * behaviour, because free-form prose is a perfectly good description.
+ */
 function composeDescription(original: string): string | null {
   if (!original) return null;
-  if (original.length <= 400) return original;
-  const cut = original.slice(0, 400);
+
+  const labelled = extractLabelledDescription(original);
+  if (labelled) return truncateDescription(labelled);
+
+  // Scaffolding with no description in it — keep only the prose that came
+  // before the form (senders typically write first, then fill the template).
+  TEMPLATE_LABEL_RE.lastIndex = 0;
+  const labels = original.match(TEMPLATE_LABEL_RE) ?? [];
+  if (labels.length >= 3) {
+    const firstLabel = original.search(TEMPLATE_LABEL_RE);
+    // Slice at the ENGLISH label, then drop the native-script half of that
+    // same label, which sits before it ("… 45000 වර්ගය · வகை ·").
+    const prose =
+      firstLabel > 0
+        ? original
+            .slice(0, firstLabel)
+            .replace(/[\s·]*[\u0D80-\u0DFF\u0B80-\u0BFF][\u0D80-\u0DFF\u0B80-\u0BFF\s·]*$/u, '')
+            .trim()
+        : '';
+    return prose.length >= 20 ? truncateDescription(prose) : null;
+  }
+
+  return truncateDescription(original);
+}
+
+function truncateDescription(text: string): string {
+  if (text.length <= 400) return text;
+  const cut = text.slice(0, 400);
   const lastSentence = Math.max(
     cut.lastIndexOf('. '),
     cut.lastIndexOf('! '),
