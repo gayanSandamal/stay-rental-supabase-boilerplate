@@ -245,3 +245,66 @@ describe('parser LLM fallback', () => {
     expect(url).not.toContain('anthropic');
   });
 });
+
+/**
+ * Towns the LLM invents.
+ *
+ * The rule parser can only ever emit a gazetteer town. The LLM is asked for a
+ * "Sri Lankan city" as free text, and only ever when the rules found none — so
+ * whatever it returns is unvalidated by construction. normalizeLocation passes
+ * an unknown town through untouched on purpose (a real village must still
+ * publish), which is how "Puluyandala" reached a live listing titled
+ * "2BR House in Puluyandala": a town that does not exist, in a column the
+ * search filter matches with `eq`, invisible to everyone searching Piliyandala.
+ */
+describe('LLM-supplied towns are checked against the gazetteer', () => {
+  const originalFetch = global.fetch;
+  beforeEach(() => {
+    process.env.SILICONFLOW_API_KEY = 'test-key';
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.clearAllMocks();
+  });
+
+  const withLlmCity = async (city: string) => {
+    vi.mocked(parseIntakeRules).mockReturnValue(
+      ruleResult({ title: '2BR House', propertyType: 'house', address: '15 Mill road', bedrooms: 2, rentPerMonth: 45000 })
+    );
+    global.fetch = vi.fn(async () => sfReply(JSON.stringify({ city }))) as any;
+    return parseIntake('irrelevant — the rule parser is mocked');
+  };
+
+  it('never publishes a misspelling as a real town', async () => {
+    const p = await withLlmCity('Puluyandala'); // meant Piliyandala
+    expect(p.city).not.toBe('Puluyandala');
+    // Held back rather than guessed at, so the sender settles it.
+    expect(p.city).toBeNull();
+    expect(p.cityTyped).toBe('Puluyandala');
+    expect(p.cityCandidates?.map((c) => c.city)).toContain('Piliyandala');
+    expect(p.missingFields).toContain('city');
+    // And the title must not advertise the town we just refused.
+    expect(p.title).not.toMatch(/Puluyandala/);
+  });
+
+  it('canonicalises a near-miss with one clear front-runner', async () => {
+    const p = await withLlmCity('Nugegoada'); // one obvious intended town
+    expect(p.city).toBe('Nugegoda');
+    expect(p.district).toBe('Colombo');
+    expect(p.missingFields).not.toContain('city');
+  });
+
+  it('still keeps a genuine small town the gazetteer has never heard of', async () => {
+    // The whole reason unknown towns pass through. A name with no plausible
+    // neighbour is a village, not a typo, and must still publish.
+    const p = await withLlmCity('Zzyzxgama');
+    expect(p.city).toBe('Zzyzxgama');
+    expect(p.cityCandidates).toBeUndefined();
+  });
+
+  it('leaves a correctly spelled known town alone', async () => {
+    const p = await withLlmCity('Maharagama');
+    expect(p.city).toBe('Maharagama');
+    expect(p.district).toBe('Colombo');
+  });
+});

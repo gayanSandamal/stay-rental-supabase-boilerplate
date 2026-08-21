@@ -9,7 +9,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { ParsedIntake, computeMissingFields } from './types';
 import { parseIntakeRules, RULES_VERSION } from './rule-parser';
 import { isLlmParserConfigured, parseIntakeWithLlm } from './llm-parser';
-import { normalizeLocation } from './gazetteer';
+import { fuzzyCityCandidates, isDecisiveCandidate, normalizeLocation } from './gazetteer';
 
 export type { ParsedIntake } from './types';
 export { REQUIRED_FIELDS } from './types';
@@ -68,6 +68,45 @@ function mergeParsed(rule: ParsedIntake, llm: ParsedIntake): ParsedIntake {
   const location = normalizeLocation(merged.city, merged.district);
   merged.city = location.city || null;
   merged.district = location.district;
+  // normalizeLocation canonicalises what it KNOWS and passes anything else
+  // through untouched — deliberately, so a real village the gazetteer misses
+  // still publishes. But it cannot tell a village from a misspelling, and the
+  // LLM is asked for free text precisely when the rules found no town, so a
+  // typo is the likelier of the two. Published unchecked, "Puluyandala" becomes
+  // a town that does not exist, in a column the search filter matches with
+  // `eq` — invisible to every renter searching Piliyandala, which is what the
+  // sender meant.
+  //
+  // The fuzzy matcher is the only thing that can separate the two cases, so ask
+  // it, and follow the same rule the deterministic path already follows: one
+  // clear front-runner is a typo we may fix outright; a close field is the
+  // sender's to settle; no neighbour at all is a genuine small town, kept.
+  if (merged.city && !location.known) {
+    const shortlist = fuzzyCityCandidates(merged.city);
+    if (shortlist.length && isDecisiveCandidate(merged.city, shortlist)) {
+      merged.cityTyped = merged.city;
+      merged.citySuggestion = {
+        city: shortlist[0].city,
+        district: shortlist[0].district,
+        from: merged.city,
+        confident: true,
+      };
+      merged.city = shortlist[0].city;
+      merged.district = shortlist[0].district;
+    } else if (shortlist.length) {
+      // Ambiguous: hold the town back rather than invent one. computeMissingFields
+      // then reports it, which routes the sender into the confirm_city menu —
+      // where "keep what I typed" remains available if it really is a village.
+      merged.cityTyped = merged.city;
+      merged.cityCandidates = shortlist.map((c) => ({
+        city: c.city,
+        district: c.district,
+        similarity: c.similarity,
+      }));
+      merged.city = null;
+      merged.district = null;
+    }
+  }
   // The rules compose a cityless title ("3BR House") when the gazetteer misses
   // the town; if the LLM recovered the city, retrofit it — otherwise the
   // listing publishes titled without its location.
