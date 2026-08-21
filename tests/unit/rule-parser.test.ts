@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIntakeRules, detectUpdateIntent } from '@/lib/intake/parser/rule-parser';
+import { parseIntakeRules, detectUpdateIntent, extractLabelledCity } from '@/lib/intake/parser/rule-parser';
 import { newListingTemplateMessage } from '@/lib/intake/messages';
 
 // Table-driven corpus. `expected` is a partial — only listed keys are asserted.
@@ -714,5 +714,84 @@ describe('intake template round-trip', () => {
     expect(p.city).toBe('Maharagama');
     expect(p.bedrooms).toBe(3);
     expect(p.rentPerMonth).toBe(55000);
+  });
+});
+
+/**
+ * A town written on a LABELLED line.
+ *
+ * The bug these pin: a landlord filled in "Town / city - Puluyandala" and was
+ * still told "we still need the town or city", with no "did you mean?" prompt
+ * either. `suggestCity` fuzzes message tokens through `fuzzyCityName`, which
+ * only accepts near-identical spellings, and the candidate shortlist that
+ * powers the disambiguation menu was gated BEHIND that suggestion — so a
+ * two-character typo produced neither a city nor a menu. The whole confirm_city
+ * flow was unreachable for exactly the misspellings it was built for.
+ */
+describe('labelled city lines', () => {
+  const fill = (values: Record<string, string>): string => {
+    let out = newListingTemplateMessage('Gayan');
+    for (const [label, value] of Object.entries(values)) {
+      out = out.replace(`${label} - `, `${label} - ${value}`);
+    }
+    return out;
+  };
+
+  it('offers the disambiguation menu for a labelled town we do not know', () => {
+    const p = parseIntakeRules(
+      fill({
+        Address: '15, Mill road, Puluyandala',
+        'Town / city': 'Puluyandala', // real town is Piliyandala
+        Bedrooms: '2',
+        Bathrooms: '1',
+        'Monthly rent (LKR)': '45000',
+      })
+    );
+    // Still not applied outright — a wrong town is worse than an unanswered
+    // question — but the sender now gets asked instead of stonewalled.
+    expect(p.city).toBeNull();
+    expect(p.cityTyped).toBe('Puluyandala');
+    expect(p.cityCandidates?.map((c) => c.city)).toContain('Piliyandala');
+  });
+
+  it('resolves a labelled town we do know', () => {
+    const p = parseIntakeRules(
+      fill({ 'Town / city': 'Nugegoda', Address: '12 Lake Rd', Bedrooms: '3', 'Monthly rent (LKR)': '85000' })
+    );
+    expect(p.city).toBe('Nugegoda');
+    expect(p.district).toBe('Colombo');
+    expect(p.missingFields).toEqual([]);
+  });
+
+  it('invents nothing from an unfilled label', () => {
+    // The value slot is empty, so the capture must not run on and swallow the
+    // NEXT field's Sinhala label as though it were the town.
+    const p = parseIntakeRules(newListingTemplateMessage('Gayan'));
+    expect(p.cityTyped).toBeUndefined();
+    expect(p.cityCandidates).toBeUndefined();
+    expect(p.city).toBeNull();
+  });
+
+  it('never lets the word "Address" become a town', () => {
+    // Guards the reason this fix reads the labelled value instead of simply
+    // loosening the token scan: fuzzyCityCandidates pairs "Address" with
+    // Akuressa at 0.63, and "Address" is a label in EVERY filled template.
+    const p = parseIntakeRules(
+      fill({ Address: '15 Mill road', Bedrooms: '2', 'Monthly rent (LKR)': '45000' })
+    );
+    expect(p.cityCandidates?.map((c) => c.city) ?? []).not.toContain('Akuressa');
+    expect(p.city).toBeNull();
+  });
+
+  it('reads the label in free-form messages too, not just the template', () => {
+    expect(extractLabelledCity('City: Kandy')).toBe('Kandy');
+    expect(extractLabelledCity('town - Maharagama, near the temple')).toBe('Maharagama');
+  });
+
+  it('does not mistake other labelled lines for a town', () => {
+    expect(extractLabelledCity('Monthly rent (LKR) - 45000')).toBeNull();
+    expect(
+      extractLabelledCity('About the place - Luxury house closer to Puluyandala Clock Tower')
+    ).toBeNull();
   });
 });

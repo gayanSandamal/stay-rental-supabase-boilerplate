@@ -15,6 +15,7 @@ import {
   fuzzyCityName,
   fuzzyCityCandidates,
   isDecisiveCandidate,
+  normalizeLocation,
 } from './gazetteer';
 import { scoreSuspicion } from './scam';
 
@@ -503,6 +504,45 @@ function cityCandidateTokens(original: string): string[] {
   return out;
 }
 
+/**
+ * The town a sender wrote on a LABELLED line — "Town / city - Piliyandala",
+ * "City: Kandy", or the trilingual line in the intake template.
+ *
+ * Exists because a labelled answer carries intent that free-text scanning
+ * cannot recover. `suggestCity` fuzzes every token of the message through
+ * `fuzzyCityName`, which only accepts near-identical spellings; a town it has
+ * never heard of therefore yields nothing at all, and the sender is told
+ * "missing: city" about a line they demonstrably filled in.
+ *
+ * Widening that token scan is not the fix — the LOOSE matcher pairs the word
+ * "Address" with Akuressa at 0.63, and "Address" is a label in every filled
+ * template, so every submission would be asked "did you mean Akuressa?".
+ * Reading the labelled value instead means only the sender's own answer is
+ * ever fuzzy-matched, which is both safer and more accurate.
+ *
+ * NOTE the shape of the regex: `normalize()` collapses every run of whitespace
+ * — newlines included — so by the time this runs the whole template is ONE
+ * line and the city value runs straight into the next field's label. The value
+ * therefore ends at the next native-script label word, a `·`, a comma, or the
+ * end of the string, rather than at a line break that no longer exists.
+ *
+ * Triggers on the ENGLISH label only. That is safe precisely because the
+ * template puts the English label against the dash by design; a native-only
+ * label still resolves through the gazetteer whenever the town is known.
+ */
+const LABELLED_CITY_RE =
+  /\b(?:town|city)\b[^:\-]{0,20}[:\-]\s*([^·,]{2,60}?)(?=\s+[\u0D80-\u0DFF\u0B80-\u0BFF]|\s*,|\s*$)/i;
+
+export function extractLabelledCity(original: string): string | null {
+  const m = original.match(LABELLED_CITY_RE);
+  if (!m) return null;
+  const value = m[1].trim();
+  // Guard against a label line whose "value" is really another label or a
+  // number (e.g. a stray "city - 3").
+  if (!value || /^\d+$/.test(value)) return null;
+  return value;
+}
+
 function suggestCity(original: string): ParsedIntake['citySuggestion'] {
   for (const token of cityCandidateTokens(original)) {
     const hit = fuzzyCityName(token);
@@ -527,14 +567,28 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
   const cityMatch = matchCity(lower);
   let city = cityMatch?.city ?? null;
   let district: string | null = cityMatch?.district ?? matchDistrict(lower);
+  // A labelled answer beats token scanning: it is what the sender explicitly
+  // said the town was, so it is tried first and its value is the only string
+  // we fuzzy-match. An unknown-but-labelled town still yields `cityTyped`, so
+  // the sender gets the disambiguation menu instead of a bare "missing: city".
+  const labelledCity = city ? null : extractLabelledCity(original);
+  if (labelledCity) {
+    const known = normalizeLocation(labelledCity);
+    if (known.known) {
+      city = known.city;
+      district = known.district ?? district;
+    }
+  }
   // Only worth looking for a misspelling when no town matched outright.
   const citySuggestion = city ? undefined : suggestCity(original);
   let cityCandidates: ParsedIntake['cityCandidates'];
   let cityTyped: string | undefined;
-  if (!city && citySuggestion) {
-    cityTyped = citySuggestion.from;
-    const shortlist = fuzzyCityCandidates(citySuggestion.from);
-    if (isDecisiveCandidate(citySuggestion.from, shortlist)) {
+  // The labelled value is preferred over whatever token scanning turned up.
+  const fuzzSource = city ? null : (labelledCity ?? citySuggestion?.from ?? null);
+  if (fuzzSource) {
+    cityTyped = fuzzSource;
+    const shortlist = fuzzyCityCandidates(fuzzSource);
+    if (isDecisiveCandidate(fuzzSource, shortlist)) {
       // One town is far enough ahead to be a typo rather than a choice.
       city = shortlist[0].city;
       district = shortlist[0].district;
