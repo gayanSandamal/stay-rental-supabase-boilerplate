@@ -20,6 +20,7 @@
     "db:set-password": "npx tsx scripts/set-password.ts",
     "parser:probe": "npx tsx scripts/parser-fallback-probe.ts",
     "db:hard-delete-user": "npx tsx scripts/hard-delete-user.ts",
+    "db:wipe-users": "npx tsx scripts/wipe-users.ts",
     "db:studio": "drizzle-kit studio",
     "moderation:calibrate": "npx tsx scripts/moderation-calibrate.ts",
     "moderation:probe": "npx tsx scripts/moderation-probe.ts",
