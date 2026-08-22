@@ -95,6 +95,11 @@ const nextConfig: NextConfig = {
     // `[id]` is read as a character class and never matches the literal segment.
     // The old bracketed key silently contributed nothing.
     '/api/listings/*/moderate': ['./public/brand/**', ...SHARP_NATIVE_LIBS],
+    // The social image proxy transcodes the derived WebP to the JPEG that
+    // Instagram will accept, so it needs the same library. Glob segments, NOT
+    // '[listingId]/[index]' — see the note on the moderate key above. No
+    // ./public/brand/**: the proxy only transcodes, it never watermarks.
+    '/api/social/img/*/*': [...SHARP_NATIVE_LIBS],
   },
   // Tracing drags the repo's documentation into every function — a 12.6 MB PDF
   // and the screenshot set — and no route reads any of it at runtime. Worth
