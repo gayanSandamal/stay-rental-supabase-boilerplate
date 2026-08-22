@@ -63,3 +63,16 @@ export interface SocialAdapter {
   publish(input: SocialPostInput): Promise<PublishResult>;
   remove(remotePostId: string): Promise<boolean>;
 }
+
+/**
+ * Prefix every adapter uses for the id it invents when it has no credentials.
+ * Dry-run state is derived from this rather than stored in a column: the prefix
+ * is already deterministic, and a schema change for a display concern is not
+ * worth another migration.
+ */
+export const DRY_RUN_ID_PREFIX = 'dryrun-';
+
+/** Was this row a dry run — i.e. nothing was ever sent to the platform? */
+export function isDryRunPost(remotePostId: string | null | undefined): boolean {
+  return Boolean(remotePostId?.startsWith(DRY_RUN_ID_PREFIX));
+}

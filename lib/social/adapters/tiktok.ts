@@ -21,6 +21,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { socialAccounts } from '@/lib/db/schema';
 import { SOCIAL_HTTP_TIMEOUT_MS, TIKTOK_API_BASE, isTikTokConfigured, socialConfig } from '../config';
+import { DRY_RUN_ID_PREFIX } from '../types';
 import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
 
 const POLL_ATTEMPTS = 10;
@@ -142,7 +143,7 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     console.log(
       `[social:dry-run] tiktok listing=${input.listingId} images=${input.imageUrls.length}\n${input.caption}`
     );
-    return { ok: true, remotePostId: `dryrun-tiktok-${input.listingId}` };
+    return { ok: true, remotePostId: `${DRY_RUN_ID_PREFIX}tiktok-${input.listingId}` };
   }
 
   const tokens = await currentToken();

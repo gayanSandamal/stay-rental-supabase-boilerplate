@@ -7,8 +7,8 @@ import { Share2, ExternalLink, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { adapterFor } from '@/lib/social/registry';
-import type { SocialPlatform } from '@/lib/social/types';
+import { adapterFor, socialAdapters, isPlatformEnabled } from '@/lib/social/registry';
+import { isDryRunPost, type SocialPlatform } from '@/lib/social/types';
 import { SocialActions } from './social-actions';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +62,43 @@ export default async function SocialPage() {
         </Card>
       )}
 
+      {/* Which platforms can actually post. Without this the only way to tell a
+          real post from a dry run was to read the server logs — which is how
+          three "posted" rows for listing #21 turned out to be nothing at all. */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Platform configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2 text-sm">
+          {socialAdapters.map((adapter) => {
+            const configured = adapter.isConfigured();
+            const on = isPlatformEnabled(adapter.platform);
+            const manual = adapter.platform === 'facebook_group';
+            return (
+              <div key={adapter.platform} className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${
+                    !on ? 'bg-slate-300' : manual || configured ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                />
+                <span className="font-medium text-slate-800">
+                  {PLATFORM_LABELS[adapter.platform] ?? adapter.platform}
+                </span>
+                <span className="text-slate-500">
+                  {!on
+                    ? '— switched off'
+                    : manual
+                      ? '— manual (no API exists)'
+                      : configured
+                        ? '— live'
+                        : '— not configured, posts are DRY RUNS'}
+                </span>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       {/* The single most important thing for a reviewer to know before they
           click "pull down" and assume the post is gone. */}
       <Card className="mb-6 border-slate-300 bg-slate-50">
@@ -97,6 +134,7 @@ export default async function SocialPage() {
         <div className="space-y-3">
           {rows.map(({ post, listingTitle, listingStatus }) => {
             const adapter = adapterFor(post.platform as SocialPlatform);
+            const dryRun = isDryRunPost(post.remotePostId);
             return (
               <Card key={post.id}>
                 <CardHeader className="pb-2">
@@ -114,6 +152,11 @@ export default async function SocialPage() {
                     >
                       {post.status}
                     </span>
+                    {dryRun && (
+                      <span className="rounded px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-900">
+                        dry run — nothing was sent
+                      </span>
+                    )}
                     {listingStatus && listingStatus !== 'active' && (
                       <span className="rounded px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">
                         listing {listingStatus}
@@ -165,6 +208,7 @@ export default async function SocialPage() {
                     platform={post.platform}
                     caption={post.caption}
                     supportsRemove={adapter?.supportsRemove ?? false}
+                    dryRun={dryRun}
                   />
                 </CardContent>
               </Card>

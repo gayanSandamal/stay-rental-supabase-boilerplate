@@ -14,6 +14,7 @@
  */
 
 import { isInstagramConfigured, socialConfig } from '../config';
+import { DRY_RUN_ID_PREFIX } from '../types';
 import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
 import { graphGet, graphPost, isPermissionError, isRateLimitError, isTokenError } from './graph';
 
@@ -68,7 +69,7 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     console.log(
       `[social:dry-run] instagram listing=${input.listingId} images=${input.imageUrls.length}\n${input.caption}`
     );
-    return { ok: true, remotePostId: `dryrun-instagram-${input.listingId}` };
+    return { ok: true, remotePostId: `${DRY_RUN_ID_PREFIX}instagram-${input.listingId}` };
   }
 
   const igId = socialConfig.instagramAccountId;
