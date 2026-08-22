@@ -29,6 +29,19 @@ export const socialConfig = {
   get instagramAccountId() {
     return process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? '';
   },
+  /**
+   * OPTIONAL, and only ever used to READ the Page token's expiry via
+   * `debug_token` — never to publish. Meta wants an app or app-developer token
+   * for that call, so without these we fall back to asking with the Page token
+   * itself, which Meta accepts in some app configurations and refuses in
+   * others. Refusal costs us the expiry readout, nothing more.
+   */
+  get facebookAppId() {
+    return process.env.FACEBOOK_APP_ID ?? '';
+  },
+  get facebookAppSecret() {
+    return process.env.FACEBOOK_APP_SECRET ?? '';
+  },
   get tiktokClientKey() {
     return process.env.TIKTOK_CLIENT_KEY ?? '';
   },
