@@ -9,7 +9,8 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { adapterFor, socialAdapters, isPlatformEnabled } from '@/lib/social/registry';
 import { isDryRunPost, type SocialPlatform } from '@/lib/social/types';
-import { SocialActions } from './social-actions';
+import { checkSocialCredentials, platformStatusLine } from '@/lib/social/health';
+import { RetryAllFailed, SocialActions } from './social-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,14 @@ const STATUS_STYLES: Record<string, string> = {
   failed: 'bg-rose-100 text-rose-800',
   skipped: 'bg-amber-100 text-amber-800',
   pulled: 'bg-slate-200 text-slate-700',
+};
+
+/** Health tone → the dot beside the platform name. */
+const TONE_DOT: Record<string, string> = {
+  ok: 'bg-emerald-500',
+  warn: 'bg-amber-500',
+  bad: 'bg-rose-500',
+  off: 'bg-slate-300',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -45,6 +54,10 @@ export default async function SocialPage() {
     .limit(150);
 
   const enabled = isFeatureEnabled('enableSocialAutoPublish');
+  // Never throws by contract — a health readout must not be able to take this
+  // page down. Cached per instance for a minute.
+  const health = await checkSocialCredentials();
+  const failedCount = rows.filter(({ post }) => post.status === 'failed').length;
 
   return (
     <section className="flex-1 p-4 lg:p-8">
@@ -62,37 +75,28 @@ export default async function SocialPage() {
         </Card>
       )}
 
-      {/* Which platforms can actually post. Without this the only way to tell a
-          real post from a dry run was to read the server logs — which is how
-          three "posted" rows for listing #21 turned out to be nothing at all. */}
+      {/* Which platforms can actually post — checked against the platforms, not
+          just against the env vars. An env-presence readout said "live" for the
+          31 minutes every Facebook post was failing on an expired token. */}
       <Card className="mb-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Platform configuration</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-2 sm:grid-cols-2 text-sm">
           {socialAdapters.map((adapter) => {
-            const configured = adapter.isConfigured();
-            const on = isPlatformEnabled(adapter.platform);
-            const manual = adapter.platform === 'facebook_group';
+            const status = platformStatusLine(
+              health[adapter.platform],
+              isPlatformEnabled(adapter.platform)
+            );
             return (
-              <div key={adapter.platform} className="flex items-center gap-2">
+              <div key={adapter.platform} className="flex items-start gap-2">
                 <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    !on ? 'bg-slate-300' : manual || configured ? 'bg-emerald-500' : 'bg-amber-500'
-                  }`}
+                  className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${TONE_DOT[status.tone]}`}
                 />
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-slate-800 shrink-0">
                   {PLATFORM_LABELS[adapter.platform] ?? adapter.platform}
                 </span>
-                <span className="text-slate-500">
-                  {!on
-                    ? '— switched off'
-                    : manual
-                      ? '— manual (no API exists)'
-                      : configured
-                        ? '— live'
-                        : '— not configured, posts are DRY RUNS'}
-                </span>
+                <span className="text-slate-500">{status.text}</span>
               </div>
             );
           })}
@@ -122,6 +126,12 @@ export default async function SocialPage() {
           </p>
         </CardContent>
       </Card>
+
+      {failedCount > 0 && (
+        <div className="mb-4 flex justify-end">
+          <RetryAllFailed count={failedCount} />
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <Card>

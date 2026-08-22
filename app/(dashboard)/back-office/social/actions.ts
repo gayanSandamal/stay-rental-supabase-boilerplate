@@ -83,6 +83,29 @@ export async function retryAction(formData: FormData): Promise<void> {
 }
 
 /**
+ * Put EVERY failed row back in the queue.
+ *
+ * A dead credential fails every row at once — one expired Page token took out
+ * the whole queue — so per-row Retry is N clicks for a single root cause. Same
+ * reset as `retryAction`, scoped to `failed` so nothing `posted`, `pulled` or
+ * `skipped` is disturbed.
+ */
+export async function retryAllFailedAction(): Promise<void> {
+  await requireStaff();
+  await db
+    .update(listingSocialPosts)
+    .set({
+      status: 'queued',
+      attempts: 0,
+      leaseUntil: null,
+      error: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(listingSocialPosts.status, 'failed'));
+  revalidatePath('/back-office/social');
+}
+
+/**
  * Mark a Facebook Group draft as posted.
  *
  * The Group row can never be `posted` by the worker — there is no API — so this

@@ -3,7 +3,33 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, Copy, RefreshCw, Trash2 } from 'lucide-react';
-import { markGroupPostedAction, pullDownAction, retryAction } from './actions';
+import { markGroupPostedAction, pullDownAction, retryAction, retryAllFailedAction } from './actions';
+
+/**
+ * Requeue every failed row at once.
+ *
+ * Rendered only when something is actually failed. The motivating case is a
+ * credential fault: one expired Page token failed every queued post, and
+ * clearing that by hand meant clicking Retry once per row.
+ */
+export function RetryAllFailed({ count }: { count: number }) {
+  const [pending, start] = useTransition();
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          await retryAllFailedAction();
+        })
+      }
+    >
+      <RefreshCw className="mr-1.5 h-4 w-4" />
+      Retry all {count} failed
+    </Button>
+  );
+}
 
 export function SocialActions({
   postId,

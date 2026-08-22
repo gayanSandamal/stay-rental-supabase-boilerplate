@@ -42,11 +42,17 @@ export async function graphPost<T = Record<string, unknown>>(
   return graphCall<T>('POST', path, body);
 }
 
+/**
+ * `accessToken` overrides the Page token for the rare call that cannot use it —
+ * `debug_token` wants an app or app-developer token, not the token being
+ * inspected. Everything else omits it and authenticates as the Page.
+ */
 export async function graphGet<T = Record<string, unknown>>(
   path: string,
-  query: Record<string, string> = {}
+  query: Record<string, string> = {},
+  accessToken?: string
 ): Promise<GraphResponse<T>> {
-  return graphCall<T>('GET', path, query);
+  return graphCall<T>('GET', path, query, accessToken);
 }
 
 export async function graphDelete<T = Record<string, unknown>>(
@@ -58,9 +64,10 @@ export async function graphDelete<T = Record<string, unknown>>(
 async function graphCall<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
-  params: Record<string, string>
+  params: Record<string, string>,
+  accessToken?: string
 ): Promise<GraphResponse<T>> {
-  const token = socialConfig.facebookPageAccessToken;
+  const token = accessToken || socialConfig.facebookPageAccessToken;
   if (!token) return { ok: false, error: { message: 'No Page access token configured' } };
 
   const url = new URL(`${GRAPH_API_BASE}/${path.replace(/^\/+/, '')}`);

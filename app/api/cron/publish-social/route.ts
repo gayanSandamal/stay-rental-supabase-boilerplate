@@ -48,7 +48,21 @@ export async function GET(request: NextRequest) {
       console.error('[cron/publish-social] prompt reconcile failed', err);
     }
 
-    return NextResponse.json({ ok: true, ...counts, prompted });
+    // Same reasoning as `imageToolchain` on /api/cron/moderate-listings: the
+    // credentials are the other thing that can be silently dead while every
+    // code path looks healthy, and reading Vercel logs is a poor way to find
+    // out. Own try/catch — a health readout must never fail the sweep.
+    let credentials: Record<string, unknown> | undefined;
+    try {
+      const { checkSocialCredentials, summariseCredentialHealth } = await import(
+        '@/lib/social/health'
+      );
+      credentials = summariseCredentialHealth(await checkSocialCredentials());
+    } catch (err) {
+      console.error('[cron/publish-social] credential check failed', err);
+    }
+
+    return NextResponse.json({ ok: true, ...counts, prompted, credentials });
   } catch (err: any) {
     console.error('[cron/publish-social] failed', err);
     return NextResponse.json(
