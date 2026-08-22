@@ -10,7 +10,8 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { adapterFor, socialAdapters, isPlatformEnabled } from '@/lib/social/registry';
 import { isDryRunPost, type SocialPlatform } from '@/lib/social/types';
 import { checkSocialCredentials, platformStatusLine } from '@/lib/social/health';
-import { RetryAllFailed, SocialActions } from './social-actions';
+import { groupByListing } from '@/lib/social/group';
+import { ListingSocialActions, RetryAllFailed, SocialActions } from './social-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,13 +52,15 @@ export default async function SocialPage() {
     .from(listingSocialPosts)
     .leftJoin(listings, eq(listingSocialPosts.listingId, listings.id))
     .orderBy(desc(listingSocialPosts.createdAt))
-    .limit(150);
+    // Grouped by listing below, so this is ~50 listings rather than 200.
+    .limit(200);
 
   const enabled = isFeatureEnabled('enableSocialAutoPublish');
   // Never throws by contract — a health readout must not be able to take this
   // page down. Cached per instance for a minute.
   const health = await checkSocialCredentials();
   const failedCount = rows.filter(({ post }) => post.status === 'failed').length;
+  const groups = groupByListing(rows);
 
   return (
     <section className="flex-1 p-4 lg:p-8">
@@ -133,7 +136,7 @@ export default async function SocialPage() {
         </div>
       )}
 
-      {rows.length === 0 ? (
+      {groups.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-slate-500">
             Nothing queued yet. Posts appear here once a landlord agrees to share a published
@@ -141,91 +144,125 @@ export default async function SocialPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {rows.map(({ post, listingTitle, listingStatus }) => {
-            const adapter = adapterFor(post.platform as SocialPlatform);
-            const dryRun = isDryRunPost(post.remotePostId);
-            return (
-              <Card key={post.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-base">
-                      {listingTitle ?? `Listing #${post.listingId}`}
-                    </CardTitle>
-                    <span className="rounded px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">
-                      {PLATFORM_LABELS[post.platform] ?? post.platform}
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <Card key={group.listingId}>
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-base">
+                    {group.title ?? `Listing #${group.listingId}`}
+                  </CardTitle>
+                  <Link
+                    href={`/dashboard/listings/${group.listingId}`}
+                    className="inline-flex items-center gap-1 text-sm text-teal-700 hover:underline"
+                  >
+                    #{group.listingId} <ExternalLink className="h-3 w-3" />
+                  </Link>
+                  {group.listingStatus && group.listingStatus !== 'active' && (
+                    <span className="rounded px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">
+                      listing {group.listingStatus}
                     </span>
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${
-                        STATUS_STYLES[post.status] ?? 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      {post.status}
-                    </span>
-                    {dryRun && (
-                      <span className="rounded px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-900">
-                        dry run — nothing was sent
-                      </span>
-                    )}
-                    {listingStatus && listingStatus !== 'active' && (
-                      <span className="rounded px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">
-                        listing {listingStatus}
-                      </span>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex flex-wrap gap-4 text-slate-600">
-                    <Link
-                      href={`/dashboard/listings/${post.listingId}`}
-                      className="inline-flex items-center gap-1 text-teal-700 hover:underline"
-                    >
-                      Listing #{post.listingId} <ExternalLink className="h-3 w-3" />
-                    </Link>
-                    {post.remotePermalink && (
-                      <a
-                        href={post.remotePermalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-teal-700 hover:underline"
-                      >
-                        View post <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                    {post.postedAt && <span>posted {post.postedAt.toLocaleString()}</span>}
-                    {post.attempts > 0 && <span>{post.attempts} attempt(s)</span>}
-                  </div>
-
-                  {post.error && (
-                    <p
-                      className={`text-xs ${
-                        post.error.includes('REMOVE BY HAND') ? 'text-rose-700 font-medium' : 'text-slate-500'
-                      }`}
-                    >
-                      {post.error}
-                    </p>
                   )}
+                  <span className="ml-auto text-xs text-slate-500">{group.summary}</span>
+                </div>
+              </CardHeader>
 
-                  {post.caption && (
+              <CardContent className="space-y-3 text-sm">
+                {/* One row per platform. Four cards for one listing was the
+                    reason this page was unreadable. */}
+                <div className="divide-y divide-slate-100">
+                  {group.posts.map((post) => {
+                    const adapter = adapterFor(post.platform as SocialPlatform);
+                    const dryRun = isDryRunPost(post.remotePostId);
+                    return (
+                      <div key={post.id} className="flex flex-wrap items-center gap-2 py-2">
+                        <span className="rounded px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 min-w-[7.5rem]">
+                          {PLATFORM_LABELS[post.platform] ?? post.platform}
+                        </span>
+                        <span
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            STATUS_STYLES[post.status] ?? 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {post.status}
+                        </span>
+                        {dryRun && (
+                          <span className="rounded px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-900">
+                            dry run — nothing was sent
+                          </span>
+                        )}
+                        {post.remotePermalink && (
+                          <a
+                            href={post.remotePermalink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-teal-700 hover:underline"
+                          >
+                            View post <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {post.postedAt && (
+                          <span className="text-xs text-slate-500">
+                            {post.postedAt.toLocaleString()}
+                          </span>
+                        )}
+                        {post.attempts > 0 && (
+                          <span className="text-xs text-slate-500">{post.attempts} attempt(s)</span>
+                        )}
+                        {post.error && (
+                          <span
+                            className={`text-xs ${
+                              post.error.includes('REMOVE BY HAND')
+                                ? 'text-rose-700 font-medium'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            {post.error}
+                          </span>
+                        )}
+                        <span className="ml-auto">
+                          <SocialActions
+                            postId={post.id}
+                            status={post.status}
+                            platform={post.platform}
+                            caption={post.caption}
+                            supportsRemove={adapter?.supportsRemove ?? false}
+                            dryRun={dryRun}
+                          />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Captions are per-platform shaped (Instagram says "link in
+                    bio", TikTok caps the title), so they are not always equal —
+                    but they usually are. Render each DISTINCT caption once,
+                    labelled with the platforms that share it. */}
+                {group.captions.map(({ caption, platforms }) => (
+                  <div key={caption} className="space-y-1">
+                    {group.captions.length > 1 && (
+                      <p className="text-xs font-medium text-slate-500">
+                        {platforms.map((pf) => PLATFORM_LABELS[pf] ?? pf).join(' · ')}
+                      </p>
+                    )}
                     <pre className="whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs text-slate-700 max-h-40 overflow-y-auto">
-                      {post.caption}
+                      {caption}
                     </pre>
-                  )}
+                  </div>
+                ))}
 
-                  <SocialActions
-                    postId={post.id}
-                    status={post.status}
-                    platform={post.platform}
-                    caption={post.caption}
-                    supportsRemove={adapter?.supportsRemove ?? false}
-                    dryRun={dryRun}
-                  />
-                </CardContent>
-              </Card>
-            );
-          })}
+                <ListingSocialActions
+                  listingId={group.listingId}
+                  failedCount={group.failed}
+                  livePostCount={group.live}
+                />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
+
     </section>
   );
 }

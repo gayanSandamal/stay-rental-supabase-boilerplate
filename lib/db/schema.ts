@@ -229,6 +229,10 @@ export const listings = pgTable('listings', {
   socialConsentAt: timestamp('social_consent_at'),
   socialConsentSource: varchar('social_consent_source', { length: 20 }), // whatsapp | web | ops
   socialDeclinedAt: timestamp('social_declined_at'), // explicit no — stop asking
+  // 0041 — the "here is where it went live" notice. Same delivery-record
+  // contract as socialPromptedAt: stamped only once a message actually reached
+  // the landlord, so a failed send is retried instead of silently dropped.
+  socialResultsSentAt: timestamp('social_results_sent_at'),
 });
 
 // Listing views (for Premium/Agency performance insights)

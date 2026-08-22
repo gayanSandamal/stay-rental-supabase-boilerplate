@@ -6,10 +6,10 @@ import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rate-limit
 import { resolveAccessToken, touchAccessToken } from '@/lib/auth/access-links';
 
 /**
- * Passwordless access links: /l/<token>[/e/<id>|/d/<id>]
+ * Passwordless access links: /l/<token>[/e/<id>|/d/<id>|/s/<id>]
  *
  * Signs the landlord in and forwards them to their dashboard, a listing's edit
- * form, or a delete confirmation page.
+ * form, a delete confirmation page, or its social-post page.
  *
  * WHY THIS ROUTE EXISTS: the app's other link→session path
  * (app/auth/callback/route.ts) uses exchangeCodeForSession, which is PKCE and
@@ -69,6 +69,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ slug?: 
   let destination = '/dashboard/listings';
   if (listingId && action === 'e') destination = `/dashboard/listings/${listingId}/edit`;
   else if (listingId && action === 'd') destination = `/dashboard/listings/${listingId}/delete`;
+  // 's' — take this listing back off our social accounts. Like 'd' it lands on
+  // a confirmation page, never on a mutation: a WhatsApp link preview or an
+  // accidental long-press must not pull a live post down.
+  else if (listingId && action === 's') destination = `/dashboard/listings/${listingId}/social`;
 
   const supabase = await createClient();
 

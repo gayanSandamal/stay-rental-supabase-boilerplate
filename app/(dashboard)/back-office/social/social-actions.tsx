@@ -3,7 +3,70 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, Copy, RefreshCw, Trash2 } from 'lucide-react';
-import { markGroupPostedAction, pullDownAction, retryAction, retryAllFailedAction } from './actions';
+import {
+  markGroupPostedAction,
+  pullDownAction,
+  pullDownListingAction,
+  retryAction,
+  retryAllFailedAction,
+  retryListingFailedAction,
+} from './actions';
+
+/**
+ * Card-level actions: everything for ONE listing, across every platform.
+ *
+ * A credential fault or an archived listing is never per-platform — it hits all
+ * of them at once — so the fix should be one click, not four.
+ */
+export function ListingSocialActions({
+  listingId,
+  failedCount,
+  livePostCount,
+}: {
+  listingId: number;
+  failedCount: number;
+  /** Real posts (dry runs excluded) that there is actually something to remove for. */
+  livePostCount: number;
+}) {
+  const [pending, start] = useTransition();
+
+  const run = (action: (fd: FormData) => Promise<void>) => () => {
+    const fd = new FormData();
+    fd.set('listingId', String(listingId));
+    start(async () => {
+      await action(fd);
+    });
+  };
+
+  if (!failedCount && !livePostCount) return null;
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+      {failedCount > 0 && (
+        <Button size="sm" variant="outline" disabled={pending} onClick={run(retryListingFailedAction)}>
+          <RefreshCw className="mr-1.5 h-4 w-4" />
+          Retry {failedCount} failed
+        </Button>
+      )}
+      {livePostCount > 0 && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={run(pullDownListingAction)}
+          className="border-rose-300 text-rose-800 hover:bg-rose-50"
+          // Deliberately not "delete everywhere": only Facebook actually goes
+          // through an API. The rest becomes a task for a human, and the banner
+          // above this list says so.
+          title="Delete the Facebook post and flag Instagram/TikTok for manual removal"
+        >
+          <Trash2 className="mr-1.5 h-4 w-4" />
+          Pull down all
+        </Button>
+      )}
+    </div>
+  );
+}
 
 /**
  * Requeue every failed row at once.
