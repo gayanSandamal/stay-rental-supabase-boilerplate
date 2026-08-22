@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
       contactNumbers, // Array of contact number IDs
       businessAccountId, // New field
       exclusive,
+      shareOnSocial, // consent to post on Easy Rent's own social accounts
     } = body;
 
     // Resolved up front because the address requirement depends on it.
@@ -245,6 +246,13 @@ export async function POST(request: NextRequest) {
           : {}),
         status: status || 'pending',
         exclusive: (user.role === 'admin' || user.role === 'ops' || isUserPremium(user)) && Boolean(exclusive),
+        // Consent recorded at creation. The listing is `pending` here, so
+        // nothing is queued yet — the publish path picks this up via
+        // enqueueIfAlreadyConsented once it actually goes live. Only stamped
+        // when ticked: absent consent must stay NULL, not a falsy timestamp.
+        ...(shareOnSocial
+          ? { socialConsentAt: new Date(), socialConsentSource: 'web' as const }
+          : {}),
     };
 
     // Only add new fields if columns exist (after migration)
@@ -374,6 +382,18 @@ export async function POST(request: NextRequest) {
       city: newListing.city,
       businessAccountId: listingData.businessAccountId ?? null,
     });
+
+    // A listing created straight into `active` (ops, or auto-publish with
+    // moderation disarmed) never passes through a publish transition, so it
+    // would otherwise never act on the consent just given.
+    if (shareOnSocial && newListing.status === 'active') {
+      try {
+        const { enqueueIfAlreadyConsented } = await import('@/lib/social/consent');
+        await enqueueIfAlreadyConsented(newListing);
+      } catch (err) {
+        console.error('[listings POST] social enqueue failed', err);
+      }
+    }
 
     return NextResponse.json(
       { success: true, listing: newListing },

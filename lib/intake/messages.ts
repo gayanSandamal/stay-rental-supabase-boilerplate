@@ -486,3 +486,43 @@ export function verifyCodeUnusableMessage(
         : "We don't recognise that code.";
   return `${lead}\n\nOpen your Easy Rent dashboard, go to your contact numbers and tap “Verify on WhatsApp” for a fresh one.`;
 }
+
+// --- social auto-publish ----------------------------------------------------
+
+/**
+ * The consent ask, sent right after "your listing is live".
+ *
+ * Asked per listing rather than once per landlord: a landlord may be happy to
+ * advertise an empty annex widely and not the house they still live in.
+ *
+ * Names the networks explicitly. "Our social media" is not informed consent
+ * when the landlord cannot tell whether that means a page with 200 followers
+ * or a public TikTok.
+ */
+export function socialConsentPrompt(title: string): string {
+  return [
+    `📣 Want more tenants to see "${title}"?`,
+    '',
+    "We can share it on Easy Rent's Facebook page, Instagram and TikTok — your photos, the rent and a link back to your listing.",
+    '',
+    'Your phone number is never included. Tenants still reach you through Easy Rent.',
+    '',
+    'Reply YES to share it, or NO to skip.',
+  ].join('\n');
+}
+
+/** The two taps offered when rich replies are on. */
+export function socialConsentButtons(listingId: number): Array<{ id: string; title: string }> {
+  return [
+    { id: `social_yes:${listingId}`, title: 'Yes, share it' },
+    { id: `social_no:${listingId}`, title: 'No thanks' },
+  ];
+}
+
+export function socialConsentGrantedMessage(title: string): string {
+  return `👍 Thanks! We'll post "${title}" to our channels shortly.\n\nChanged your mind? Just tell us here and we'll take it down.`;
+}
+
+export function socialConsentDeclinedMessage(): string {
+  return "No problem — we'll keep it on Easy Rent only. 👍";
+}

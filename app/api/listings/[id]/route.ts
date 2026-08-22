@@ -214,6 +214,35 @@ export async function PATCH(
       }
     }
 
+    // Manual ops approval is one of the three ways a listing first goes live,
+    // so it owes the same social-sharing offer the moderation sweeper makes.
+    // Without this, every ops-approved listing silently skips the question.
+    if (status === 'active' && listing.status !== 'active') {
+      try {
+        const { promptForSocialConsent, enqueueIfAlreadyConsented } = await import(
+          '@/lib/social/consent'
+        );
+        if (updatedListing.socialConsentAt) {
+          await enqueueIfAlreadyConsented(updatedListing);
+        } else {
+          await promptForSocialConsent(updatedListing);
+        }
+      } catch (err) {
+        console.error('[listings PATCH] social consent offer failed', err);
+      }
+    }
+
+    // Leaving `active` must take down anything already published on our own
+    // social accounts — the listing is gone, the advert should not outlive it.
+    if (listing.status === 'active' && status && status !== 'active') {
+      try {
+        const { pullDownForListing } = await import('@/lib/social/publish');
+        await pullDownForListing(listingId, `Listing set to ${status}`);
+      } catch (err) {
+        console.error('[listings PATCH] social pull-down failed', err);
+      }
+    }
+
     return NextResponse.json(
       { success: true, listing: updatedListing },
       { status: 200 }

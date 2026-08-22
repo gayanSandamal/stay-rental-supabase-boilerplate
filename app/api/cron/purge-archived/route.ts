@@ -43,6 +43,17 @@ export async function GET(request: NextRequest) {
   let purged = 0;
   for (const listing of due) {
     try {
+      // Social posts BEFORE the row goes: listing_social_posts cascades on
+      // delete, so the remote post ids and permalinks are about to be lost. A
+      // post left standing after the listing is purged advertises a property
+      // that no longer exists and can never be traced back.
+      try {
+        const { pullDownForListing } = await import('@/lib/social/publish');
+        await pullDownForListing(listing.id, 'Listing purged after 30 days archived');
+      } catch (err) {
+        console.error('[purge] social pull-down failed for listing', listing.id, err);
+      }
+
       // Storage first: if the row goes but the objects don't, we lose the URLs
       // needed to find them.
       // The UNION of every URL we know about, deduped: originals, derived

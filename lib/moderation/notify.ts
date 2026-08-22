@@ -10,6 +10,7 @@ import { landlords, listingModerations, listings } from '@/lib/db/schema';
 import { createNotification, createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { whatsappIntakes } from '@/lib/db/schema';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 import type { ModerationVerdict } from './types';
 
 type ListingRow = typeof listings.$inferSelect;
@@ -128,7 +129,14 @@ export async function notifyModerationOutcome(
       // Only the go-live announcement is reconciled, so only it is recorded.
       // Stamping on a photo-added follow-up would mark a listing announced
       // whose owner never heard it went live.
-      if (isFirstPublish) await markLandlordNotified(listing.id);
+      if (isFirstPublish) {
+        await markLandlordNotified(listing.id);
+        // Ask about social sharing as a SEPARATE message, and only after the
+        // 🎉 landed — a consent question stapled onto the go-live text would
+        // bury the link they actually want, and asking someone whose listing
+        // announcement failed to send makes no sense.
+        await offerSocialSharing(listing);
+      }
     } else {
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
@@ -154,11 +162,41 @@ export async function notifyModerationOutcome(
       body: (verdict.landlordReasons.join(' ') || verdict.reasons.join(' ')).slice(0, 300),
       link: `/dashboard/listings/${listing.id}`,
     });
-    if (isFirstPublish) await markLandlordNotified(listing.id);
+    if (isFirstPublish) {
+      await markLandlordNotified(listing.id);
+      await offerSocialSharing(listing);
+    }
   } else if (isFirstPublish) {
     // Nobody to tell — an ops-owned listing with no landlord account. Record it
     // anyway: the reconciler must not re-examine it on every tick forever.
     await markLandlordNotified(listing.id);
+  }
+}
+
+/**
+ * Offer social sharing, and pick up a consent given before publish.
+ *
+ * Dynamically imported to keep `lib/social` out of the moderation module graph:
+ * notify.ts already documents a cycle that threw at module init in production
+ * (see findIntakeForListing), and the social modules import the DB, the flags
+ * and the WhatsApp sender. Never allowed to throw — a failed offer must not
+ * take down a go-live announcement that already succeeded.
+ */
+async function offerSocialSharing(listing: ListingRow): Promise<void> {
+  try {
+    if (!isFeatureEnabled('enableSocialAutoPublish')) return;
+    const { promptForSocialConsent, enqueueIfAlreadyConsented } = await import(
+      '@/lib/social/consent'
+    );
+    // A web landlord may have ticked the box at creation time, before there was
+    // anything to publish. Now there is.
+    if (listing.socialConsentAt) {
+      await enqueueIfAlreadyConsented(listing);
+      return;
+    }
+    await promptForSocialConsent(listing);
+  } catch (err) {
+    console.error('[social] consent offer failed', listing.id, err);
   }
 }
 

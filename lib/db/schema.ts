@@ -45,6 +45,20 @@ export const listingModerationStatusEnum = pgEnum('listing_moderation_status', [
   'skipped', // moderation not configured/enabled for this row
 ]);
 
+/**
+ * Per-platform state of a social auto-publish job (migration 0040). One row per
+ * (listing, platform), so a failure on one network never blocks the others and
+ * each carries its own remote post id for takedown.
+ */
+export const socialPostStatusEnum = pgEnum('social_post_status', [
+  'queued', // consent given, waiting for the publish sweeper
+  'running', // claimed by a sweeper run (lease held)
+  'posted', // live on the platform
+  'failed', // gave up after retries, or a non-retriable error
+  'skipped', // no API path — facebook_group, which ops post by hand
+  'pulled', // taken down (or marked for manual takedown) after going live
+]);
+
 // Business Account Status enum
 export const businessAccountStatusEnum = pgEnum('business_account_status', [
   'active',
@@ -206,6 +220,15 @@ export const listings = pgTable('listings', {
   landlordNotifiedAt: timestamp('landlord_notified_at'),
   photosManifest: text('photos_manifest'), // JSON array of PhotoManifestEntry
   archivedAt: timestamp('archived_at'), // set on archive; purged 30 days later
+
+  // Social auto-publish (migration 0040). Consent is asked per listing, so all
+  // four are per-listing facts rather than a landlord-level preference.
+  // `socialPromptedAt` is the delivery record for the ask — a published listing
+  // with NULL here is one the sweeper still owes a prompt (cf. landlordNotifiedAt).
+  socialPromptedAt: timestamp('social_prompted_at'),
+  socialConsentAt: timestamp('social_consent_at'),
+  socialConsentSource: varchar('social_consent_source', { length: 20 }), // whatsapp | web | ops
+  socialDeclinedAt: timestamp('social_declined_at'), // explicit no — stop asking
 });
 
 // Listing views (for Premium/Agency performance insights)
@@ -447,6 +470,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_moderation_held',
   'listing_moderation_overridden',
   'listing_photos_dropped',
+  // 0040 — social auto-publish
+  'listing_social_consent_granted',
+  'listing_social_published',
+  'listing_social_pulled',
 ]);
 
 // WhatsApp concierge intake statuses
@@ -529,6 +556,69 @@ export const imageModerationCache = pgTable(
   },
   (table) => [primaryKey({ columns: [table.contentHash, table.promptVersion] })]
 );
+
+/**
+ * Social auto-publish jobs (migration 0040). One row per (listing, platform),
+ * enforced by a unique index — that constraint IS the enqueue idempotency, so a
+ * re-consent or a replayed webhook can never double-post.
+ *
+ * Row-per-platform rather than a JSON map on `listings`: each network has its
+ * own lifecycle, remote id, retry budget and failure mode, and concurrent
+ * workers claiming a shared JSON column would lose updates.
+ *
+ * `remotePostId` is the handle we need to delete the post again. Note that only
+ * Facebook Page supports deletion via API — for Instagram and TikTok a takedown
+ * is a note to ops, which is why `remotePermalink` is stored alongside it.
+ */
+export const listingSocialPosts = pgTable('listing_social_posts', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  /** facebook_page | instagram | tiktok | facebook_group */
+  platform: text('platform').notNull(),
+  status: socialPostStatusEnum('status').notNull().default('queued'),
+  remotePostId: text('remote_post_id'),
+  remotePermalink: text('remote_permalink'),
+  /** Exactly what we sent — audit trail, and the paste source for facebook_group. */
+  caption: text('caption'),
+  attempts: integer('attempts').notNull().default(0),
+  leaseUntil: timestamp('lease_until'),
+  error: text('error'),
+  postedAt: timestamp('posted_at'),
+  pulledAt: timestamp('pulled_at'),
+  pulledBy: integer('pulled_by').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * OAuth credentials for social accounts whose tokens ROTATE (migration 0040).
+ *
+ * Only TikTok needs this. Meta Page access tokens are long-lived and sit in an
+ * env var; TikTok's access token expires in ~24h and its refresh token rotates
+ * on every use, so the current pair has to be written back somewhere durable —
+ * an env var cannot be updated by the running app.
+ *
+ * Service-role access only (RLS on, no policies). Never expose these rows to a
+ * client, and never log the token values.
+ */
+export const socialAccounts = pgTable('social_accounts', {
+  id: serial('id').primaryKey(),
+  /** One connected account per platform. */
+  platform: text('platform').notNull().unique(),
+  /** The platform's own account identifier (TikTok calls it open_id). */
+  externalAccountId: text('external_account_id'),
+  displayName: text('display_name'),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token'),
+  expiresAt: timestamp('expires_at'),
+  refreshExpiresAt: timestamp('refresh_expires_at'),
+  scope: text('scope'),
+  connectedBy: integer('connected_by').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
 
 // Audit log table
 export const auditLogs = pgTable('audit_logs', {
@@ -750,3 +840,7 @@ export type ListingModeration = typeof listingModerations.$inferSelect;
 export type NewListingModeration = typeof listingModerations.$inferInsert;
 export type ImageModerationCacheRow = typeof imageModerationCache.$inferSelect;
 export type NewImageModerationCacheRow = typeof imageModerationCache.$inferInsert;
+export type ListingSocialPost = typeof listingSocialPosts.$inferSelect;
+export type NewListingSocialPost = typeof listingSocialPosts.$inferInsert;
+export type SocialAccount = typeof socialAccounts.$inferSelect;
+export type NewSocialAccount = typeof socialAccounts.$inferInsert;

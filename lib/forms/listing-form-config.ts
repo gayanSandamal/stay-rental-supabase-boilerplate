@@ -403,6 +403,24 @@ export const listingFormConfig: FormConfig = {
       defaultValue: false,
       helpText: 'Only visible to Premium subscribers. Requires ops approval or Premium landlord plan.',
     },
+    {
+      // Consent to share on Easy Rent's own social accounts.
+      //
+      // Defaults to FALSE and always will: permission to republish someone's
+      // property photos to a public audience has to be given, never assumed.
+      //
+      // Web landlords are asked here, at creation, rather than after publish
+      // like WhatsApp landlords — Meta's 24h customer-service window has long
+      // closed for anyone who signed up on the website, so there is no reliable
+      // way to ask them in chat later. The go-live notification carries a
+      // second chance for anyone who leaves this unticked.
+      name: 'shareOnSocial',
+      label: "Share on Easy Rent's social channels",
+      type: 'checkbox',
+      defaultValue: false,
+      helpText:
+        'Let us post this listing to our Facebook page, Instagram and TikTok to reach more tenants. Your phone number is never included — tenants still contact you through Easy Rent. You can ask us to remove it at any time.',
+    },
 
     // Contact Information Section
     {

@@ -5,6 +5,7 @@ import { detectUpdateIntent } from './parser/rule-parser';
 import {
   clearConversation,
   detectCommand,
+  isAffirmative,
   isCancel,
   isDeleteConfirmation,
   parseMenuPick,
@@ -92,7 +93,13 @@ export interface AppendOutcome {
      * enters an intake session.
      */
     | 'number_verified'
-    | 'verify_failed';
+    | 'verify_failed'
+    /**
+     * confirm_social: the sender agreed to (or refused) having a published
+     * listing shared on Easy Rent's own social accounts.
+     */
+    | 'social_consent_granted'
+    | 'social_consent_declined';
   intakeId?: number;
   /** attach_media / edit_link / delete / location_saved: the listing concerned. */
   listingId?: number | null;
@@ -356,6 +363,42 @@ export async function appendToIntake(
         await clearConversation(tx, msg.channel, msg.senderId);
         await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
         return { action: 'command_cancelled' } as const;
+      }
+
+      if (convo.state === 'confirm_social') {
+        // Deliberately the ONLY pending state that can fall through.
+        //
+        // The blocks below return unconditionally once they match, which is
+        // right for a delete or a town pick — those are mid-task and any reply
+        // belongs to them. A consent question is different: it is unsolicited,
+        // it arrives seconds after "your listing is live", and it stays open for
+        // 24h. Returning here on anything but yes/no would swallow the DELETE,
+        // HELP and LINK commands for that whole window, breaking the deletion
+        // promise deleteDoneMessage makes to every landlord.
+        //
+        // So: answer a clear yes or no, and otherwise silently drop the prompt
+        // and let the message be handled as if we had never asked. Silence
+        // declines, which is the safe default for permission to publish.
+        const listingId = convo.payload.socialListingId;
+        const yes =
+          msg.interactiveReplyId === `social_yes:${listingId}` || isAffirmative(msg.text);
+        const no = msg.interactiveReplyId === `social_no:${listingId}` || isCancel(msg.text);
+
+        if (listingId && (yes || no)) {
+          await clearConversation(tx, msg.channel, msg.senderId);
+          await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+          const listing = await tx.query.listings.findFirst({
+            where: eq(listings.id, listingId),
+            columns: { title: true },
+          });
+          return {
+            action: yes ? 'social_consent_granted' : 'social_consent_declined',
+            listingId,
+            listingTitle: listing?.title ?? null,
+          } as const;
+        }
+        await clearConversation(tx, msg.channel, msg.senderId);
+        // No return — fall through to detectCommand and the session append.
       }
 
       if (convo.state === 'confirm_city') {
