@@ -30,6 +30,14 @@ const RESTORE_RE = /^(?:restore|undo|undelete|restore\s+(?:my\s+)?listing)[.!]?$
 const CANCEL_RE = /^(?:cancel|stop|no|nevermind|never\s*mind|අවලංගු|ரத்து)[.!]?$/i;
 /** The one word that actually deletes. Case-insensitive, nothing else counts. */
 const CONFIRM_RE = /^delete[.!]?$/i;
+/**
+ * A plain yes, for the social-sharing consent prompt. Only ever consulted while
+ * `confirm_social` is pending — it grants permission, it never destroys
+ * anything, so it can afford to be more generous than CONFIRM_RE.
+ * Sinhala ඔව්/හරි, Tamil ஆம்/சரி.
+ */
+const AFFIRMATIVE_RE =
+  /^(?:yes|yeah|yep|yes\s*please|ok|okay|sure|go\s*ahead|do\s*it|post\s*it|share\s*it|please|ඔව්|හරි|ஆம்|சரி)[.!]?$/i;
 
 /**
  * A command must be the WHOLE message and short. The digit guard stops a real
@@ -54,6 +62,11 @@ export function isDeleteConfirmation(text: string | null | undefined): boolean {
   return CONFIRM_RE.test((text ?? '').trim());
 }
 
+/** An unambiguous yes. See AFFIRMATIVE_RE for why this is broader than DELETE. */
+export function isAffirmative(text: string | null | undefined): boolean {
+  return AFFIRMATIVE_RE.test((text ?? '').trim());
+}
+
 /** A single-digit menu pick, 1-9. Returns null when it isn't one. */
 export function parseMenuPick(text: string | null | undefined): number | null {
   const m = (text ?? '').trim().match(/^([1-9])[.)]?$/);
@@ -65,7 +78,13 @@ export type ConversationState =
   | 'delete_pick'
   | 'delete_confirm'
   /** Offered a numbered list of towns; waiting for the sender to pick one. */
-  | 'confirm_city';
+  | 'confirm_city'
+  /**
+   * Asked whether we may share a just-published listing on Easy Rent's own
+   * social accounts; waiting for yes/no. Unlike the states above, an
+   * unrecognised reply here does NOT reprompt — see lib/intake/session.ts.
+   */
+  | 'confirm_social';
 
 export interface ConversationPayload {
   /** Listing ids in menu order, so "2" always means the same listing. */
@@ -81,6 +100,8 @@ export interface ConversationPayload {
   cityTyped?: string;
   /** The submission the answer belongs to. */
   cityIntakeId?: number;
+  /** The listing a confirm_social answer applies to. */
+  socialListingId?: number;
 }
 
 export interface Conversation {
@@ -136,9 +157,18 @@ export async function setConversation(
   channel: string,
   fromNumber: string,
   state: ConversationState,
-  payload: ConversationPayload = {}
+  payload: ConversationPayload = {},
+  /**
+   * How long the pending state stays answerable. Defaults to the 15-minute
+   * confirmation window, which is right for a destructive prompt — a stale
+   * "DELETE" must never land. A consent question is not destructive and
+   * landlords routinely answer the next morning, so confirm_social passes a
+   * much longer TTL (see lib/social/consent.ts).
+   */
+  ttlMs: number = PENDING_TTL_MS
 ): Promise<void> {
   const now = new Date();
+  const expiresAt = state === 'idle' ? null : new Date(now.getTime() + ttlMs);
   await tx
     .insert(intakeConversations)
     .values({
@@ -146,7 +176,7 @@ export async function setConversation(
       fromNumber,
       state,
       payload: JSON.stringify(payload),
-      expiresAt: state === 'idle' ? null : new Date(now.getTime() + PENDING_TTL_MS),
+      expiresAt,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -154,7 +184,7 @@ export async function setConversation(
       set: {
         state,
         payload: JSON.stringify(payload),
-        expiresAt: state === 'idle' ? null : new Date(now.getTime() + PENDING_TTL_MS),
+        expiresAt,
         updatedAt: now,
       },
     });

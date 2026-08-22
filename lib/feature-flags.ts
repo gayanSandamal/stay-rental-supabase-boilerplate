@@ -112,8 +112,25 @@ export const featureFlagDefaults = {
   enableImageProcessing: false,
   watermarkListingImages: true,
 
+  // Social auto-publish (migration 0040). Master switch OFF: the adapters are
+  // dormant until the Meta/TikTok credentials exist, and posting to the brand's
+  // own public accounts should never start by accident on a deploy.
+  enableSocialAutoPublish: false,
+  socialPublishFacebookPage: true,
+  socialPublishInstagram: true,
+  // OFF until TikTok audits the app. An unaudited client can only post
+  // SELF_ONLY (private), so switching this on before then produces invisible
+  // posts and burns the daily creator cap for nothing.
+  socialPublishTikTok: false,
+  // Facebook Groups have NO API — Meta removed it 2024-04-22. This only
+  // controls whether ops get a paste-ready draft to post by hand.
+  socialDraftFacebookGroup: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
+  // Instagram's carousel ceiling. Also bounds how many images the proxy has to
+  // transcode per post.
+  socialMaxPhotos: 10,
 } as const;
 
 export type FeatureFlags = {
@@ -361,12 +378,60 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     appWide: true,
     public: false,
   },
+  enableSocialAutoPublish: {
+    label: 'Social auto-publish',
+    description:
+      "Ask the landlord when their listing goes live whether Easy Rent may also post it to our own social accounts, and publish it if they agree. Dormant unless the platform credentials are configured — without them every adapter runs in dry-run and only logs what it would have sent.",
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  socialPublishFacebookPage: {
+    label: '— post to Facebook Page',
+    description:
+      'Sub-switch: publish a multi-photo post to the Easy Rent Facebook Page. The only network whose posts can also be deleted through the API.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  socialPublishInstagram: {
+    label: '— post to Instagram',
+    description:
+      'Sub-switch: publish the listing photos as an Instagram carousel. Instagram has no delete endpoint, so taking a post down again is a manual job for ops.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  socialPublishTikTok: {
+    label: '— post to TikTok',
+    description:
+      'Sub-switch: publish the photos as a TikTok photo post. Leave OFF until TikTok has audited the app — an unaudited client can only post privately (SELF_ONLY), so posts are invisible and the daily creator cap is spent for nothing. No delete endpoint either.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  socialDraftFacebookGroup: {
+    label: '— draft for Facebook Group',
+    description:
+      'Sub-switch: Facebook Groups cannot be posted to programmatically (Meta removed the Groups API in April 2024). This queues a paste-ready caption in Back Office → Social for a human to post instead.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
   listingExpirationDays: {
     label: 'Listing expiration (days)',
     description: 'Days after publishing before a listing expires.',
     group: 'Configuration',
     appWide: false,
     public: true,
+  },
+  socialMaxPhotos: {
+    label: 'Photos per social post',
+    description:
+      "How many listing photos to include in a social post. Instagram's carousel ceiling is 10 and posts are rejected above it, so treat that as the maximum.",
+    group: 'Configuration',
+    appWide: false,
+    public: false,
   },
 };
 

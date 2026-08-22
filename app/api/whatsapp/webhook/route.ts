@@ -36,7 +36,11 @@ import {
   updateAckMessage,
   verifyCodeUnusableMessage,
   verifyWrongSenderMessage,
+  socialConsentGrantedMessage,
+  socialConsentDeclinedMessage,
 } from '@/lib/intake/messages';
+import { recordConsent } from '@/lib/social/consent';
+import { pullDownForListing } from '@/lib/social/publish';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { hasListingDetail } from '@/lib/intake/parser/types';
 import { mintAccessLink } from '@/lib/auth/access-links';
@@ -304,6 +308,31 @@ async function handleInbound(
         title: `Landlord removed listing #${outcome.listingId} via WhatsApp — archived, purges in 30 days`,
         link: `/dashboard/listings/${outcome.listingId}`,
       });
+      // A landlord who takes their listing down must not stay on our social
+      // accounts. Facebook is deleted outright; Instagram and TikTok have no
+      // delete API, so this raises an explicit manual task for ops.
+      if (outcome.listingId) {
+        await pullDownForListing(outcome.listingId, 'Landlord deleted the listing').catch(
+          (err) => console.error('[social] pull-down after chat delete failed', err)
+        );
+      }
+    } else if (outcome.action === 'social_consent_granted') {
+      await recordConsent({
+        listingId: outcome.listingId!,
+        granted: true,
+        source: 'whatsapp',
+      });
+      await whatsappAdapter.sendText(
+        message.senderId,
+        socialConsentGrantedMessage(outcome.listingTitle ?? 'your listing')
+      );
+    } else if (outcome.action === 'social_consent_declined') {
+      await recordConsent({
+        listingId: outcome.listingId!,
+        granted: false,
+        source: 'whatsapp',
+      });
+      await whatsappAdapter.sendText(message.senderId, socialConsentDeclinedMessage());
     } else if (outcome.action === 'command_cancelled') {
       await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage());
     } else if (outcome.action === 'no_listings') {

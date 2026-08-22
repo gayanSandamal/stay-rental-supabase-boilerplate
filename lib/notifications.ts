@@ -2,12 +2,15 @@ import { db } from '@/lib/db/drizzle';
 import { notifications, users } from '@/lib/db/schema';
 import { eq, and, inArray, desc, isNull } from 'drizzle-orm';
 
+// The DB column is a plain varchar(50), so adding a member here needs no
+// migration — but every reader of this union must still handle it.
 export type NotificationType =
   | 'new_lead'
   | 'saved_search_alert'
   | 'viewing_scheduled'
   | 'listing_approved'
-  | 'whatsapp_intake';
+  | 'whatsapp_intake'
+  | 'social_publish';
 
 export async function createNotification(params: {
   userId: number;

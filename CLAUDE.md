@@ -137,6 +137,30 @@ approval**. All of it is flag-gated and OFF by default — see
   `pnpm moderation:calibrate`, and bump `PROMPT_VERSION` only deliberately — it
   invalidates the whole image verdict cache.
 
+## Social auto-publish (2026-08-22)
+
+Published listings can be posted to **Easy Rent's own** Facebook Page, Instagram
+and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
+(`enableSocialAutoPublish`) and OFF by default — see
+`docs/deep-dive-social-auto-publish.md`.
+
+- **Facebook Groups cannot be automated.** Meta removed the Groups API on
+  2024-04-22. Group posts are paste-ready drafts for ops, never API calls. Don't
+  "fix" this.
+- **Only Facebook Page supports deletion via API.** Instagram and TikTok
+  takedowns are manual — the UI must say so rather than implying the post is
+  gone.
+- Social platforms never get a Supabase URL: Instagram is JPEG-only and TikTok
+  only pulls from a **verified domain**. Everything goes through
+  `/api/social/img/[listingId]/[index]`, which also normalises to Instagram's
+  4:5 canvas. That path prefix is what is verified with TikTok — don't move it.
+- `confirm_social` is the one conversation state that **falls through** on an
+  unrecognised reply, so a pending consent prompt can't swallow DELETE for 24h.
+- A listing leaving `active` must call `pullDownForListing` — a deleted listing
+  must not stay live on our social accounts.
+- Captions must never contain a phone number (`stripContactDigits`, asserted in
+  tests).
+
 ## When making changes
 
 - Match the existing server-component-first style; reach for client components only when interactivity demands it.

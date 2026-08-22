@@ -65,6 +65,25 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
     .where(eq(listings.id, id));
 
   await logListingAction('listing_moderation_overridden', id, user.id, { action: 'publish_anyway' });
+
+  // The third path to going live, and it owes the same social-sharing offer as
+  // the sweeper and the ops approve endpoint. Only on a FIRST publish: a
+  // listing that was already live is being re-approved, not published.
+  if (!listing.publishedAt) {
+    try {
+      const fresh = await db.query.listings.findFirst({ where: eq(listings.id, id) });
+      if (fresh) {
+        const { promptForSocialConsent, enqueueIfAlreadyConsented } = await import(
+          '@/lib/social/consent'
+        );
+        if (fresh.socialConsentAt) await enqueueIfAlreadyConsented(fresh);
+        else await promptForSocialConsent(fresh);
+      }
+    } catch (err) {
+      console.error('[moderation] social consent offer failed', err);
+    }
+  }
+
   revalidatePath('/back-office/moderation');
 }
 

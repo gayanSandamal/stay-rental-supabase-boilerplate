@@ -7,6 +7,8 @@ const DROP_SQL = `
 DROP MATERIALIZED VIEW IF EXISTS "search_location_suggestions" CASCADE;
 
 -- Drop tables in reverse dependency order
+DROP TABLE IF EXISTS "listing_social_posts" CASCADE;
+DROP TABLE IF EXISTS "social_accounts" CASCADE;
 DROP TABLE IF EXISTS "image_moderation_cache" CASCADE;
 DROP TABLE IF EXISTS "listing_moderations" CASCADE;
 DROP TABLE IF EXISTS "landlord_access_tokens" CASCADE;
@@ -33,6 +35,7 @@ DROP TABLE IF EXISTS "teams" CASCADE;
 DROP TABLE IF EXISTS "users" CASCADE;
 
 -- Drop enums
+DROP TYPE IF EXISTS "social_post_status" CASCADE;
 DROP TYPE IF EXISTS "listing_moderation_status" CASCADE;
 DROP TYPE IF EXISTS "whatsapp_intake_status" CASCADE;
 DROP TYPE IF EXISTS "audit_action" CASCADE;
@@ -113,6 +116,8 @@ async function reset() {
     '0036_listing_address_optional.sql',
     '0037_locations.sql',
     '0038_intake_city_override.sql',
+    '0039_phone_verifications.sql',
+    '0040_listing_social_posts.sql',
   ];
 
   function splitStatements(sql: string): string[] {
