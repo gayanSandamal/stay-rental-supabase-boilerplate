@@ -27,6 +27,8 @@ export interface AccessLinks {
   viewUrl: string;
   editUrl: string;
   deleteUrl: string;
+  /** Where the landlord takes the listing back off our social accounts. */
+  socialUrl: string;
   dashboardUrl: string;
 }
 
@@ -75,6 +77,7 @@ export async function mintAccessLink(args: {
     viewUrl: id ? `${root}/listings/${id}` : `${root}/listings`,
     editUrl: id ? `${root}/l/${token}/e/${id}` : `${root}/l/${token}`,
     deleteUrl: id ? `${root}/l/${token}/d/${id}` : `${root}/l/${token}`,
+    socialUrl: id ? `${root}/l/${token}/s/${id}` : `${root}/l/${token}`,
     dashboardUrl: `${root}/l/${token}`,
   };
 }

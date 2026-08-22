@@ -62,7 +62,18 @@ export async function GET(request: NextRequest) {
       console.error('[cron/publish-social] credential check failed', err);
     }
 
-    return NextResponse.json({ ok: true, ...counts, prompted, credentials });
+    // Tell landlords where their listing actually went live, once every
+    // platform for it has settled. Own try/catch for the same reason the
+    // prompt reconciler has one: it must never fail the sweep.
+    let notified = 0;
+    try {
+      const { notifyPendingSocialResults } = await import('@/lib/social/notify');
+      ({ notified } = await notifyPendingSocialResults());
+    } catch (err) {
+      console.error('[cron/publish-social] results notify failed', err);
+    }
+
+    return NextResponse.json({ ok: true, ...counts, prompted, notified, credentials });
   } catch (err: any) {
     console.error('[cron/publish-social] failed', err);
     return NextResponse.json(

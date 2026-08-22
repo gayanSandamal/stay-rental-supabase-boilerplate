@@ -526,3 +526,60 @@ export function socialConsentGrantedMessage(title: string): string {
 export function socialConsentDeclinedMessage(): string {
   return "No problem — we'll keep it on Easy Rent only. 👍";
 }
+
+/** One published social post, as the landlord needs to see it. */
+export interface SocialResultItem {
+  platform: string;
+  permalink?: string | null;
+  /** Nothing was actually sent — the adapter had no credentials. */
+  dryRun: boolean;
+}
+
+const SOCIAL_RESULT_LABELS: Record<string, string> = {
+  facebook_page: '📘 Facebook',
+  instagram: '📷 Instagram',
+  tiktok: '🎵 TikTok',
+};
+
+/**
+ * "Here is where your listing went live."
+ *
+ * Returns null when nothing genuinely posted, and the caller then sends
+ * NOTHING. Announcing a share that only ever happened as a dry run is the same
+ * lie as a `posted` badge for a post that never existed — the failure this
+ * feature already had once, in the back office.
+ *
+ * The Facebook Group row is deliberately absent: it is an ops paste-draft, not
+ * something the landlord can open, so listing it would promise a post that no
+ * API can make (Meta removed the Groups API on 2024-04-22).
+ */
+export function socialResultsMessage(
+  title: string,
+  results: SocialResultItem[],
+  pullDownUrl: string | null
+): string | null {
+  const live = results.filter(
+    (r) => !r.dryRun && r.platform !== 'facebook_group' && SOCIAL_RESULT_LABELS[r.platform]
+  );
+  if (!live.length) return null;
+
+  const lines = [`✅ "${title}" is now on Easy Rent's social media.`, ''];
+  for (const r of live) {
+    const label = SOCIAL_RESULT_LABELS[r.platform];
+    // A platform that posted but withheld its permalink (Instagram sometimes
+    // does) is still reported. Dropping it would understate where their photos
+    // actually are, which is the opposite of the point of this message.
+    lines.push(r.permalink ? `${label}: ${r.permalink}` : `${label}: posted (link not available)`);
+  }
+  lines.push('', 'Have a look, and share it with anyone who might be interested.');
+
+  if (pullDownUrl) {
+    lines.push(
+      '',
+      'Changed your mind? Take it off our social media here:',
+      pullDownUrl
+    );
+  }
+  return lines.join('\n');
+}
+

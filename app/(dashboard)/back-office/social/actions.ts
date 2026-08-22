@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db/drizzle';
 import { listingSocialPosts } from '@/lib/db/schema';
@@ -8,6 +8,7 @@ import { getUser } from '@/lib/db/queries';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { adapterFor } from '@/lib/social/registry';
+import { pullDownForListing } from '@/lib/social/publish';
 import type { SocialPlatform } from '@/lib/social/types';
 
 async function requireStaff() {
@@ -102,6 +103,43 @@ export async function retryAllFailedAction(): Promise<void> {
       updatedAt: new Date(),
     })
     .where(eq(listingSocialPosts.status, 'failed'));
+  revalidatePath('/back-office/social');
+}
+
+/** Requeue just this listing's failed rows. */
+export async function retryListingFailedAction(formData: FormData): Promise<void> {
+  await requireStaff();
+  const listingId = Number(formData.get('listingId'));
+  if (!Number.isFinite(listingId) || listingId <= 0) return;
+  await db
+    .update(listingSocialPosts)
+    .set({ status: 'queued', attempts: 0, leaseUntil: null, error: null, updatedAt: new Date() })
+    .where(
+      and(eq(listingSocialPosts.listingId, listingId), eq(listingSocialPosts.status, 'failed'))
+    );
+  revalidatePath('/back-office/social');
+}
+
+/**
+ * Take every live post for one listing down at once.
+ *
+ * Same routine the landlord's own takedown link uses, so ops and landlord
+ * cannot drift: Facebook is deleted through the API, Instagram and TikTok are
+ * flagged REMOVE BY HAND (neither has a delete endpoint) and ops is notified,
+ * and anything still queued is cancelled.
+ */
+export async function pullDownListingAction(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+  await loadFeatureFlags();
+  const listingId = Number(formData.get('listingId'));
+  if (!Number.isFinite(listingId) || listingId <= 0) return;
+
+  await pullDownForListing(listingId, 'Pulled down by ops');
+  await logListingAction('listing_social_pulled', listingId, user.id, {
+    source: 'ops',
+    scope: 'all-platforms',
+  }).catch(() => {});
+
   revalidatePath('/back-office/social');
 }
 

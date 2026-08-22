@@ -43,6 +43,7 @@ const MIGRATIONS = [
   '0038_intake_city_override.sql',
   '0039_phone_verifications.sql',
   '0040_listing_social_posts.sql',
+  '0041_social_results_notice.sql',
 ];
 
 function splitStatements(sql: string): string[] {
