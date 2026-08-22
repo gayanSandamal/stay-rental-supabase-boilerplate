@@ -160,12 +160,24 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
   must not stay live on our social accounts.
 - Captions must never contain a phone number (`stripContactDigits`, asserted in
   tests).
+- With no credentials an adapter **dry-runs**: it logs `[social:dry-run] …` and
+  returns a `dryrun-<platform>-<id>` post id. The back office must keep showing
+  that as a `dry run` badge with no takedown button — a row reading `posted` for
+  something never sent is the same lie as claiming an Instagram deletion we
+  cannot perform.
 
 ## When making changes
 
 - Match the existing server-component-first style; reach for client components only when interactivity demands it.
 - Keep listings free/unlimited and visibility manually-activated unless explicitly told otherwise — these are product decisions, not bugs.
 - Schema change? Update `schema.ts` **and** add + register a numbered SQL migration.
+- **Run `pnpm db:migrate-all` against production BEFORE the deploy lands.** Nothing
+  runs it for you — `build` is a plain `next build` and `vercel.json` sets no
+  `buildCommand`. Drizzle's relational queries name every column explicitly, so a
+  column that exists in `schema.ts` but not in the database takes down *every read
+  of that table*, not just the new feature. Adding four columns to `listings` and
+  deploying first is what 500'd the whole site on 2026-08-22; a feature flag does
+  not protect you, because the ORM names the columns whether the flag is on or not.
 - New admin action? Add an `audit_action` enum value and log it.
 - Preserve secure, generic auth messaging (no account enumeration) on sign-in/forgot-password flows.
 - Sri Lanka context is the point: prices are LKR, locations are Sri Lankan cities/districts, and resilience fields (power/water/fiber) are first-class, not afterthoughts.

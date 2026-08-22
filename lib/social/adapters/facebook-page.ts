@@ -11,6 +11,7 @@
  */
 
 import { isFacebookPageConfigured, socialConfig } from '../config';
+import { DRY_RUN_ID_PREFIX } from '../types';
 import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
 import {
   graphDelete,
@@ -25,7 +26,7 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     console.log(
       `[social:dry-run] facebook_page listing=${input.listingId} images=${input.imageUrls.length}\n${input.caption}`
     );
-    return { ok: true, remotePostId: `dryrun-facebook_page-${input.listingId}` };
+    return { ok: true, remotePostId: `${DRY_RUN_ID_PREFIX}facebook_page-${input.listingId}` };
   }
 
   const pageId = socialConfig.facebookPageId;

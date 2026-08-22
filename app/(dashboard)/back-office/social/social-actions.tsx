@@ -11,12 +11,15 @@ export function SocialActions({
   platform,
   caption,
   supportsRemove,
+  dryRun,
 }: {
   postId: number;
   status: string;
   platform: string;
   caption: string | null;
   supportsRemove: boolean;
+  /** Nothing was actually sent — the adapter had no credentials. */
+  dryRun: boolean;
 }) {
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
@@ -72,7 +75,10 @@ export function SocialActions({
         </Button>
       )}
 
-      {status === 'posted' && (
+      {/* No takedown on a dry run: there is nothing on any platform to remove,
+          and offering the button is the same lie as claiming an Instagram
+          deletion we cannot perform. */}
+      {status === 'posted' && !dryRun && (
         <Button
           size="sm"
           variant="outline"

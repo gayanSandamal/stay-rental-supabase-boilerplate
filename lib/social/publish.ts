@@ -189,6 +189,12 @@ async function publishOne(row: SocialPostRow): Promise<keyof Omit<SocialSweepCou
   });
 
   if (result.ok) {
+    // An unconfigured adapter reports success without sending anything (see the
+    // dry-run branch in each adapter). Say so in the row: `posted` with no note
+    // reads as a real post, and ops offered a takedown button for something that
+    // was never published. The UI derives its badge from the `dryrun-` id, but
+    // this note is what a human actually reads.
+    const dryRun = !adapter.isConfigured();
     await db
       .update(listingSocialPosts)
       .set({
@@ -196,7 +202,11 @@ async function publishOne(row: SocialPostRow): Promise<keyof Omit<SocialSweepCou
         remotePostId: result.remotePostId,
         remotePermalink: result.permalink ?? null,
         caption,
-        error: result.note ?? null,
+        error:
+          result.note ??
+          (dryRun
+            ? `DRY RUN — ${platform} has no credentials configured, so nothing was sent.`
+            : null),
         postedAt: new Date(),
         leaseUntil: null,
         updatedAt: new Date(),
