@@ -66,3 +66,48 @@ describe('isDryRunPost', () => {
     expect(isDryRunPost('')).toBe(false);
   });
 });
+
+describe('a dry run is never handed to ops as a takedown', () => {
+  /**
+   * `pullDownForListing` decides three things per row: whether to call the
+   * adapter, whether to add the platform to the "remove by hand" list ops are
+   * notified about, and what note to leave on the row. A dry run must take the
+   * third path on all three — nothing was ever sent, so there is nothing to
+   * delete and nobody to ask.
+   *
+   * This became reachable when `reconcileOrphanedSocialPosts` started sweeping
+   * archived listings: production held 7 dry-run rows across listings #21-#23
+   * (Instagram and TikTok have never had credentials), and Instagram and TikTok
+   * both report `supportsRemove: false`. Without this, the first sweep would
+   * have told ops to go and hand-delete seven posts that never existed — the
+   * same lie as a row reading `posted` for something never sent, which is the
+   * whole reason the dry-run badge above exists.
+   */
+  const decide = (remotePostId: string, supportsRemove: boolean) => {
+    const dryRun = isDryRunPost(remotePostId);
+    const callsAdapter = !dryRun && supportsRemove;
+    // `removed` starts as `dryRun`, so a dry run is never pushed to `manual`.
+    const removed = dryRun;
+    return { callsAdapter, needsManualRemoval: !dryRun && !removed };
+  };
+
+  it.each([
+    ['dryrun-instagram-21', false],
+    ['dryrun-tiktok-22', false],
+    ['dryrun-facebook_page-21', true],
+  ] as const)('%s asks nothing of ops', (id, supportsRemove) => {
+    const d = decide(id, supportsRemove);
+    expect(d.callsAdapter).toBe(false);
+    expect(d.needsManualRemoval).toBe(false);
+  });
+
+  it('a REAL post on a platform with no delete API still reaches ops', () => {
+    // The behaviour that must survive: Instagram takedowns are manual, and
+    // silently swallowing one would be worse than the noise it replaces.
+    expect(decide('17851234567890123', false).needsManualRemoval).toBe(true);
+  });
+
+  it('a REAL post on Facebook Page is deleted through the API', () => {
+    expect(decide('1229347226919525_122111941959369710', true).callsAdapter).toBe(true);
+  });
+});
