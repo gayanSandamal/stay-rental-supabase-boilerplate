@@ -11,6 +11,8 @@ import { createNotification, createNotificationsForOpsAndAdmin } from '@/lib/not
 import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
 import { whatsappIntakes } from '@/lib/db/schema';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { t } from '@/lib/intake/i18n';
+import { resolveReplyLang, type ReplyLang } from '@/lib/intake/language';
 import type { ModerationVerdict } from './types';
 
 type ListingRow = typeof listings.$inferSelect;
@@ -107,9 +109,18 @@ export async function notifyModerationOutcome(
     return;
   }
 
+  // The landlord's language lives on the intake row that created this listing.
+  const originIntake = await db.query.whatsappIntakes
+    .findFirst({ where: eq(whatsappIntakes.listingId, listing.id) })
+    .catch(() => null);
+  const lang: ReplyLang = resolveReplyLang(
+    originIntake?.replyLanguage ?? null,
+    originIntake?.messageText ?? ''
+  );
+
   const lines: string[] = [];
   if (isFirstPublish) {
-    lines.push(firstPublishLine(listing));
+    lines.push(firstPublishLine(listing, lang));
     if (verdict.landlordReasons.length) lines.push('', ...verdict.landlordReasons);
   } else if (verdict.outcome === 'passed') {
     if (ctx.added > 0) {
@@ -200,9 +211,23 @@ async function offerSocialSharing(listing: ListingRow): Promise<void> {
   }
 }
 
-/** The one line that says a listing went live. Shared with the reconciler. */
-function firstPublishLine(listing: Pick<ListingRow, 'id' | 'title'>): string {
-  return `🎉 Your listing "${listing.title}" is now live: ${baseUrl()}/listings/${listing.id}`;
+/**
+ * The one line that says a listing went live. Shared with the reconciler.
+ *
+ * Built here rather than in `lib/intake/messages.ts`, which is why it needs its
+ * own translation hook: this is the single message EVERY successful landlord
+ * receives, so leaving it English would undo most of the point of localising
+ * the rest.
+ */
+function firstPublishLine(
+  listing: Pick<ListingRow, 'id' | 'title'>,
+  lang: ReplyLang = 'en'
+): string {
+  const url = `${baseUrl()}/listings/${listing.id}`;
+  return (
+    t(lang, 'goLive', { title: listing.title, url }) ??
+    `🎉 Your listing "${listing.title}" is now live: ${url}`
+  );
 }
 
 async function markLandlordNotified(listingId: number): Promise<void> {
@@ -253,9 +278,13 @@ export async function reconcileMissedAnnouncements(
       // Re-use the reasons the failed run computed, so the sender gets the same
       // message they should have had rather than a bare "it's live".
       const reasons = await lastLandlordReasons(listing.id);
-      const message = [firstPublishLine(listing), ...(reasons.length ? ['', ...reasons] : [])].join(
-        '\n'
-      );
+      const message = [
+        firstPublishLine(
+          listing,
+          resolveReplyLang(intake.replyLanguage, intake.messageText ?? '')
+        ),
+        ...(reasons.length ? ['', ...reasons] : []),
+      ].join('\n');
       if (await whatsappAdapter.sendText(intake.fromNumber, message)) {
         await markLandlordNotified(listing.id);
         sent++;

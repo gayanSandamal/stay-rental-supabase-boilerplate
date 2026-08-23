@@ -80,6 +80,9 @@ export const users = pgTable('users', {
   // Meta has proven possession of the number. Unique among live accounts
   // (partial index in migration 0030).
   waPhone: varchar('wa_phone', { length: 20 }),
+  // 0042 — the language this landlord writes in, so a returning one is answered
+  // correctly from their first message rather than after it. NULL = not known.
+  preferredLanguage: varchar('preferred_language', { length: 8 }),
   subscriptionTier: varchar('subscription_tier', { length: 20 }).default('free'),
   subscriptionExpiresAt: timestamp('subscription_expires_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -501,6 +504,10 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   /** Town the sender picked from the disambiguation menu; overrides the parse. */
   cityOverride: varchar('city_override', { length: 120 }),
   districtOverride: varchar('district_override', { length: 50 }), // JSON {latitude, longitude, name?, address?} from a shared pin
+  // 0042 — the language to answer this submission in. Decided once from the
+  // first conclusive message, not per message: a Sinhala ad followed by "50000"
+  // would otherwise flip the conversation back to English mid-submission.
+  replyLanguage: varchar('reply_language', { length: 8 }),
   waMessageIds: text('wa_message_ids'), // JSON array (idempotency)
   parsedPayload: text('parsed_payload'), // JSON from the LLM parser
   status: whatsappIntakeStatusEnum('status').notNull().default('received'),

@@ -44,6 +44,7 @@ import { pullDownForListing } from '@/lib/social/publish';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { hasListingDetail } from '@/lib/intake/parser/types';
 import { mintAccessLink } from '@/lib/auth/access-links';
+import { resolveReplyLang, type ReplyLang } from '@/lib/intake/language';
 import { db } from '@/lib/db/drizzle';
 import { landlords, users } from '@/lib/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -150,6 +151,10 @@ async function handleInbound(
     // Session write + redelivery dedup happen BEFORE media download inside
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
+    // One lookup per inbound message, reused by every reply below. Resolved
+    // from what this sender has written before plus what they just wrote, so a
+    // Sinhala landlord answering "50000" is still answered in Sinhala.
+    const lang = await langFor(message.senderId, message.text);
 
     if (outcome.action === 'number_verified') {
       await whatsappAdapter.sendText(
@@ -185,7 +190,7 @@ async function handleInbound(
       await whatsappAdapter.sendText(
         message.senderId,
         batchHasDetail
-          ? receivedAckMessage(message.senderName)
+          ? receivedAckMessage(message.senderName, lang)
           : newListingTemplateMessage(message.senderName)
       );
       if (!rich && outcome.pinStored) {
@@ -200,7 +205,7 @@ async function handleInbound(
       } else if (rich && outcome.action === 'appended' && outcome.reopenedFromNeedsInfo) {
         // Exactly one message per needs_info round flips the status back, so
         // this can't spam a multi-message answer.
-        await whatsappAdapter.sendText(message.senderId, updateAckMessage());
+        await whatsappAdapter.sendText(message.senderId, updateAckMessage(lang));
       }
 
       // A held intake used to swallow everything: the sender saw a typing
@@ -276,7 +281,7 @@ async function handleInbound(
           })
         : false;
       if (!sentList) {
-        await whatsappAdapter.sendText(message.senderId, deleteMenuMessage(menu));
+        await whatsappAdapter.sendText(message.senderId, deleteMenuMessage(menu, lang));
       }
     } else if (outcome.action === 'delete_confirm_prompt') {
       const title = outcome.listingTitle ?? 'your listing';
@@ -296,12 +301,12 @@ async function handleInbound(
           )
         : false;
       if (!sentButtons) {
-        await whatsappAdapter.sendText(message.senderId, deleteConfirmMessage(title));
+        await whatsappAdapter.sendText(message.senderId, deleteConfirmMessage(title, lang));
       }
     } else if (outcome.action === 'listing_deleted') {
       await whatsappAdapter.sendText(
         message.senderId,
-        deleteDoneMessage(outcome.listingTitle ?? 'your listing')
+        deleteDoneMessage(outcome.listingTitle ?? 'your listing', lang)
       );
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
@@ -334,7 +339,7 @@ async function handleInbound(
       });
       await whatsappAdapter.sendText(message.senderId, socialConsentDeclinedMessage());
     } else if (outcome.action === 'command_cancelled') {
-      await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage());
+      await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage(lang));
     } else if (outcome.action === 'no_listings') {
       await whatsappAdapter.sendText(message.senderId, noListingsMessage());
     } else if (outcome.action === 'city_chosen') {
@@ -358,7 +363,7 @@ async function handleInbound(
         cityChoiceUnclearMessage(outcome.choiceCount ?? 0)
       );
     } else if (outcome.action === 'help') {
-      await whatsappAdapter.sendText(message.senderId, helpMessage());
+      await whatsappAdapter.sendText(message.senderId, helpMessage(lang));
     } else if (outcome.action === 'link_reissue') {
       const links = await linksFor(message.senderId, outcome.listingId ?? null);
       // link_reissue means a listing EXISTS — when minting fails (legacy
@@ -413,7 +418,7 @@ async function handleInbound(
       // Tell the sender too — previously only ops heard, and listings went
       // live missing photos the landlord was sure they had sent.
       if (outcome.action === 'created' || outcome.action === 'appended') {
-        await whatsappAdapter.sendText(message.senderId, photosMissedMessage(outcome.mediaFailed));
+        await whatsappAdapter.sendText(message.senderId, photosMissedMessage(outcome.mediaFailed, lang));
       }
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
@@ -421,6 +426,37 @@ async function handleInbound(
         link: '/back-office/whatsapp-intakes',
       });
     }
+  }
+}
+
+/**
+ * Which language to answer this sender in.
+ *
+ * Reads the language remembered on their account, lets a conclusively-scripted
+ * new message override it, and writes the result back so the next message is
+ * answered consistently. Deliberately tolerant: a failed lookup answers in
+ * English rather than dropping the reply, because a reply in the wrong language
+ * still beats no reply at all.
+ */
+async function langFor(senderId: string, text: string | null | undefined): Promise<ReplyLang> {
+  try {
+    const e164 = senderId.startsWith('+') ? senderId : `+${senderId}`;
+    const user = await db.query.users.findFirst({
+      where: and(eq(users.waPhone, e164), isNull(users.deletedAt)),
+      columns: { id: true, preferredLanguage: true },
+    });
+    const lang = resolveReplyLang(user?.preferredLanguage ?? null, text ?? '');
+    if (user && lang !== user.preferredLanguage) {
+      await db
+        .update(users)
+        .set({ preferredLanguage: lang, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+        .catch(() => {});
+    }
+    return lang;
+  } catch (err) {
+    console.error('[webhook] language lookup failed', err);
+    return 'en';
   }
 }
 
