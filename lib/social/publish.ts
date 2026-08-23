@@ -24,7 +24,7 @@ import {
 import { socialImageUrls } from './images';
 import { adapterFor, enabledPlatforms, isPlatformEnabled } from './registry';
 import { MANUAL_ONLY_PREFIX } from './adapters/facebook-group';
-import type { SocialPlatform } from './types';
+import { isDryRunPost, type SocialPlatform } from './types';
 
 type SocialPostRow = typeof listingSocialPosts.$inferSelect;
 
@@ -329,8 +329,13 @@ export async function pullDownForListing(listingId: number, reason: string): Pro
   const manual: string[] = [];
   for (const row of live) {
     const adapter = adapterFor(row.platform as SocialPlatform);
-    let removed = false;
-    if (adapter?.supportsRemove && row.remotePostId) {
+    // A dry run never reached the platform, so there is nothing to take down
+    // and nobody to ask. Sending ops to "delete this Instagram post by hand"
+    // for a post that was never sent is the same lie as a row reading `posted`
+    // for one — the thing the dry-run badge exists to prevent, one layer up.
+    const dryRun = isDryRunPost(row.remotePostId);
+    let removed = dryRun;
+    if (!dryRun && adapter?.supportsRemove && row.remotePostId) {
       removed = await adapter.remove(row.remotePostId).catch(() => false);
     }
     if (!removed) manual.push(row.platform);
@@ -340,7 +345,11 @@ export async function pullDownForListing(listingId: number, reason: string): Pro
       .set({
         status: 'pulled',
         pulledAt: new Date(),
-        error: removed ? reason : `${reason} — REMOVE BY HAND (no delete API)`,
+        error: dryRun
+          ? `${reason} — was a dry run, nothing had been sent`
+          : removed
+            ? reason
+            : `${reason} — REMOVE BY HAND (no delete API)`,
         updatedAt: new Date(),
       })
       .where(eq(listingSocialPosts.id, row.id));
