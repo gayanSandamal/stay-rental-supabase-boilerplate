@@ -36,6 +36,25 @@ export async function archiveListingAction(formData: FormData): Promise<void> {
     .set({ status: 'archived', archivedAt: new Date(), updatedAt: new Date() })
     .where(eq(listings.id, id));
 
+  // The advert must not outlive the listing.
+  //
+  // This is the page the WhatsApp "🗑️ To remove it:" link opens, so it is the
+  // main way a landlord deletes their own listing — and it was the one
+  // de-listing path that never took the social posts down. On 2026-08-23 two
+  // listings were archived through here while their Facebook posts stayed up.
+  //
+  // Called unconditionally rather than only for `active`: pullDownForListing
+  // also cancels rows still `queued`/`running`, so a landlord who deletes a
+  // consented listing before the sweeper reaches it is not published anyway.
+  // Best-effort — the deletion is what the landlord asked for and must stand
+  // even if Graph is down; the reconciler on the publish-social cron retries.
+  try {
+    const { pullDownForListing } = await import('@/lib/social/publish');
+    await pullDownForListing(id, 'Landlord deleted the listing');
+  } catch (err) {
+    console.error('[listing delete] social pull-down failed', id, err);
+  }
+
   await logListingAction('listing_archived', id, user.id, {
     via: 'access_link_delete_page',
     previousStatus: listing.status,

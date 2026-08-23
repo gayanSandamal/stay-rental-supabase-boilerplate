@@ -48,6 +48,18 @@ export async function GET(request: NextRequest) {
       console.error('[cron/publish-social] prompt reconcile failed', err);
     }
 
+    // Take down anything still live on our accounts for a listing that is not.
+    // Every de-listing path is meant to call pullDownForListing; this is what
+    // makes a forgotten one self-correct instead of leaving a deleted
+    // landlord's advert up forever. Own try/catch, same as the others.
+    let orphansPulled = 0;
+    try {
+      const { reconcileOrphanedSocialPosts } = await import('@/lib/social/publish');
+      ({ posts: orphansPulled } = await reconcileOrphanedSocialPosts());
+    } catch (err) {
+      console.error('[cron/publish-social] orphan reconcile failed', err);
+    }
+
     // Same reasoning as `imageToolchain` on /api/cron/moderate-listings: the
     // credentials are the other thing that can be silently dead while every
     // code path looks healthy, and reading Vercel logs is a poor way to find
@@ -73,7 +85,14 @@ export async function GET(request: NextRequest) {
       console.error('[cron/publish-social] results notify failed', err);
     }
 
-    return NextResponse.json({ ok: true, ...counts, prompted, notified, credentials });
+    return NextResponse.json({
+      ok: true,
+      ...counts,
+      prompted,
+      notified,
+      orphansPulled,
+      credentials,
+    });
   } catch (err: any) {
     console.error('[cron/publish-social] failed', err);
     return NextResponse.json(
