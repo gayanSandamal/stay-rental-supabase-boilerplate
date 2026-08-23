@@ -17,6 +17,13 @@ import { getOrCreateOpsIdentity } from './ops-identity';
 import { getOrCreateWhatsAppLandlord } from './landlord-identity';
 import { mintAccessLink } from '@/lib/auth/access-links';
 import { resolveReplyLang } from './language';
+import {
+  NEEDS_INFO_MAX_ROUNDS,
+  adoptAnswer,
+  carryForward,
+  parseStoredFields,
+  parseStoredPayload,
+} from './accumulator';
 import { detectSaleAd, SALE_AD_REASON } from './parser/sale-ad';
 import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
@@ -27,6 +34,7 @@ import {
   needsInfoMessage,
   pendingReviewMessage,
   publishedMessage,
+  stuckMessage,
   summarizeUnderstood,
 } from './messages';
 import { sendWhatsAppText } from './channels/whatsapp/send';
@@ -165,7 +173,25 @@ export async function processIntake(
 ): Promise<IntakeOutcome> {
   // Rule-based parse (LLM fallback only when flagged on) — never null; an
   // unparseable message surfaces as missingFields → needs_info.
-  const parsed = await parseIntake(intake.messageText ?? '');
+  const fresh = await parseIntake(intake.messageText ?? '');
+
+  // Everything this intake already knew, carried onto this turn's parse.
+  //
+  // Without this the field set is whatever the last parse happened to produce,
+  // and on 2026-08-23 that meant a landlord who answered a question was asked
+  // for MORE than before — the LLM fallback is asked only for the fields the
+  // rules missed, so each turn poses it a different question and its answers
+  // legitimately move. Extraction may wobble; the intake's knowledge may not.
+  //
+  // Then: a reply to "what is the address?" IS the address, whatever the
+  // extractor makes of it. See accumulator.ts for why that is limited to the
+  // address and never extended to the town.
+  const { parsed } = adoptAnswer(
+    carryForward(parseStoredPayload(intake.parsedPayload), fresh),
+    parseStoredFields(intake.askedFields),
+    intake.pendingAnswer
+  );
+
   const pin = parsePin(intake.locationPin);
   applyLocationPin(parsed, pin);
   // A town the sender picked from the menu is final — it beats the parse and
@@ -194,6 +220,35 @@ export async function processIntake(
   // genuinely missing — see parser/sale-ad.ts for why that guard matters.
   const sale = detectSaleAd(intake.messageText ?? '', parsed.rentPerMonth != null);
 
+  // Asking the same person the same question a third time is not a
+  // conversation, it is the loop of 2026-08-23. Hand it to someone who can
+  // read the thread and finish the listing by hand. Counted across EVERY kind
+  // of ask, including the town menu: the cap exists to bound the landlord's
+  // patience, and they do not care which of our questions it was.
+  if (!check.ok && check.retriable && intake.needsInfoRounds >= NEEDS_INFO_MAX_ROUNDS) {
+    await db
+      .update(whatsappIntakes)
+      .set({
+        parsedPayload: JSON.stringify(parsed),
+        status: 'manual_review',
+        failureReason: `Asked ${intake.needsInfoRounds}× without resolving: ${check.reason}`,
+        // Nothing is outstanding once a person owns it.
+        askedFields: null,
+        pendingAnswer: null,
+        processedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(whatsappIntakes.id, intake.id));
+    await notifyOps(
+      intake.id,
+      `WhatsApp intake #${intake.id} asked ${intake.needsInfoRounds}× and still ${check.reason} — finish it by hand`
+    );
+    await adapter
+      .sendText(intake.fromNumber, stuckMessage(intake.profileName, lang))
+      .catch(() => {});
+    return 'manual_review';
+  }
+
   if (!check.ok && check.retriable) {
     await db
       .update(whatsappIntakes)
@@ -201,6 +256,11 @@ export async function processIntake(
         parsedPayload: JSON.stringify(parsed),
         status: 'needs_info',
         failureReason: sale.looksLikeSale ? SALE_AD_REASON : check.reason,
+        // What this round asks for, so the next reply can be credited to it,
+        // and a clean slate for that reply to accumulate into.
+        askedFields: JSON.stringify(parsed.missingFields),
+        pendingAnswer: null,
+        needsInfoRounds: intake.needsInfoRounds + 1,
         processedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -268,6 +328,8 @@ export async function processIntake(
         parsedPayload: JSON.stringify(parsed),
         status: 'manual_review',
         failureReason: check.reason,
+        askedFields: null,
+        pendingAnswer: null,
         processedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -407,6 +469,10 @@ export async function processIntake(
       status: 'published',
       // Clear any needs_info reason left from an earlier round of this session.
       failureReason: null,
+      // No question is outstanding on a published listing: a later "add photos"
+      // reply must never be credited to an ask from before it went live.
+      askedFields: null,
+      pendingAnswer: null,
       listingId: listing.id,
       processedAt: new Date(),
       updatedAt: new Date(),

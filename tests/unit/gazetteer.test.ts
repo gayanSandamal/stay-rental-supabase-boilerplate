@@ -336,3 +336,70 @@ describe('town disambiguation', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+/**
+ * Script coverage.
+ *
+ * On 2026-08-23 a landlord wrote "හොරණ" and was told it was not in our town
+ * list. Horana had been in the gazetteer since day one — in Latin only. The
+ * town therefore never resolved, `known` stayed false, and because
+ * computeMissingFields only waives the address for a RECOGNISED town, the
+ * pipeline demanded a street address the landlord had already given twice.
+ *
+ * 99 of the 173 towns were in that state. A Sri Lankan rental marketplace
+ * whose gazetteer only speaks English is not a Sri Lankan gazetteer, so this
+ * asserts the floor rather than trusting anyone to remember.
+ */
+describe('every town is reachable in all three scripts', () => {
+  const SINHALA = /[඀-෿]/;
+  const TAMIL = /[஀-௿]/;
+  const LATIN = /[A-Za-z]/;
+
+  it.each(CITIES.map((c) => [c.name, c] as const))('%s has a Sinhala name', (_name, city) => {
+    expect(city.aliases?.some((a) => SINHALA.test(a))).toBe(true);
+  });
+
+  it.each(CITIES.map((c) => [c.name, c] as const))('%s has a Tamil name', (_name, city) => {
+    expect(city.aliases?.some((a) => TAMIL.test(a))).toBe(true);
+  });
+
+  it('resolves the town from the incident, in its own script', () => {
+    expect(normalizeLocation('හොරණ')).toEqual({
+      city: 'Horana',
+      district: 'Kalutara',
+      known: true,
+    });
+  });
+
+  it('every alias is written in ONE script', () => {
+    // A single Sinhala codepoint inside a Tamil word is invisible on screen and
+    // makes the alias unmatchable by anyone typing it properly. Three slipped
+    // in when these were first added; the same typo will not survive twice.
+    const mixed: string[] = [];
+    for (const city of CITIES) {
+      for (const alias of city.aliases ?? []) {
+        const scripts = [SINHALA, TAMIL, LATIN].filter((re) => re.test(alias)).length;
+        if (scripts > 1) mixed.push(`${city.name}: ${alias}`);
+      }
+    }
+    expect(mixed).toEqual([]);
+  });
+
+  it('every alias is lowercase, as the matchers assume', () => {
+    const wrong = CITIES.flatMap((c) =>
+      (c.aliases ?? []).filter((a) => a !== a.toLowerCase()).map((a) => `${c.name}: ${a}`)
+    );
+    expect(wrong).toEqual([]);
+  });
+
+  it('no alias points at two different towns', () => {
+    const owners = new Map<string, string[]>();
+    for (const city of CITIES) {
+      for (const alias of city.aliases ?? []) {
+        owners.set(alias, [...(owners.get(alias) ?? []), city.name]);
+      }
+    }
+    const ambiguous = [...owners].filter(([, names]) => names.length > 1);
+    expect(ambiguous).toEqual([]);
+  });
+});

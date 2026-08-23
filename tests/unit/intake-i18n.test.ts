@@ -9,6 +9,7 @@ import {
   receivedAckMessage,
   manualReviewPendingMessage,
   pendingReviewMessage,
+  stuckMessage,
   photosAddedMessage,
   publishedMessage,
   socialConsentPrompt,
@@ -223,6 +224,14 @@ describe('regressions from the 2026-08-23 half-translated reply', () => {
     // This is the "Our team is reviewing your listing" line the landlord was
     // left staring at, in English, under a Sinhala thread.
     expect(leftoverEnglish(manualReviewPendingMessage(lang))).toEqual([]);
+  });
+
+  it.each(['si', 'ta'] as const)('%s stuck message is translated', (lang) => {
+    enableFlag(true);
+    // Sent INSTEAD of a third question. A landlord who has already answered
+    // twice reading an English paragraph would be the same failure again.
+    // No name: a landlord's own name is legitimately Latin in any language.
+    expect(leftoverEnglish(stuckMessage(null, lang))).toEqual([]);
   });
 
   it.each(['si', 'ta'] as const)('%s photosAdded uses its catalogue key', (lang) => {

@@ -62,6 +62,7 @@ export type MsgKey =
   | 'photosOverCap'
   | 'resendAsPhotos'
   | 'manualReviewPending'
+  | 'stuck'
   | 'photosAdded'
   | 'photosQueued'
   | 'photos.someFailed'

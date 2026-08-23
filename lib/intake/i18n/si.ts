@@ -70,6 +70,12 @@ export const si: Catalogue = {
   manualReviewPending:
     'ස්තූතියි — ලැබුණා. අපගේ කණ්ඩායම මෙය සමාලෝචනය කරමින් සිටින අතර ඉක්මනින් මෙතැනින්ම පිළිතුරු දෙනු ඇත.',
 
+  // Sent INSTEAD of asking a third time. It must not ask for anything, and it
+  // must not suggest the landlord did something wrong — by this point they
+  // have answered us twice and the fault is ours.
+  stuck:
+    'ස්තූතියි{name} — අපට අවශ්‍ය සියල්ල ඔබ එවා ඇත. නැවත විමසනවා වෙනුවට, අපගේ කණ්ඩායමේ අයෙක් ඔබේ දැන්වීම අතින් සම්පූර්ණ කරන අතර එය සජීවී වූ විට මෙතැනින්ම දැනුම් දෙනු ඇත.',
+
   photosAdded: '📷 ඡායාරූප {added}ක් "{title}" ට එකතු කළා.',
   photosQueued:
     '📸 "{title}" සඳහා ඡායාරූප {added}ක් ලැබුණා — පරීක්ෂා කිරීමෙන් පසු විනාඩි කිහිපයකින් පෙනෙනු ඇත.',

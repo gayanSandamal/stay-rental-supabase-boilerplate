@@ -234,6 +234,22 @@ export function manualReviewMessage(profileName: string | null, lang: ReplyLang 
   );
 }
 
+/**
+ * We have asked as many times as we are going to.
+ *
+ * The landlord has answered us more than once and we are still not satisfied;
+ * at that point the fault is far likelier to be ours than theirs, so the copy
+ * does not ask for anything and does not imply they got something wrong. It
+ * says a person is taking over, which is what is actually happening.
+ */
+export function stuckMessage(profileName: string | null, lang: ReplyLang = 'en'): string {
+  return (
+    t(lang, 'stuck', { name: profileName ? ' ' + profileName : '' }) ??
+    `Thanks${profileName ? ' ' + profileName : ''} — you've sent us everything we need. ` +
+      `Rather than ask again, one of our team is finishing your listing by hand and will message you here when it's live.`
+  );
+}
+
 /** Some photos from the submission never made it — say so immediately. */
 export function photosMissedMessage(failed: number, lang: ReplyLang = 'en'): string {
   return (

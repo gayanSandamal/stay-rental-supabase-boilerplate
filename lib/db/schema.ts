@@ -510,6 +510,14 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   replyLanguage: varchar('reply_language', { length: 8 }),
   waMessageIds: text('wa_message_ids'), // JSON array (idempotency)
   parsedPayload: text('parsed_payload'), // JSON from the LLM parser
+  // 0043 — the intake's memory of its own conversation, so answering a question
+  // can never produce more questions. See lib/intake/accumulator.ts.
+  /** JSON array: the fields our last question asked for. */
+  askedFields: text('asked_fields'),
+  /** Everything received since that question, cleared when we ask again. */
+  pendingAnswer: text('pending_answer'),
+  /** How many times we have asked; past the cap a human takes over. */
+  needsInfoRounds: integer('needs_info_rounds').notNull().default(0),
   status: whatsappIntakeStatusEnum('status').notNull().default('received'),
   failureReason: text('failure_reason'),
   // Sender attached media we can't ingest (video/voice/non-image documents) —
