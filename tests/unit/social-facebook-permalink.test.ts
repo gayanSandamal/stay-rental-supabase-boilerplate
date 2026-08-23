@@ -1,62 +1,66 @@
 import { describe, expect, it } from 'vitest';
-import { facebookPostUrl } from '@/lib/social/adapters/facebook-page';
+import { normalizeFacebookPermalink } from '@/lib/social/adapters/facebook-page';
 
 /**
  * The link Easy Rent sends a landlord after posting their listing.
  *
- * THE INCIDENT (2026-08-23, listing #26). The adapter built the permalink by
- * dropping the Graph post id straight after the domain:
+ * THE INCIDENT (2026-08-23, listing #26). A Page has TWO ids, and the one we
+ * publish with is not the one its public URLs use:
  *
- *   https://www.facebook.com/1229347226919525_122111941959369710
+ *   FACEBOOK_PAGE_ID         1229347226919525   ← what Graph publishes with
+ *   the Page's public actor   61591091318155    ← what facebook.com URLs use
  *
- * Graph returns the post id as `{page-id}_{story-id}`, and that URL LOOKS like
- * it works, because a logged-in desktop browser follows Facebook's redirect.
- * It is not a post URL. Fetched without a session it lands on a login wall,
- * and the Facebook mobile app — which cannot deep-link the composite form —
- * shows "This isn't available". Verified against the live post:
+ * Graph hands back a post id as `{FACEBOOK_PAGE_ID}_{story-id}`, so every URL
+ * we assembled locally carried the wrong id. Measured against the live post:
  *
- *   /1229347226919525_122111941959369710  → <title>Log into Facebook</title>
- *   /1229347226919525/posts/122111941959369710
- *       → <title>Easy Rent - 🏠 2-bedroom apartment for rent in Horana…</title>
+ *   /1229347226919525_122111941959369710       → "Log into Facebook"
+ *   /permalink.php?story_fbid=…&id=…           → "Log into Facebook"
+ *   /1229347226919525/posts/122111941959369710 → renders on web via a redirect,
+ *                                                but the mobile app cannot
+ *                                                deep-link it → "This isn't
+ *                                                available"
+ *   /61591091318155/posts/…/122111941959369710/ → the post, everywhere
  *
- * The message this link goes in says "share it with anyone who might be
- * interested". A link that demands a login is not shareable, so this was a
- * distribution bug, not a cosmetic one.
- *
- * The adapter now asks Graph for `permalink_url` and only falls back to this
- * builder — but the fallback is what runs whenever that extra call fails, so
- * it has to be right on its own.
+ * The first attempt at this fix swapped the first form for the third, which
+ * still failed on the app — because the id was still wrong, and a logged-out
+ * web fetch had made it look correct. The actor id appears NOWHERE in our
+ * configuration, so nothing local can build a valid URL. Only Graph's
+ * `permalink_url` is authoritative, and when it is missing the honest answer
+ * is no link at all.
  */
 
-/** The real ids from listing #26's Facebook post. */
-const PAGE_ID = '1229347226919525';
-const STORY_ID = '122111941959369710';
+describe('normalizeFacebookPermalink', () => {
+  const CANONICAL =
+    'https://www.facebook.com/61591091318155/posts/-2-bedroom-apartment-for-rent-in-horana-kalutara-lkr-25000month-3-months-deposit/122111941959369710/';
 
-describe('facebookPostUrl', () => {
-  it('THE REGRESSION: builds the public /posts/ form, not the composite id', () => {
-    expect(facebookPostUrl(`${PAGE_ID}_${STORY_ID}`)).toBe(
-      `https://www.facebook.com/${PAGE_ID}/posts/${STORY_ID}`
+  it('passes through the canonical URL Graph returns', () => {
+    expect(normalizeFacebookPermalink(CANONICAL)).toBe(CANONICAL);
+  });
+
+  it('absolutizes a relative permalink_url', () => {
+    // Graph returns a path rather than a full URL for some objects.
+    expect(normalizeFacebookPermalink('/61591091318155/posts/122111941959369710/')).toBe(
+      'https://www.facebook.com/61591091318155/posts/122111941959369710/'
     );
   });
 
-  it('never emits the login-walled composite form', () => {
-    const url = facebookPostUrl(`${PAGE_ID}_${STORY_ID}`)!;
-    expect(url).not.toContain(`${PAGE_ID}_${STORY_ID}`);
-    expect(url).toContain('/posts/');
+  it.each([null, undefined, '', '   '])('returns null for %p rather than a guess', (raw) => {
+    expect(normalizeFacebookPermalink(raw as string | null)).toBeNull();
   });
 
-  it('returns null rather than a broken URL for an unexpected id shape', () => {
-    // A guessed URL is worse than no URL: the back office renders the
-    // permalink as a link ops are told to open and delete by hand.
-    expect(facebookPostUrl('1229347226919525')).toBeNull();
-    expect(facebookPostUrl('')).toBeNull();
-    expect(facebookPostUrl('_122111941959369710')).toBeNull();
-    expect(facebookPostUrl('1229347226919525_')).toBeNull();
+  it('rejects anything that is not a URL', () => {
+    // A bare id is the shape that started this: it looks link-ish and is not.
+    expect(normalizeFacebookPermalink('1229347226919525_122111941959369710')).toBeNull();
+    expect(normalizeFacebookPermalink('javascript:alert(1)')).toBeNull();
   });
 
-  it('ignores anything after a second underscore', () => {
-    // Graph ids are two-part; be explicit about what happens if that changes
-    // rather than silently splicing extra segments into the path.
-    expect(facebookPostUrl('123_456_789')).toBe('https://www.facebook.com/123/posts/456');
+  it('THE REGRESSION: nothing here can manufacture a URL from a post id', () => {
+    // The module must expose no way to build a permalink from the composite id.
+    // Every such URL carries FACEBOOK_PAGE_ID, which public Facebook URLs do
+    // not use, and the resulting link dies in the landlord's phone.
+    const composite = '1229347226919525_122111941959369710';
+    const out = normalizeFacebookPermalink(composite);
+    expect(out).toBeNull();
+    expect(out ?? '').not.toContain('1229347226919525');
   });
 });
