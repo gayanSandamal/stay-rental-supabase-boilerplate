@@ -212,7 +212,7 @@ async function handleInbound(
       // bubble and then nothing, forever, and ops were never told the thread
       // was still alive. Both halves now hear about it.
       if (outcome.action === 'appended_manual') {
-        await whatsappAdapter.sendText(message.senderId, manualReviewPendingMessage());
+        await whatsappAdapter.sendText(message.senderId, manualReviewPendingMessage(lang));
         await createNotificationsForOpsAndAdmin({
           type: 'whatsapp_intake',
           title: `Sender added more to intake #${outcome.intakeId}, which is held for review`,
@@ -393,7 +393,8 @@ async function handleInbound(
               outcome.mediaFailed,
               // When the checks are armed the photo is not visible yet, so
               // promising it was "added" would send them looking for it.
-              { queued: Boolean(outcome.mediaQueued), overCap: outcome.mediaOverCap ?? 0 }
+              { queued: Boolean(outcome.mediaQueued), overCap: outcome.mediaOverCap ?? 0 },
+              lang
             )
           : photosFailedMessage()
       );

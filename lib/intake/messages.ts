@@ -271,12 +271,13 @@ export interface ListingLinks {
  * Photos refused for being over `maxPhotosPerListing`. Empty string when none,
  * so the no-cap output stays byte-identical to before the cap existed.
  */
-export function photosOverCapNote(overCap: number, cap: number): string {
+export function photosOverCapNote(overCap: number, cap: number, lang: ReplyLang = 'en'): string {
   if (overCap < 1 || !Number.isFinite(cap) || cap < 1) return '';
   return (
+    t(lang, 'photosOverCap', { over: overCap, cap }) ??
     `\n\n🖼️ We show up to ${cap} photos per listing, so the last ` +
-    `${overCap === 1 ? 'one wasn’t' : `${overCap} weren’t`} used. ` +
-    'Reply here any time to swap one in.'
+      `${overCap === 1 ? 'one wasn’t' : `${overCap} weren’t`} used. ` +
+      'Reply here any time to swap one in.'
   );
 }
 
@@ -308,8 +309,10 @@ export function publishedMessage(
   );
   parts.push('', t(lang, 'published.contact') ?? 'Tenants will call or WhatsApp you directly.');
   const base = parts.join('\n');
-  const withMedia = opts.unsupportedMedia ? `${base}\n${RESEND_AS_PHOTOS_NOTE}` : base;
-  return withMedia + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
+  const withMedia = opts.unsupportedMedia
+    ? `${base}\n${t(lang, 'resendAsPhotos') ?? RESEND_AS_PHOTOS_NOTE}`
+    : base;
+  return withMedia + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0, lang);
 }
 
 export function pendingReviewMessage(
@@ -322,15 +325,19 @@ export function pendingReviewMessage(
     t(lang, 'pendingReview', { title }) ??
       `Thanks! Your listing "${title}" has been created and is with our team for a quick review. We'll message you when it's live.`,
   ];
-  if (links?.editUrl) parts.push('', '✏️ You can change the details meanwhile:', links.editUrl);
+  if (links?.editUrl) {
+    parts.push('', t(lang, 'pending.edit') ?? '✏️ You can change the details meanwhile:', links.editUrl);
+  }
   // The remove link belongs here, not only on publishedMessage. With the
   // automated checks armed every intake lands pending, so publishedMessage —
   // the only other message carrying a delete link — is never sent, and the
   // approval notice is a bare public URL. Without this the landlord is never
   // given one. Access links are reusable, so it keeps working once live, and a
   // landlord who spots a mistake can pull the listing before anyone sees it.
-  if (links?.deleteUrl) parts.push('', '🗑️ Or remove it:', links.deleteUrl);
-  return parts.join('\n') + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0);
+  if (links?.deleteUrl) {
+    parts.push('', t(lang, 'pending.remove') ?? '🗑️ Or remove it:', links.deleteUrl);
+  }
+  return parts.join('\n') + photosOverCapNote(opts.photosOverCap ?? 0, opts.photoCap ?? 0, lang);
 }
 
 /** Photos sent after publish were added to the live listing (or queued first). */
@@ -338,22 +345,30 @@ export function photosAddedMessage(
   title: string,
   added: number,
   failed: number,
-  opts: { queued?: boolean; overCap?: number } = {}
+  opts: { queued?: boolean; overCap?: number } = {},
+  lang: ReplyLang = 'en'
 ): string {
-  const base = opts.queued
-    ? `📸 Got ${added} photo${added === 1 ? '' : 's'} for "${title}" — ${added === 1 ? 'it' : 'they'} will appear in a couple of minutes once checked.`
-    : `📸 Added ${added} photo${added === 1 ? '' : 's'} to "${title}".`;
+  const base =
+    t(lang, opts.queued ? 'photosQueued' : 'photosAdded', { added, title }) ??
+    (opts.queued
+      ? `📸 Got ${added} photo${added === 1 ? '' : 's'} for "${title}" — ${added === 1 ? 'it' : 'they'} will appear in a couple of minutes once checked.`
+      : `📸 Added ${added} photo${added === 1 ? '' : 's'} to "${title}".`);
   const fail =
     failed > 0
-      ? ` ${failed} photo${failed === 1 ? '' : 's'} didn't come through — please send ${failed === 1 ? 'it' : 'them'} again.`
+      ? (t(lang, 'photos.someFailed', { failed }) ??
+        ` ${failed} photo${failed === 1 ? '' : 's'} didn't come through — please send ${failed === 1 ? 'it' : 'them'} again.`)
       : '';
   // Deliberately NOT phrased as a failure: asking them to resend a photo we
   // refused on purpose would loop forever.
   const over =
     (opts.overCap ?? 0) > 0
-      ? ` ${opts.overCap} more ${opts.overCap === 1 ? 'photo' : 'photos'} didn't fit — this listing is at its photo limit.`
+      ? (t(lang, 'photos.overCapInline', { over: opts.overCap ?? 0 }) ??
+        ` ${opts.overCap} more ${opts.overCap === 1 ? 'photo' : 'photos'} didn't fit — this listing is at its photo limit.`)
       : '';
-  return `${base}${fail}${over}\nIf they were meant for a different listing, reply here and our team will sort it out.`;
+  const wrongListing =
+    t(lang, 'photos.wrongListing') ??
+    '\nIf they were meant for a different listing, reply here and our team will sort it out.';
+  return `${base}${fail}${over}${wrongListing}`;
 }
 
 /** Every photo download failed — never leave the sender thinking it worked. */
@@ -487,8 +502,11 @@ export function helpMessage(lang: ReplyLang = 'en'): string {
  * Someone messaged an intake that is held for human review. Says the thread is
  * alive without promising a listing — the hold may be a genuine scam flag.
  */
-export function manualReviewPendingMessage(): string {
-  return `Thanks — got it. Our team is reviewing this submission and will get back to you here shortly.`;
+export function manualReviewPendingMessage(lang: ReplyLang = 'en'): string {
+  return (
+    t(lang, 'manualReviewPending') ??
+    `Thanks — got it. Our team is reviewing this submission and will get back to you here shortly.`
+  );
 }
 
 export interface CityChoice {
