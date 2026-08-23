@@ -119,6 +119,7 @@ Channel msg (Meta, …) ──POST──▶ /api/{channel}/webhook
 - **Thin webhook / fat worker:** the webhook only persists; the cron reasons. Survives Meta retries and slow processing.
 - **Adapter isolation:** all provider wire concerns live in the adapter; the core never sees a Cloud API payload.
 - **Rules-first parsing:** deterministic and unit-testable; the LLM is an optional gap-filler, never the authority (rule values win on merge).
+- **Knowledge only grows:** an intake's extracted fields accumulate across turns (`lib/intake/accumulator.ts`). Extraction may be nondeterministic — the LLM is asked a different question every turn, since it only gets the fields the rules missed — but a field known at turn N must be known at turn N+1. Without this, answering a question can produce MORE questions.
 - **State machine on a status column:** `whatsapp_intakes.status` drives every decision and the ops queue.
 - **Fail closed everywhere:** unconfigured → 503/no-op; bad signature → 401; missing cron secret → 401; processing error → `manual_review` with `failureReason` (never silently dropped).
 - **System-identity ownership:** "Easy Rent Operations" owns concierge listings; the real owner is surfaced via `listings.sourceContactName` and a verified contact number.
@@ -251,5 +252,52 @@ is now actually used.
 and asserts the two behaviours that matter (a cross-language listing is NOT
 flagged; an added watermark IS detected). `pnpm moderation:calibrate` runs a
 14-case corpus with expected verdicts. Re-run both after any prompt change.
+
+## 2026-08-23 — the needs-info loop (intake #31)
+
+A landlord sent a complete Sinhala ad for a Horana upstairs annex, answered
+three follow-up questions, and was asked for the address four times. It never
+published, and after they answered, the next question asked for MORE fields
+than the one before it.
+
+Four independent defects lined up, none of which was "the parser is bad":
+
+1. **The gazetteer only spoke English.** 99 of 173 towns had no Sinhala alias —
+   Horana among them, while neighbouring Padukka had one. `හොරණ` resolved to
+   nothing, and since `computeMissingFields` only waives the address for a
+   RECOGNISED town, the pipeline demanded a street address the landlord had
+   already given. Every town now carries a Sinhala and a Tamil name, asserted
+   per-town in `tests/unit/gazetteer.test.ts`.
+
+   This alone was the whole fix: the intake now publishes on the first message,
+   with `parserMeta.engine: "rules"` — the LLM is not called at all.
+
+2. **Nothing remembered the previous turn.** Every turn re-parses the whole
+   accumulated `message_text` and kept only that run's result. The rule parser
+   is stable across those turns; the LLM fallback is not, because it is asked
+   only for the fields the rules missed. `carryForward()` fixes it. City and
+   district move as a PAIR — carrying them independently is how a listing gets
+   one turn's town with another turn's district.
+
+3. **A reply to a question was not an answer.** `ADDRESS_RE` wants a house
+   number and a street type; the landlord gave a landmark
+   ("adjoining the Horana main road"), twice. `adoptAnswer()` accepts a direct
+   answer to a field we asked for. Address only — a town is a controlled
+   vocabulary where a wrong answer is worse than a missing one.
+
+4. **No escape hatch.** After `NEEDS_INFO_MAX_ROUNDS` (2) the intake goes to
+   `manual_review` and the landlord is told a person is finishing it by hand.
+
+Migration `0043` adds `asked_fields`, `pending_answer`, `needs_info_rounds`.
+`pending_answer` accumulates and is cleared when we ask again — NOT derived
+from `message_text` by offset, because several messages routinely arrive
+between processing runs and all of them are part of the answer.
+
+**Also: moderation no longer holds a listing on a title we generated.**
+Listing #25 was held on "Title describes a apartment but the description
+describes a house" — that title came from our own `composeTitle()`. A title the
+landlord never saw and could not change cannot be evidence against them.
+`isGeneratedTitle()` (rule-parser.ts) recognises the shape; `text-check.ts`
+records a deterministic note instead. A landlord-written title is still checked.
 
 _Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-ups 2026-08-02; intake v2 2026-08-04. Original deep-dive generated 2026-07-10._
