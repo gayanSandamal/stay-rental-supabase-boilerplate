@@ -83,44 +83,57 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     };
   }
 
-  // Ask Facebook for its own URL rather than assembling one — same best-effort
-  // shape the Instagram adapter already uses. A failure here must never fail a
-  // post that has already gone out, so the constructed form is the fallback.
+  // Only Facebook can tell us a post's public URL — see normalizeFacebookPermalink.
   const permalink = await graphGet<{ permalink_url?: string }>(post.data.id, {
     fields: 'permalink_url',
   });
+  const url = permalink.ok ? normalizeFacebookPermalink(permalink.data.permalink_url) : null;
+  if (!url) {
+    // Surfaced rather than papered over: the row still says `posted` and holds
+    // the remote id, so ops can find the post — they just have no link to
+    // click, which is the honest state.
+    console.error(
+      '[social] facebook permalink unavailable for',
+      post.data.id,
+      permalink.ok ? '(no permalink_url in response)' : permalink.error.message
+    );
+  }
 
-  return {
-    ok: true,
-    remotePostId: post.data.id,
-    permalink:
-      (permalink.ok ? permalink.data.permalink_url : undefined) ??
-      facebookPostUrl(post.data.id) ??
-      undefined,
-  };
+  return { ok: true, remotePostId: post.data.id, permalink: url ?? undefined };
 }
 
 /**
- * The PUBLIC, shareable URL for a Page post.
+ * Make Graph's `permalink_url` absolute. Returns null when there is nothing
+ * usable — never a guess.
  *
- * `/{page-id}/posts/{story-id}`, NOT `/{composite-id}`. The Graph API returns
- * the post id as `{page-id}_{story-id}`, and dropping that straight after the
- * domain looks like it works — on desktop web, while logged in, Facebook
- * redirects it. It is not a real post URL:
+ * WHY THERE IS NO CONSTRUCTED FALLBACK. A Page has TWO different ids, and the
+ * one we publish with is not the one its public URLs use:
  *
- *   facebook.com/1229347226919525_1221119…  → "Log into Facebook"
- *   facebook.com/1229347226919525/posts/…  → the post
+ *   FACEBOOK_PAGE_ID          1229347226919525   ← what Graph publishes with
+ *   the Page's public actor    61591091318155    ← what facebook.com URLs use
  *
- * So the link Easy Rent sent landlords opened a LOGIN WALL for anyone not
- * already signed in, and the Facebook mobile app — which cannot deep-link the
- * composite form at all — showed "This isn't available". The message tells the
- * landlord to share the post with anyone who might be interested; a link that
- * demands a login is not shareable, which defeats the whole feature.
+ * Graph returns a post id as `{FACEBOOK_PAGE_ID}_{story-id}`, so ANY URL built
+ * out of that carries the wrong id. Measured against listing #26's live post:
+ *
+ *   /1229347226919525_122111941959369710       → "Log into Facebook"
+ *   /permalink.php?story_fbid=…&id=…           → "Log into Facebook"
+ *   /1229347226919525/posts/122111941959369710 → renders on web, but only via a
+ *                                                redirect; the mobile app can't
+ *                                                deep-link it → "This isn't
+ *                                                available"
+ *   /61591091318155/posts/…/122111941959369710/ → the post, everywhere
+ *
+ * That last one is what Facebook itself advertises as `rel="canonical"`, and
+ * `permalink_url` is where Graph hands it to us. The actor id appears nowhere
+ * in our configuration, so there is nothing correct to build a URL from
+ * locally — hence null, and a logged error, rather than a link that renders in
+ * a logged-in desktop tab and dies in every landlord's phone.
  */
-export function facebookPostUrl(compositeId: string): string | null {
-  const [pageId, storyId] = compositeId.split('_');
-  if (!pageId || !storyId) return null;
-  return `https://www.facebook.com/${pageId}/posts/${storyId}`;
+export function normalizeFacebookPermalink(raw: string | null | undefined): string | null {
+  const url = (raw ?? '').trim();
+  if (!url) return null;
+  if (url.startsWith('/')) return `https://www.facebook.com${url}`;
+  return /^https?:\/\//i.test(url) ? url : null;
 }
 
 async function remove(remotePostId: string): Promise<boolean> {
