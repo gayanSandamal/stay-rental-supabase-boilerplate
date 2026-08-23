@@ -426,6 +426,9 @@ function extractAddressFallback(
   return { address: [numberPart, ...segments].join(', '), cityOverride };
 }
 
+/** Every word composeTitle can put in the type slot. */
+const TITLE_TYPE_LABELS = ['Annex', 'House', 'Apartment', 'Room', 'Property'] as const;
+
 function composeTitle(args: {
   bedrooms: number | null;
   propertyType: ParsedIntake['propertyType'];
@@ -444,6 +447,36 @@ function composeTitle(args: {
   return [args.bedrooms ? `${args.bedrooms}BR` : null, typeLabel, args.city ? `in ${args.city}` : null]
     .filter(Boolean)
     .join(' ');
+}
+
+/** The exact shape composeTitle emits: "2BR Apartment in Horana", "5BR House". */
+const GENERATED_TITLE_RE = new RegExp(
+  `^(?:\\d{1,2}BR )?(?:${TITLE_TYPE_LABELS.join('|')})(?: in .+)?$`
+);
+
+/**
+ * Did WE write this title, rather than the landlord?
+ *
+ * Moderation needs to know, because a title/description mismatch means
+ * completely different things in the two cases. A landlord whose title and
+ * description describe different properties may be pasting two ads together
+ * and is worth a look. A title WE composed from bedrooms + type + town cannot
+ * indict the landlord of anything — a disagreement there is our own extraction
+ * arguing with itself.
+ *
+ * That is not hypothetical: listing #25 (2026-08-23) was held on "Title
+ * describes a apartment but the description describes a house". The landlord
+ * had written "නිවසක්, මහල් නිවාසයක උඩු මහල" — the upper floor of a
+ * two-storey house — which is genuinely both, and our own detectPropertyType
+ * picked apartment because it tests මහල් before නිවස. The listing never went
+ * live and the landlord was told a person would be in touch.
+ *
+ * Deliberately anchored and narrow: derived from the same TITLE_TYPE_LABELS
+ * composeTitle uses, so adding a type there cannot leave this behind. A
+ * landlord's own title ("Upstairs house Horana 25000") does not match.
+ */
+export function isGeneratedTitle(title: string | null | undefined): boolean {
+  return Boolean(title && GENERATED_TITLE_RE.test(title.trim()));
 }
 
 /**

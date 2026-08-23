@@ -45,6 +45,7 @@ const MIGRATIONS = [
   '0040_listing_social_posts.sql',
   '0041_social_results_notice.sql',
   '0042_reply_language.sql',
+  '0043_intake_conversation_memory.sql',
 ];
 
 function splitStatements(sql: string): string[] {

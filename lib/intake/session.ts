@@ -2,6 +2,7 @@ import { db } from '@/lib/db/drizzle';
 import { whatsappIntakes, listings, landlords, users } from '@/lib/db/schema';
 import { and, eq, gte, desc, sql, inArray, isNull, or } from 'drizzle-orm';
 import { detectUpdateIntent } from './parser/rule-parser';
+import { appendPendingAnswer } from './accumulator';
 import {
   clearConversation,
   detectCommand,
@@ -328,6 +329,11 @@ export async function appendToIntake(
         .update(whatsappIntakes)
         .set({
           messageText: [row.messageText, msg.text].filter(Boolean).join('\n'),
+          // Kept separately from messageText because a reply has to be
+          // creditable to the question that prompted it. Landlords routinely
+          // send an answer as two or three short messages, so this accumulates
+          // rather than replaces, and process.ts clears it when it next asks.
+          pendingAnswer: appendPendingAnswer(row.pendingAnswer, msg.text),
           waMessageIds: JSON.stringify([...parseArr(row.waMessageIds), msg.messageId].filter(Boolean)),
           profileName: row.profileName ?? msg.senderName,
           hasUnsupportedMedia: row.hasUnsupportedMedia || Boolean(msg.unsupportedMedia),
