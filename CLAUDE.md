@@ -137,6 +137,37 @@ approval**. All of it is flag-gated and OFF by default — see
   `pnpm moderation:calibrate`, and bump `PROMPT_VERSION` only deliberately — it
   invalidates the whole image verdict cache.
 
+## Intake conversation memory (2026-08-23)
+
+A landlord answered three follow-up questions and was asked for the address four
+times; the ask even GREW after they answered. See
+`docs/deep-dive-whatsapp-intake-pipeline.md` for the full post-mortem. Three
+rules came out of it:
+
+- **An intake's knowledge only grows.** `lib/intake/accumulator.ts` merges each
+  turn's parse onto everything already known. Extraction is allowed to wobble —
+  the LLM fallback is asked only for the fields the rules missed, so it gets a
+  different question every turn — but a field known at turn N must be known at
+  turn N+1. `city` and `district` move as a PAIR, never independently.
+- **A reply to a question is an answer.** If we asked for the address and the
+  landlord replies, that IS the address, whatever `ADDRESS_RE` makes of it —
+  Sri Lankan landlords give landmarks, not house numbers. Address only; a town
+  still goes through the gazetteer, because a wrong town is worse than none.
+- **Never ask a third time.** `NEEDS_INFO_MAX_ROUNDS = 2`, then it goes to a
+  human. Any new outbound ask must respect the cap.
+
+Two supporting invariants worth keeping:
+
+- **Every gazetteer town needs a Sinhala AND a Tamil alias** (asserted per-town
+  in `tests/unit/gazetteer.test.ts`, along with single-script/lowercase/unique).
+  A town the gazetteer cannot recognise makes the address mandatory, which is
+  how a landlord gets asked for something they already sent.
+- **Never hold a listing on a title we generated.** `composeTitle()` writes
+  "2BR Apartment in Horana"; when that disagrees with the landlord's own
+  description the disagreement is between two of OUR readings. `isGeneratedTitle()`
+  gates it in `lib/moderation/text-check.ts`. A landlord-written title is still
+  checked — two properties in one submission is real.
+
 ## Social auto-publish (2026-08-22)
 
 Published listings can be posted to **Easy Rent's own** Facebook Page, Instagram
