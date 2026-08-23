@@ -16,6 +16,8 @@ import { runIntakeChecks } from './checks';
 import { getOrCreateOpsIdentity } from './ops-identity';
 import { getOrCreateWhatsAppLandlord } from './landlord-identity';
 import { mintAccessLink } from '@/lib/auth/access-links';
+import { resolveReplyLang } from './language';
+import { detectSaleAd, SALE_AD_REASON } from './parser/sale-ad';
 import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { isModerationConfigured } from '@/lib/moderation/config';
@@ -148,7 +150,7 @@ export async function processSettledIntakes(
         counts.manual++;
         // Same rule as the flagged path: the sender must hear something.
         await adapter
-          .sendText(intake.fromNumber, manualReviewMessage(intake.profileName))
+          .sendText(intake.fromNumber, manualReviewMessage(intake.profileName, resolveReplyLang(intake.replyLanguage, intake.messageText ?? '')))
           .catch(() => {});
       }
     }
@@ -175,13 +177,30 @@ export async function processIntake(
 
   const check = await runIntakeChecks(parsed);
 
+  // Which language do we answer in? Resolved from the stored value plus this
+  // submission's own text, so a landlord who wrote Sinhala stays in Sinhala even
+  // when their follow-up is a bare number.
+  const lang = resolveReplyLang(intake.replyLanguage, intake.messageText ?? '');
+  if (lang !== intake.replyLanguage) {
+    await db
+      .update(whatsappIntakes)
+      .set({ replyLanguage: lang, updatedAt: new Date() })
+      .where(eq(whatsappIntakes.id, intake.id))
+      .catch(() => {});
+  }
+
+  // A for-sale ad has no monthly rent to give us. Asking for one loops forever,
+  // so say what is actually wrong instead. Only consulted when the rent is
+  // genuinely missing — see parser/sale-ad.ts for why that guard matters.
+  const sale = detectSaleAd(intake.messageText ?? '', parsed.rentPerMonth != null);
+
   if (!check.ok && check.retriable) {
     await db
       .update(whatsappIntakes)
       .set({
         parsedPayload: JSON.stringify(parsed),
         status: 'needs_info',
-        failureReason: check.reason,
+        failureReason: sale.looksLikeSale ? SALE_AD_REASON : check.reason,
         processedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -213,9 +232,14 @@ export async function processIntake(
 
     const sent = await adapter.sendText(
       intake.fromNumber,
-      needsInfoMessage(intake.profileName, parsed.missingFields, check.reason, {
+      needsInfoMessage(
+        intake.profileName,
+        parsed.missingFields,
+        check.reason,
+        {
         unsupportedMedia: intake.hasUnsupportedMedia,
-        understood: summarizeUnderstood(parsed),
+        understood: summarizeUnderstood(parsed, lang),
+        looksLikeSaleAd: sale.looksLikeSale,
         // Only when the town is still the blocker: an unconfirmed suggestion is
         // pointless noise if we already know where the property is. Confident
         // ones were applied by the parser and never reach here.
@@ -223,7 +247,9 @@ export async function processIntake(
           parsed.missingFields.includes('city') && parsed.citySuggestion
             ? { city: parsed.citySuggestion.city, from: parsed.citySuggestion.from }
             : null,
-      })
+        },
+        lang
+      )
     );
     if (!sent) {
       // Undelivered ask = the sender waits forever. Ops must know.
@@ -249,7 +275,7 @@ export async function processIntake(
     await notifyOps(intake.id, `WhatsApp intake #${intake.id} flagged: ${check.reason}`);
     // Never a silent dead end: the sender can't see our review queue, and
     // "no reply ever" was the worst path in the original flow.
-    await adapter.sendText(intake.fromNumber, manualReviewMessage(intake.profileName));
+    await adapter.sendText(intake.fromNumber, manualReviewMessage(intake.profileName, resolveReplyLang(intake.replyLanguage, intake.messageText ?? '')));
     return 'manual_review';
   }
 
@@ -425,15 +451,22 @@ export async function processIntake(
     // publishedMessage's "now LIVE" + /listings/{id} link would 404 for ~2 min.
     // The sweeper sends the real 🎉 once it passes (lib/moderation/notify.ts).
     const confirmation = goLiveNow
-      ? publishedMessage(listing.title, links, {
-          unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
-          photosOverCap: overCapMedia.length,
-          photoCap: cap,
-        })
-      : pendingReviewMessage(listing.title, links, {
-          photosOverCap: overCapMedia.length,
-          photoCap: cap,
-        });
+      ? publishedMessage(
+          listing.title,
+          links,
+          {
+            unsupportedMedia: intake.hasUnsupportedMedia && media.length === 0,
+            photosOverCap: overCapMedia.length,
+            photoCap: cap,
+          },
+          lang
+        )
+      : pendingReviewMessage(
+          listing.title,
+          links,
+          { photosOverCap: overCapMedia.length, photoCap: cap },
+          lang
+        );
     // Rich replies render the view link as a preview card (the copy already
     // puts it first for exactly this) — plain text otherwise, byte-identical
     // to the pre-flag behavior.

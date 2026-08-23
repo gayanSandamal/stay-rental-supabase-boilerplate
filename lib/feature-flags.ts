@@ -116,6 +116,7 @@ export const featureFlagDefaults = {
   // dormant until the Meta/TikTok credentials exist, and posting to the brand's
   // own public accounts should never start by accident on a deploy.
   enableSocialAutoPublish: false,
+  enableLocalizedReplies: false,
   socialPublishFacebookPage: true,
   socialPublishInstagram: true,
   // OFF until TikTok audits the app. An unaudited client can only post
@@ -374,6 +375,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   watermarkListingImages: {
     label: '— apply watermark',
     description: 'Sub-switch: compress without branding when off.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableLocalizedReplies: {
+    label: 'Reply in the landlord’s language',
+    description:
+      'Answer WhatsApp landlords in Sinhala or Tamil when they wrote in that script, instead of always in English — including the name of any missing field. OFF by default because the Sinhala and Tamil copy in lib/intake/i18n/ is a draft that has not been reviewed by a native speaker. With this off, every reply is byte-for-byte the English it has always been.',
     group: 'Platform',
     appWide: true,
     public: false,

@@ -17,6 +17,7 @@ import { logAudit } from '@/lib/db/audit-logger';
 import { createNotification } from '@/lib/notifications';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { setConversation } from '@/lib/intake/commands';
+import { resolveReplyLang } from '@/lib/intake/language';
 import { sendWhatsAppButtons, sendWhatsAppText } from '@/lib/intake/channels/whatsapp/send';
 import { socialConsentButtons, socialConsentPrompt } from '@/lib/intake/messages';
 import { enqueueSocialPosts } from './publish';
@@ -50,7 +51,10 @@ export async function promptForSocialConsent(listing: ListingRow): Promise<boole
 
   // --- WhatsApp-origin landlord: ask in the thread they are already in ------
   if (intake?.fromNumber) {
-    const body = socialConsentPrompt(listing.title);
+    // The consent prompt is sent minutes after the landlord's own message, so
+    // the language they wrote in is already on the intake row.
+    const lang = resolveReplyLang(intake.replyLanguage, intake.messageText ?? '');
+    const body = socialConsentPrompt(listing.title, lang);
     let sent = false;
 
     if (isFeatureEnabled('enableWhatsAppRichReplies')) {
