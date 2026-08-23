@@ -15,6 +15,7 @@ import { DRY_RUN_ID_PREFIX } from '../types';
 import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
 import {
   graphDelete,
+  graphGet,
   graphPost,
   isPermissionError,
   isRateLimitError,
@@ -82,11 +83,44 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     };
   }
 
+  // Ask Facebook for its own URL rather than assembling one — same best-effort
+  // shape the Instagram adapter already uses. A failure here must never fail a
+  // post that has already gone out, so the constructed form is the fallback.
+  const permalink = await graphGet<{ permalink_url?: string }>(post.data.id, {
+    fields: 'permalink_url',
+  });
+
   return {
     ok: true,
     remotePostId: post.data.id,
-    permalink: `https://www.facebook.com/${post.data.id}`,
+    permalink:
+      (permalink.ok ? permalink.data.permalink_url : undefined) ??
+      facebookPostUrl(post.data.id) ??
+      undefined,
   };
+}
+
+/**
+ * The PUBLIC, shareable URL for a Page post.
+ *
+ * `/{page-id}/posts/{story-id}`, NOT `/{composite-id}`. The Graph API returns
+ * the post id as `{page-id}_{story-id}`, and dropping that straight after the
+ * domain looks like it works — on desktop web, while logged in, Facebook
+ * redirects it. It is not a real post URL:
+ *
+ *   facebook.com/1229347226919525_1221119…  → "Log into Facebook"
+ *   facebook.com/1229347226919525/posts/…  → the post
+ *
+ * So the link Easy Rent sent landlords opened a LOGIN WALL for anyone not
+ * already signed in, and the Facebook mobile app — which cannot deep-link the
+ * composite form at all — showed "This isn't available". The message tells the
+ * landlord to share the post with anyone who might be interested; a link that
+ * demands a login is not shareable, which defeats the whole feature.
+ */
+export function facebookPostUrl(compositeId: string): string | null {
+  const [pageId, storyId] = compositeId.split('_');
+  if (!pageId || !storyId) return null;
+  return `https://www.facebook.com/${pageId}/posts/${storyId}`;
 }
 
 async function remove(remotePostId: string): Promise<boolean> {
