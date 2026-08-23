@@ -41,7 +41,27 @@ export async function checkAndMarkExpiredListings() {
     );
 
   console.log(`Marked ${expiredListings.length} listings as expired`);
-  
+
+  // An expired listing is off the site, so its advert must come off our social
+  // accounts too — otherwise a Facebook post keeps sending renters to a listing
+  // that 404s. Dynamically imported to keep `lib/social` (and its adapter and
+  // flag graph) out of this module, which is plain DB code.
+  //
+  // NOTE: nothing currently calls this function. Fixed anyway, because the gap
+  // is invisible until someone wires it to a cron and by then the posts are
+  // already orphaned. `reconcileOrphanedSocialPosts` is the backstop either way.
+  try {
+    const { pullDownForListing } = await import('@/lib/social/publish');
+    for (const id of expiredIds) {
+      await pullDownForListing(id, 'Listing expired').catch((err) => {
+        console.error('[expiry] social pull-down failed', id, err);
+        return 0;
+      });
+    }
+  } catch (err) {
+    console.error('[expiry] social pull-down unavailable', err);
+  }
+
   return { count: expiredListings.length, ids: expiredIds };
 }
 

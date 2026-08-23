@@ -369,6 +369,50 @@ export async function pullDownForListing(listingId: number, reason: string): Pro
 }
 
 /**
+ * Posts still live on our accounts for listings that are no longer live on ours.
+ *
+ * Every de-listing path is supposed to call `pullDownForListing`, and there are
+ * a lot of them: the landlord's own delete page, the WhatsApp DELETE command,
+ * the dashboard archive button, the ops PATCH, expiry, the purge cron. Relying
+ * on all of them remembering is how listings #24 and #25 were archived on
+ * 2026-08-23 with their Facebook posts left up — the access-link delete page
+ * was the one that had never been wired.
+ *
+ * So this closes the class rather than the instance: whatever route took the
+ * listing down, a post that outlives it is found here within one sweep. A
+ * missed call becomes five minutes of over-exposure instead of forever.
+ *
+ * Ordered oldest-first and bounded, so a large back catalogue drains over
+ * several ticks rather than blowing the run budget on one.
+ */
+export async function reconcileOrphanedSocialPosts(
+  limit = 5
+): Promise<{ listings: number; posts: number }> {
+  const orphans = await db
+    .select({ listingId: listingSocialPosts.listingId, status: listings.status })
+    .from(listingSocialPosts)
+    .innerJoin(listings, eq(listings.id, listingSocialPosts.listingId))
+    .where(
+      and(eq(listingSocialPosts.status, 'posted'), sql`${listings.status} <> 'active'`)
+    )
+    .groupBy(listingSocialPosts.listingId, listings.status)
+    .orderBy(listingSocialPosts.listingId)
+    .limit(limit);
+
+  let posts = 0;
+  for (const row of orphans) {
+    posts += await pullDownForListing(
+      row.listingId,
+      `Listing is ${row.status} — post outlived the listing`
+    ).catch((err) => {
+      console.error('[social] orphan pull-down failed', row.listingId, err);
+      return 0;
+    });
+  }
+  return { listings: orphans.length, posts };
+}
+
+/**
  * Listings that went live but were never asked about social sharing.
  *
  * Same at-least-once insurance as `reconcileMissedAnnouncements`: the prompt is
