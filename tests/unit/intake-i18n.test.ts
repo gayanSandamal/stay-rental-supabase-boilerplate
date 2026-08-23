@@ -7,6 +7,10 @@ import {
   helpMessage,
   needsInfoMessage,
   receivedAckMessage,
+  manualReviewPendingMessage,
+  pendingReviewMessage,
+  photosAddedMessage,
+  publishedMessage,
   socialConsentPrompt,
   summarizeUnderstood,
 } from '@/lib/intake/messages';
@@ -164,5 +168,88 @@ describe('catalogue hygiene', () => {
         expect(String(value).trim(), `${lang}.${key}`).not.toBe('');
       }
     }
+  });
+});
+
+describe('regressions from the 2026-08-23 half-translated reply', () => {
+  // The landlord got a Sinhala first line followed by English "You can change
+  // the details meanwhile", "Or remove it", and "We show up to 6 photos per
+  // listing". Localising the headline of a composite message is not localising
+  // the message.
+
+  /** Latin text that is legitimately Latin in any language. */
+  const ALLOWED_LATIN = [
+    /https?:\/\/\S+/g, // links
+    /Easy Rent/g, // brand
+    /WhatsApp/g, // brand
+    /\b(?:DELETE|CANCEL|RESTORE|LINK|YES|NO)\b/g, // operative keywords, on purpose
+  ];
+
+  /** Any English word left over once the legitimate Latin is removed. */
+  function leftoverEnglish(msg: string): string[] {
+    let stripped = msg;
+    for (const re of ALLOWED_LATIN) stripped = stripped.replace(re, ' ');
+    return stripped.match(/[A-Za-z]{4,}/g) ?? [];
+  }
+
+  it('pendingReview is fully Sinhala, links and photo note included', () => {
+    enableFlag(true);
+    const msg = pendingReviewMessage(
+      'පාදුක්ක නිවස',
+      { editUrl: 'https://easyrent.lk/l/tok/e/24', deleteUrl: 'https://easyrent.lk/l/tok/d/24' },
+      { photosOverCap: 3, photoCap: 6 },
+      'si'
+    );
+    expect(leftoverEnglish(msg)).toEqual([]);
+  });
+
+  it.each(['si', 'ta'] as const)('%s published message leaves no English behind', (lang) => {
+    enableFlag(true);
+    const msg = publishedMessage(
+      'පාදුක්ක නිවස',
+      {
+        viewUrl: 'https://easyrent.lk/listings/24',
+        editUrl: 'https://easyrent.lk/l/tok/e/24',
+        deleteUrl: 'https://easyrent.lk/l/tok/d/24',
+      },
+      { unsupportedMedia: true, photosOverCap: 2, photoCap: 6 },
+      lang
+    );
+    expect(leftoverEnglish(msg)).toEqual([]);
+  });
+
+  it.each(['si', 'ta'] as const)('%s manual-review holding message is translated', (lang) => {
+    enableFlag(true);
+    // This is the "Our team is reviewing your listing" line the landlord was
+    // left staring at, in English, under a Sinhala thread.
+    expect(leftoverEnglish(manualReviewPendingMessage(lang))).toEqual([]);
+  });
+
+  it.each(['si', 'ta'] as const)('%s photosAdded uses its catalogue key', (lang) => {
+    enableFlag(true);
+    // The key existed but was never wired to the builder — it rendered English
+    // while the catalogue claimed coverage.
+    expect(leftoverEnglish(photosAddedMessage('පාදුක්ක නිවස', 2, 1, { overCap: 2 }, lang))).toEqual([]);
+  });
+});
+
+describe('no dangling catalogue keys', () => {
+  it('every key is actually referenced by a builder', async () => {
+    // photosAdded shipped as a translation nobody could ever see, because the
+    // builder was never wired to it. Parity between si and ta did not catch it:
+    // both were equally unreachable.
+    const fs = await import('node:fs/promises');
+    const sources = (
+      await Promise.all(
+        ['lib/intake/messages.ts', 'lib/moderation/notify.ts'].map((f) => fs.readFile(f, 'utf8'))
+      )
+    ).join('\n');
+
+    const unreferenced = Object.keys(catalogueFor('si')).filter((key) => {
+      // Field labels are looked up dynamically as `field.${f}` / `type.${t}`.
+      if (key.startsWith('field.') || key.startsWith('type.')) return false;
+      return !sources.includes(`'${key}'`);
+    });
+    expect(unreferenced).toEqual([]);
   });
 });

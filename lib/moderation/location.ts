@@ -25,6 +25,18 @@ export interface LocationAnalysis {
   hardReasons: string[];
   /** Observations passed to the model as context; the model adjudicates. */
   softNotes: string[];
+  /**
+   * The gazetteer POSITIVELY confirmed this city belongs to this district —
+   * not merely "found no contradiction".
+   *
+   * This exists because the deterministic check could previously only ever
+   * hold a listing, never clear one. On 2026-08-23 the text model held a
+   * perfectly good Padukka listing claiming "Padukka is in the Sabaragamuwa
+   * Province, not Colombo". Padukka is in Colombo District, and our own
+   * curated gazetteer says so. Curated data beats a model guessing at Sri
+   * Lankan geography, so this flag lets the caller overrule it.
+   */
+  districtConfirmed: boolean;
 }
 
 /** Sri Lanka's bounding box, generously padded. */
@@ -37,13 +49,19 @@ export function checkLocationCoherence(input: LocationInput): LocationAnalysis {
   const city = (input.city ?? '').trim();
   const district = (input.district ?? '').trim();
 
-  // 1. The city determines its district — a mismatch is unambiguous.
+  // 1. The city determines its district — a mismatch is unambiguous, and a
+  //    match is an equally unambiguous CONFIRMATION.
+  let districtConfirmed = false;
   if (city && district) {
     const resolved = isCityName(city.toLowerCase());
-    if (resolved && resolved.district.toLowerCase() !== district.toLowerCase()) {
-      hardReasons.push(
-        `City "${city}" is in ${resolved.district} district, but the listing says ${district}.`
-      );
+    if (resolved) {
+      if (resolved.district.toLowerCase() !== district.toLowerCase()) {
+        hardReasons.push(
+          `City "${city}" is in ${resolved.district} district, but the listing says ${district}.`
+        );
+      } else {
+        districtConfirmed = true;
+      }
     }
   }
 
@@ -94,5 +112,5 @@ export function checkLocationCoherence(input: LocationInput): LocationAnalysis {
     }
   }
 
-  return { hardFail: hardReasons.length > 0, hardReasons, softNotes };
+  return { hardFail: hardReasons.length > 0, hardReasons, softNotes, districtConfirmed };
 }

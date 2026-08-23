@@ -95,3 +95,37 @@ describe('checkLocationCoherence — soft notes only (never hold)', () => {
     expect(r.hardReasons[0]).toContain('Batticaloa');
   });
 });
+
+describe('gazetteer confirmation (regression: the Padukka hold)', () => {
+  // 2026-08-23: the text model held a good listing with "Padukka is in the
+  // Sabaragamuwa Province, not Colombo". Padukka is in COLOMBO district, and
+  // lib/intake/parser/gazetteer.ts says so. The landlord got "our team is
+  // reviewing your listing" and then silence.
+  //
+  // The deterministic check was already right — it just had no way to SAY so,
+  // because it could only ever hold a listing, never clear one.
+  it('positively confirms a correct city/district pairing', () => {
+    const r = checkLocationCoherence({ city: 'Padukka', district: 'Colombo' });
+    expect(r.hardFail).toBe(false);
+    expect(r.districtConfirmed).toBe(true);
+  });
+
+  it('does not confirm a wrong pairing — it hard-fails it', () => {
+    const r = checkLocationCoherence({ city: 'Padukka', district: 'Kandy' });
+    expect(r.districtConfirmed).toBe(false);
+    expect(r.hardFail).toBe(true);
+  });
+
+  it('does not confirm a town the gazetteer does not know', () => {
+    // No authority to overrule the model here, which is the correct outcome:
+    // absence of data is not confirmation.
+    const r = checkLocationCoherence({ city: 'Nowherevillage', district: 'Colombo' });
+    expect(r.districtConfirmed).toBe(false);
+    expect(r.hardFail).toBe(false);
+  });
+
+  it('does not confirm when either half is missing', () => {
+    expect(checkLocationCoherence({ city: 'Padukka' }).districtConfirmed).toBe(false);
+    expect(checkLocationCoherence({ district: 'Colombo' }).districtConfirmed).toBe(false);
+  });
+});

@@ -183,11 +183,37 @@ export async function checkText(listing: LocationInput): Promise<TextCheckOutcom
   const modelSaysDifferent = d.describes_same_property === false;
   const titleCoherent = shapes.coherent && !modelSaysDifferent;
 
+  // RULES BEFORE MODELS — and that has to cut both ways.
+  //
+  // The deterministic gazetteer check could previously only ever HOLD a
+  // listing, never clear one, so the model was free to invent a contradiction
+  // the gazetteer had already disproved. On 2026-08-23 it held a good listing
+  // with "Padukka is in the Sabaragamuwa Province, not Colombo" — Padukka is in
+  // Colombo District, and lib/intake/parser/gazetteer.ts says so explicitly.
+  // The landlord saw "our team is reviewing your listing" and nothing more.
+  //
+  // When the gazetteer POSITIVELY confirms the city→district pairing, curated
+  // data wins over a model guessing at Sri Lankan geography. Only that exact
+  // claim is discarded; every other model finding still stands.
+  const modelOverruledOnLocation = location.districtConfirmed && d.location_consistent === false;
+
   const reasons: string[] = [];
   if (shapes.reason) reasons.push(shapes.reason);
   if (modelSaysDifferent && d.difference_reason) reasons.push(d.difference_reason);
-  if (d.location_mismatch_reason) reasons.push(d.location_mismatch_reason);
+  if (d.location_mismatch_reason && !modelOverruledOnLocation) {
+    reasons.push(d.location_mismatch_reason);
+  }
   if (d.spam_reason) reasons.push(d.spam_reason);
+
+  if (modelOverruledOnLocation) {
+    // Recorded, not silent: ops can see the model was overruled, and a rash of
+    // these is the signal that either the prompt or the gazetteer needs work.
+    deterministicNotes.push(
+      `Model claimed a location mismatch; overruled because the gazetteer confirms ` +
+        `"${listing.city}" is in ${listing.district} district. Model said: ` +
+        `${d.location_mismatch_reason ?? '(no reason given)'}`
+    );
+  }
 
   return {
     verdict: {
@@ -195,8 +221,8 @@ export async function checkText(listing: LocationInput): Promise<TextCheckOutcom
       languageSupported: isSupportedLanguage(language),
       titleCoherent,
       // Default to coherent when the model omits a field: never hold a listing
-      // on a missing key.
-      locationCoherent: d.location_consistent !== false,
+      // on a missing key — and never on a claim the gazetteer disproves.
+      locationCoherent: modelOverruledOnLocation || d.location_consistent !== false,
       looksLikeRental: d.looks_like_rental_listing !== false,
       reasons,
       deterministicNotes,
