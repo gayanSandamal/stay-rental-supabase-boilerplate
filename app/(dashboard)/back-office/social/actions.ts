@@ -50,6 +50,10 @@ export async function pullDownAction(formData: FormData): Promise<void> {
       status: 'pulled',
       pulledAt: new Date(),
       pulledBy: user.id,
+      // Still live unless the API really deleted it — this is what puts the row
+      // in the "Awaiting manual takedown" worklist instead of letting `pulled`
+      // imply the post is gone.
+      needsManualTakedown: !removed,
       error: removed
         ? 'Deleted from the platform'
         : 'REMOVE BY HAND — this platform has no delete API',
@@ -172,6 +176,55 @@ export async function markGroupPostedAction(formData: FormData): Promise<void> {
   await logListingAction('listing_social_published', row.listingId, user.id, {
     platform: row.platform,
     manual: true,
+  }).catch(() => {});
+
+  revalidatePath('/back-office/social');
+}
+
+/**
+ * Ops confirming they deleted, by hand, a post no API could remove.
+ *
+ * This is the only way a row leaves the "Awaiting manual takedown" worklist.
+ * Nothing automatic can close it: Instagram and TikTok expose no delete
+ * endpoint, so the platform can never tell us the post is gone — only the
+ * person who opened the permalink and deleted it knows, and this records that
+ * they did, and who they were.
+ *
+ * Guarded on `needs_manual_takedown` still being true so a double submit (or a
+ * stale tab) is a no-op rather than a second audit entry against a closed item.
+ */
+export async function markManuallyRemovedAction(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+
+  const id = Number(formData.get('postId'));
+  const row = await db.query.listingSocialPosts.findFirst({
+    where: eq(listingSocialPosts.id, id),
+  });
+  if (!row) return;
+
+  const [updated] = await db
+    .update(listingSocialPosts)
+    .set({
+      needsManualTakedown: false,
+      manualTakedownAt: new Date(),
+      manualTakedownBy: user.id,
+      error: 'Removed by hand and confirmed in Back Office',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(listingSocialPosts.id, id),
+        eq(listingSocialPosts.needsManualTakedown, true)
+      )
+    )
+    .returning({ id: listingSocialPosts.id });
+
+  // Already closed by someone else — say nothing and log nothing.
+  if (!updated) return;
+
+  await logListingAction('listing_social_takedown_confirmed', row.listingId, user.id, {
+    platform: row.platform,
+    remotePostId: row.remotePostId,
   }).catch(() => {});
 
   revalidatePath('/back-office/social');

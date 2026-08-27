@@ -345,6 +345,10 @@ export async function pullDownForListing(listingId: number, reason: string): Pro
       .set({
         status: 'pulled',
         pulledAt: new Date(),
+        // The post is still on the platform unless `remove()` actually removed
+        // it. A dry run set `removed` true above precisely because there is
+        // nothing out there to take down.
+        needsManualTakedown: !removed,
         error: dryRun
           ? `${reason} — was a dry run, nothing had been sent`
           : removed

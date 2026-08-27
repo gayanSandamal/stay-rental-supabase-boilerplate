@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { client } from './drizzle';
 
@@ -46,6 +46,7 @@ const MIGRATIONS = [
   '0041_social_results_notice.sql',
   '0042_reply_language.sql',
   '0043_intake_conversation_memory.sql',
+  '0044_social_manual_takedown.sql',
 ];
 
 function splitStatements(sql: string): string[] {
@@ -93,10 +94,63 @@ function splitStatements(sql: string): string[] {
   );
 }
 
+const MIGRATIONS_DIR = join(process.cwd(), 'lib/db/migrations');
+
+/**
+ * Files in lib/db/migrations/ that this runner is NOT supposed to apply.
+ *
+ * `0000` belongs to drizzle-kit, not to us — it is the inherited
+ * nextjs/saas-starter baseline (activity_logs, team_id, …), it is recorded in
+ * meta/_journal.json, and it is applied by `pnpm db:migrate`. The hand-rolled
+ * runner deliberately starts at 0001.
+ *
+ * Anything NOT listed here and NOT in MIGRATIONS is a mistake, not a choice.
+ */
+const NOT_RUN_BY_THIS_RUNNER = new Set(['0000_soft_the_anarchist.sql']);
+
+/**
+ * Fail before touching the database if the manifest and the directory disagree.
+ *
+ * Both directions have bitten this repo:
+ *
+ * - REGISTERED BUT MISSING — `readFileSync` throws a bare ENOENT partway through
+ *   the run, so every migration numbered after the missing one silently never
+ *   applies. That is what an uncommitted `.sql` file looks like from a fresh
+ *   clone: it works on the author's machine and nowhere else.
+ * - PRESENT BUT UNREGISTERED — the file simply never runs. The schema drifts
+ *   from `schema.ts`, and because Drizzle names every column explicitly, the
+ *   first read of that table 500s in production.
+ */
+function checkManifest() {
+  const missing = MIGRATIONS.filter((f) => !existsSync(join(MIGRATIONS_DIR, f)));
+  if (missing.length > 0) {
+    console.error('\n✗ Registered in MIGRATIONS but not on disk:');
+    for (const f of missing) console.error(`    ${f}`);
+    console.error('\n  Nothing was applied. Commit the file(s), or remove them from');
+    console.error('  the MIGRATIONS array in lib/db/run-all-migrations.ts.\n');
+    process.exit(1);
+  }
+
+  const registered = new Set(MIGRATIONS);
+  const unregistered = readdirSync(MIGRATIONS_DIR)
+    .filter(
+      (f) => f.endsWith('.sql') && !registered.has(f) && !NOT_RUN_BY_THIS_RUNNER.has(f)
+    )
+    .sort();
+  if (unregistered.length > 0) {
+    console.error('\n✗ Present in lib/db/migrations/ but NOT registered:');
+    for (const f of unregistered) console.error(`    ${f}`);
+    console.error('\n  These will never run. Add them to the MIGRATIONS array.\n');
+    process.exit(1);
+  }
+}
+
 async function runAll() {
+  checkManifest();
+
   for (const file of MIGRATIONS) {
     console.log(`\n── ${file} ──`);
-    const path = join(process.cwd(), 'lib/db/migrations', file);
+    const path = join(MIGRATIONS_DIR, file);
     const sql = readFileSync(path, 'utf-8');
     const stmts = splitStatements(sql);
 

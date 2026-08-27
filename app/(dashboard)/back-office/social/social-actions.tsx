@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Check, Copy, RefreshCw, Trash2 } from 'lucide-react';
 import {
   markGroupPostedAction,
+  markManuallyRemovedAction,
   pullDownAction,
   pullDownListingAction,
   retryAction,
@@ -188,5 +189,38 @@ export function SocialActions({
         </Button>
       )}
     </div>
+  );
+}
+
+
+/**
+ * "I deleted it" — the only thing that closes an outstanding manual takedown.
+ *
+ * Deliberately worded as a confirmation of something already done, not as an
+ * instruction to the platform. Clicking it removes nothing; it records that a
+ * human already opened the permalink and removed the post. Anyone who reads it
+ * as a delete button would leave posts up while the worklist emptied, which is
+ * the exact failure this list exists to catch.
+ */
+export function ConfirmManualTakedown({ postId }: { postId: number }) {
+  const [pending, start] = useTransition();
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={() => {
+        const fd = new FormData();
+        fd.set('postId', String(postId));
+        start(async () => {
+          await markManuallyRemovedAction(fd);
+        });
+      }}
+      title="Record that you have already deleted this post on the platform"
+    >
+      <Check className="mr-1.5 h-4 w-4" />
+      I&rsquo;ve removed it
+    </Button>
   );
 }
