@@ -9,17 +9,35 @@ import { getConciergeWhatsAppLink } from '@/lib/site-config';
  * `showFoundingStageCopy` flag). No fabricated social proof — an honest
  * "we're new, join us at the start" pitch that doubles as supply acquisition.
  */
+/**
+ * These state what is true today and commit to nothing beyond it.
+ *
+ * The previous versions were live, unbounded liabilities:
+ *
+ * - "Founding landlords list unlimited properties free — no fees, no
+ *   commissions, ever" was a PERPETUAL pricing promise with no cap, no counter
+ *   and no per-landlord record, so it could not be honoured selectively or even
+ *   audited. The people who respond first to a free platform are those for whom
+ *   listing is a job, so the promise leaked hardest to exactly the brokers the
+ *   revenue model depends on.
+ * - "Many properties we visit in person" — no property visit has ever happened.
+ *   Nothing in the schema or any workflow records one.
+ *
+ * Note the first card says LISTING is free, never PLACEMENT. Listings are free
+ * and unlimited by design (LISTING_LIMITS = 999999); search position is the
+ * thing that gets sold, so no promise may ever cover it.
+ */
 const PROMISES = [
   {
     icon: ShieldCheck,
-    title: 'Free listings, forever',
-    text: 'Founding landlords list unlimited properties free — no fees, no commissions, ever.',
+    title: 'Free to list',
+    text: 'Listing your property is free, with no limit and no commission. We earn from optional visibility, never from your listing.',
     gradient: 'from-teal-600 to-teal-800',
   },
   {
     icon: Eye,
-    title: 'Personally verified',
-    text: 'We check every listing and verify every contact number before it goes live. Many properties we visit in person.',
+    title: 'Checked, and we show our work',
+    text: 'We verify contact numbers and review listings before they go live — and each listing shows you exactly what was checked.',
     gradient: 'from-emerald-600 to-teal-700',
   },
   {
@@ -53,7 +71,7 @@ export function FoundingLandlordCta() {
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
               We&apos;re building Sri Lanka&apos;s most trusted rental marketplace — and we&apos;re
-              starting honestly: no fake counts, no fake reviews. Just verified homes and
+              starting honestly: no fake counts, no fake reviews. Checked homes and
               direct contact. Join at the start and help set the standard.
             </p>
           </div>

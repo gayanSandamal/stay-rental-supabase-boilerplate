@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
-import { ShieldCheck, Mail, Phone, Gift } from 'lucide-react';
+import { ShieldCheck, Mail, Phone } from 'lucide-react';
 import { formatWhatsAppDisplay, getWhatsAppSupportNumber } from '@/lib/site-config';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { EasyRentMark } from '@/components/brand/easy-rent-logo';
@@ -75,20 +75,26 @@ export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                 )}
               </h3>
               <p className="text-slate-400 mt-2 text-base max-w-md">
+                {/* "Every listing is verified … before it goes live" was not
+                    true: autoPublishWhatsAppIntakes is ON while
+                    enableListingModeration is OFF, so listings can publish
+                    without the checks. Say what we actually do, and let the
+                    per-listing badge carry the specifics. */}
                 {isFeatureEnabled('showFoundingStageCopy')
                   ? isLandlord
-                    ? 'List free as a founding landlord — we verify every listing and tenants contact you directly.'
-                    : 'Every listing is verified and every contact number checked before it goes live. No scams, no surprises.'
+                    ? 'List free as a founding landlord — tenants call or WhatsApp you directly.'
+                    : 'We verify contact numbers and check listings, and every listing shows you what was checked.'
                   : isLandlord
-                    ? 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'
-                    : 'Join thousands of renters who found verified, affordable rentals through Easy Rent.'}
+                    ? 'Manage your listings in one place and let qualified tenants contact you directly.'
+                    : 'Find checked, affordable mid- to long-term rentals and deal with the owner directly.'}
               </p>
-              {pricingEnabled && (
-                <p className="text-amber-300/90 mt-2 text-sm flex items-center gap-2">
-                  <Gift className="h-4 w-4" />
-                  Refer a friend — both get LKR 500 off.
-                </p>
-              )}
+              {/* The "Refer a friend — both get LKR 500 off" line lived here.
+                  There is no referral system anywhere in the codebase — no
+                  table, no column, no route, no code — so it was a promise
+                  nothing could honour. It sat behind enablePricingSection
+                  (off), meaning nobody had seen it; deleting it now costs zero,
+                  whereas leaving it makes the first act of enabling pricing the
+                  publication of an unhonourable offer. */}
             </div>
             <div className="flex flex-wrap gap-3 shrink-0">
               <Link
@@ -118,11 +124,13 @@ export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <span className="text-base font-semibold tracking-[0.2em] text-white">EASY RENT</span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-5 max-w-xs">
-              Sri Lanka&apos;s trusted, affordable platform for verified rentals. No scams. No surprises.
+              Sri Lanka&apos;s affordable platform for mid- to long-term rentals. Deal with the owner directly.
             </p>
+            {/* "Verified Landlords & Listings" as a blanket claim overstates it
+                — verification is per-listing and shown on the listing itself. */}
             <div className="flex items-center gap-2 text-xs text-emerald-400 mb-2">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Verified Landlords & Listings</span>
+              <span>Contact numbers verified</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Mail className="h-3.5 w-3.5" />

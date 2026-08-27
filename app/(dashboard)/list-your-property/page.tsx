@@ -237,8 +237,8 @@ export default async function ListYourPropertyPage() {
             </h1>
             <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
               {founding
-                ? 'Free to list, personally verified, and tenants contact you directly. No middlemen, no commissions, no scams.'
-                : 'Reach thousands of verified tenants looking for mid-to-long-term rentals in Sri Lanka. Free to list, hassle-free management.'}
+                ? 'Free to list, checked before it goes live, and tenants contact you directly. No middlemen, no commissions.'
+                : 'Reach tenants looking for mid-to-long-term rentals in Sri Lanka. Free to list, hassle-free management.'}
             </p>
 
             <div className="flex flex-wrap justify-center gap-4">
@@ -352,11 +352,18 @@ export default async function ListYourPropertyPage() {
                 <ScrollReveal>
                   <div className="mt-10 flex items-start sm:items-center gap-4 py-5 px-6 rounded-2xl bg-amber-50 border border-amber-200">
                     <Gift className="h-6 w-6 text-amber-700 shrink-0 mt-0.5 sm:mt-0" />
+                    {/* Was: "free listings forever, and a free week of Featured
+                        placement when featured spots launch." Two promises we
+                        could not keep — a perpetual pricing commitment with no
+                        record of who received it, and a giveaway of Featured,
+                        which is the LKR 500 product the model actually sells.
+                        Free LISTING is real and unlimited; free PLACEMENT is
+                        the one thing that can never be promised. */}
                     <p className="text-sm text-amber-900">
-                      <strong>Founding landlord perks:</strong> free listings
-                      forever, and a free week of Featured placement when featured
-                      spots launch. Early landlords set the standard — and get the
-                      spotlight first.
+                      <strong>Founding landlords:</strong> listing is free and
+                      unlimited, and you deal with tenants directly by phone or
+                      WhatsApp. Early landlords set the standard — and help us
+                      decide what gets built next.
                     </p>
                   </div>
                 </ScrollReveal>
@@ -495,8 +502,8 @@ export default async function ListYourPropertyPage() {
               </h2>
               <p className="text-slate-300 mb-8 text-lg max-w-xl mx-auto">
                 {founding
-                  ? "Be one of the first landlords on Sri Lanka's most transparent rental platform — free, verified, direct."
-                  : 'Join hundreds of landlords who trust Easy Rent to manage their listings and find qualified tenants.'}
+                  ? "Be one of the first landlords on Sri Lanka's most transparent rental platform — free, checked, direct."
+                  : 'Manage your listings in one place and let qualified tenants contact you directly.'}
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link
