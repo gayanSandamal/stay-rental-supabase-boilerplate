@@ -17,11 +17,10 @@ interface LoginProps {
   redirect?: string;
   priceId?: string;
   inviteId?: string;
-  plan?: string;
   signedUp?: boolean;
 }
 
-function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = '', plan = '', signedUp = false }: LoginProps) {
+function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = '', signedUp = false }: LoginProps) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     mode === 'signin' ? signIn : signUp,
     { error: '' }
@@ -48,7 +47,6 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
           <input type="hidden" name="redirect" value={redirect} />
           <input type="hidden" name="priceId" value={priceId} />
           <input type="hidden" name="inviteId" value={inviteId} />
-          <input type="hidden" name="plan" value={plan} />
 
           <div>
             <Label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -145,7 +143,7 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
               // raw, everything after its `?` is parsed as params of this page.
               href={`${mode === 'signin' ? '/sign-up' : '/sign-in'}${
                 redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''
-              }${priceId ? `&priceId=${priceId}` : ''}${plan ? `&plan=${plan}` : ''}`}
+              }${priceId ? `&priceId=${priceId}` : ''}`}
               className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-600"
             >
               {mode === 'signin' ? 'Create an account' : 'Sign in to existing account'}
@@ -166,7 +164,6 @@ function LoginWithSearchParams({ mode = 'signin' }: { mode?: 'signin' | 'signup'
       redirect={searchParams.get('redirect') ?? ''}
       priceId={searchParams.get('priceId') ?? ''}
       inviteId={searchParams.get('inviteId') ?? ''}
-      plan={searchParams.get('plan') ?? ''}
       signedUp={searchParams.get('signed_up') === '1'}
     />
   );

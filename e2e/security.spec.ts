@@ -47,6 +47,27 @@ test.describe('Security / RBAC (API)', () => {
     }
   });
 
+  test('J10 the trust fields are not writable without a session', async ({ request }) => {
+    // `verified` drives the trust badge, the verifiedOnly filter and a search
+    // ranking term; `visited` claims a human went to the property. Both are
+    // ops-only. This body deliberately carries NO `status` key — that was the
+    // exact shape that skipped every permission check.
+    const resp = await request.patch('/api/listings/1', {
+      data: { verified: true, visited: true },
+    });
+    expect([401, 403], 'anon PATCH with trust fields').toContain(resp.status());
+  });
+
+  test('J11 sign-up cannot be handed a subscription tier via the URL', async ({ request }) => {
+    // `?plan=premium` was piped into a hidden form field and straight into
+    // `subscriptionTier`, granting Premium free and forever (no expiry, so
+    // `isUserPremium` stayed true). The field must simply not exist any more.
+    const resp = await request.get('/sign-up?plan=premium');
+    expect(resp.status()).toBe(200);
+    const html = await resp.text();
+    expect(html, 'no hidden plan input may be rendered').not.toContain('name="plan"');
+  });
+
   test('A6 baseline security headers are present', async ({ request }) => {
     const resp = await request.get('/');
     const headers = resp.headers();

@@ -123,15 +123,28 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 const notReservedEmail = (email: string) => !isReservedWaEmail(email);
 const RESERVED_EMAIL_MSG = 'This email address is not available';
 
+// NOTE: `plan` is deliberately absent.
+//
+// It used to be `z.string().optional()`, piped straight from `?plan=` in the
+// URL into `subscriptionTier`. `/sign-up?plan=premium` therefore granted
+// Premium for free, with no `subscriptionExpiresAt` — so `isUserPremium` was
+// true forever. That gates exclusive-listing creation, exclusive-listing
+// visibility, unlimited saved searches and the 24h early-access head start.
+//
+// The tier is a billing outcome. It is never a signup input, and payment is
+// manual and ops-activated (see CLAUDE.md), so nothing here may set it.
+//
+// This schema is intentionally NOT `.strict()`: `validatedAction` parses over
+// FormData, and cached HTML still posting `plan=premium` must be silently
+// dropped rather than 400'd at an existing user mid-signup.
 const signUpSchema = z.object({
   email: z.string().email().refine(notReservedEmail, RESERVED_EMAIL_MSG),
   password: z.string().min(8),
   role: z.enum(['tenant', 'landlord']).optional(),
-  plan: z.string().optional(),
 });
 
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
-  const { email, password, role = 'tenant', plan } = data;
+  const { email, password, role = 'tenant' } = data;
 
   let supabase;
   try {
@@ -210,7 +223,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     email,
     authUserId: authUser.id,
     role: role as 'tenant' | 'landlord',
-    subscriptionTier: plan === 'premium' ? 'premium' : 'free',
+    subscriptionTier: 'free',
   };
 
   let createdUser: User | undefined;
@@ -224,15 +237,21 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
 
   if (existingByAuth) {
     createdUser = existingByAuth;
-    // Update role/plan if user signed up as landlord or premium (trigger uses tenant/free)
+    // The 0020 trigger already created the row as tenant/free. Reconcile the
+    // ROLE only — a landlord signup must still land as a landlord.
+    //
+    // subscriptionTier is deliberately not touched here. This branch was the
+    // second, quieter half of the free-Premium grant: it re-applied the same
+    // `plan === 'premium'` decision through an UPDATE, so fixing only the
+    // insert above would have left the hole open on every account the trigger
+    // won the race for.
     const targetRole = role as 'tenant' | 'landlord';
-    const targetTier = plan === 'premium' ? 'premium' : 'free';
-    if (existingByAuth.role !== targetRole || (existingByAuth.subscriptionTier ?? 'free') !== targetTier) {
+    if (existingByAuth.role !== targetRole) {
       await db
         .update(users)
-        .set({ role: targetRole, subscriptionTier: targetTier, updatedAt: new Date() })
+        .set({ role: targetRole, updatedAt: new Date() })
         .where(eq(users.id, existingByAuth.id));
-      createdUser = { ...existingByAuth, role: targetRole, subscriptionTier: targetTier };
+      createdUser = { ...existingByAuth, role: targetRole };
     }
   }
 
