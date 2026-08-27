@@ -481,6 +481,8 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_social_consent_granted',
   'listing_social_published',
   'listing_social_pulled',
+  // 0044 — ops confirming a takedown an API could not perform
+  'listing_social_takedown_confirmed',
 ]);
 
 // WhatsApp concierge intake statuses
@@ -607,6 +609,20 @@ export const listingSocialPosts = pgTable('listing_social_posts', {
   postedAt: timestamp('posted_at'),
   pulledAt: timestamp('pulled_at'),
   pulledBy: integer('pulled_by').references(() => users.id),
+  /**
+   * The post went live and could NOT be removed through an API, so it is STILL
+   * VISIBLE right now and only a human can take it down.
+   *
+   * `status = 'pulled'` cannot answer this on its own — it means "taken down OR
+   * marked for manual takedown", which is exactly the ambiguity that let a post
+   * stay up on Instagram while the row read as handled. Instagram and TikTok
+   * have no delete endpoint, and a Facebook delete can simply fail, so this is
+   * set from the ACTUAL result of `remove()`, never from the platform.
+   */
+  needsManualTakedown: boolean('needs_manual_takedown').notNull().default(false),
+  /** When a human confirmed they deleted it by hand. NULL while outstanding. */
+  manualTakedownAt: timestamp('manual_takedown_at'),
+  manualTakedownBy: integer('manual_takedown_by').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
