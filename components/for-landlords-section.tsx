@@ -46,9 +46,11 @@ export function ForLandlordsSection() {
               <h3 className="text-lg font-bold text-slate-900 mb-2">
                 Ops Verification
               </h3>
+              {/* "and optionally visits the property" removed — no property
+                  visit has ever happened, and nothing records one. */}
               <p className="text-slate-600 text-sm">
-                Our team verifies your listing and optionally visits the property.
-                You handle tenant contact directly.
+                Our team reviews your listing and verifies your contact number
+                before it goes live. You handle tenant contact directly.
               </p>
             </div>
           </div>

@@ -11,10 +11,15 @@ interface RejectListingModalProps {
   onClose: () => void;
 }
 
+// Each reason is emailed to the landlord verbatim (`sendListingRejectedToLandlord`
+// renders "Reason: <this>"), so every one must name something they can actually
+// fix. "Unverified ownership documents" was removed: the app has no document,
+// deed or ID upload anywhere, so it rejected a landlord for failing a step they
+// were never asked to take and could not complete. If ops genuinely doubts
+// ownership, "Violates platform policies" or "Other" (free text) covers it.
 const REJECTION_REASONS = [
   'Incomplete property information',
   'Missing or poor quality photos',
-  'Unverified ownership documents',
   'Pricing not competitive/unrealistic',
   'Property condition concerns',
   'Location details unclear',

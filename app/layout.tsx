@@ -12,7 +12,11 @@ export const metadata: Metadata = {
     default: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
     template: '%s | Easy Rent',
   },
-  description: 'Find verified mid-to-long-term rentals (1-12+ months) in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
+  // "Verified landlords, property visits" was false in both halves — no
+  // landlord KYC exists and no property has ever been visited. This string is
+  // the site-wide SEO description, so it is what Google and every social share
+  // shows.
+  description: 'Find mid-to-long-term rentals (1-12+ months) in Sri Lanka. Verified contact numbers, listings checked before they go live, and direct contact with the owner.',
   keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals'],
   openGraph: {
     type: 'website',
@@ -20,7 +24,7 @@ export const metadata: Metadata = {
     url: baseUrl,
     siteName: 'Easy Rent',
     title: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
-    description: 'Find verified mid-to-long-term rentals in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.',
+    description: 'Find mid-to-long-term rentals in Sri Lanka. Verified contact numbers and direct contact with the owner — no middlemen.',
   },
   twitter: {
     card: 'summary_large_image',

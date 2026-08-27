@@ -47,9 +47,12 @@ export async function generateMetadata({
   const title = parts.length > 0
     ? `${parts.join(' ')} | Easy Rent`
     : 'Browse Rentals in Sri Lanka';
+  // Same correction as the site-wide description in app/layout.tsx: there is no
+  // landlord KYC and no property has ever been visited. What is true is the
+  // verified contact number and the pre-publish checks.
   const description = parts.length > 0
-    ? `Find verified mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. Verified landlords, property visits, and fast viewing coordination.`
-    : 'Find verified mid-to-long-term rentals in Sri Lanka. Browse apartments, houses, and rooms. Verified landlords, property visits, and fast viewing coordination.';
+    ? `Find mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka. Verified contact numbers and direct contact with the owner — no middlemen.`
+    : 'Find mid-to-long-term rentals in Sri Lanka. Browse apartments, houses, and rooms with verified contact numbers, direct from the owner.';
 
   const canonicalParams = new URLSearchParams();
   if (city) canonicalParams.set('city', city);
