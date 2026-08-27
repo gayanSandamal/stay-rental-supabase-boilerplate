@@ -4,23 +4,10 @@ import Link from 'next/link';
 import { Building2, Home, MapPin } from 'lucide-react';
 import { ListingCard } from '@/components/listing-card';
 import type { Metadata } from 'next';
+import { isReservedSlug } from '@/lib/reserved-slugs';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
-const RESERVED_SLUGS = new Set([
-  'listings',
-  'sign-in',
-  'sign-up',
-  'dashboard',
-  'list-your-property',
-  'how-to-use',
-  'privacy-policy',
-  'terms-of-service',
-  'forgot-password',
-  'reset-password',
-  'terminal',
-  'back-office',
-]);
 
 export async function generateMetadata({
   params,
@@ -29,7 +16,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
-  if (!slug || RESERVED_SLUGS.has(slug)) return {};
+  if (!slug || isReservedSlug(slug)) return {};
 
   const landlord = await getLandlordByProfileSlugOrPublicId(slug);
   if (!landlord) return {};
@@ -69,7 +56,7 @@ export default async function LandlordProfilePage({
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
 
-  if (!slug || RESERVED_SLUGS.has(slug)) {
+  if (!slug || isReservedSlug(slug)) {
     notFound();
   }
 

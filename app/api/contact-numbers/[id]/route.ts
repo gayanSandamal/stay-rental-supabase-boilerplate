@@ -3,7 +3,7 @@ import { db } from '@/lib/db/drizzle';
 import { userContactNumbers, businessAccountMembers } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
 import { normalizePhone } from '@/lib/auth/phone-verification';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 
 export async function PUT(
   request: NextRequest,
@@ -70,7 +70,12 @@ export async function PUT(
             ? eq(userContactNumbers.businessAccountId, contactNumber.businessAccountId)
             : undefined,
           eq(userContactNumbers.phoneNumber, phoneNumber.trim()),
-          eq(userContactNumbers.id, contactNumberId)
+          // `ne`, not `eq`. This asks for "another row with this number", so
+          // the current row must be EXCLUDED — the comment above always said
+          // so, but `eq` asked for a row that is simultaneously this one and a
+          // different number, which can never match. The duplicate check has
+          // therefore never rejected anything.
+          ne(userContactNumbers.id, contactNumberId)
         ),
       });
 
