@@ -79,6 +79,24 @@ There are **two migration systems** and they are not interchangeable:
 > and demoted a WhatsApp landlord. Roles carry no other source of truth, so the
 > data was unrecoverable except by inference from `landlords` rows.
 
+> ⚠️ **`splitStatements()` mis-parses `END $$;` — prefer migrations with NO `DO` block.**
+> It sets `inDollarBlock` on a line matching `DO $$` or `AS $$`, and clears it
+> **only** on a line that is nothing but `$$` or `$$;`. `END $$;` and
+> `$$ LANGUAGE plpgsql;` do not match, so the rest of the file is emitted as one
+> statement. Measured 2026-08-27: this already affects 13 files — `0007`, `0020`,
+> `0031` and `0036` each collapse into a **single** statement.
+>
+> First runs still work, because `postgres.js` `.unsafe()` executes
+> multi-statement strings. **Replay is where it bites:** the blob is one implicit
+> transaction, the first `already exists` aborts the remainder, and the catch
+> logs `⏭ Skipped` — so a new statement added below a `DO` block in one of those
+> files never applies and the runner still reports success.
+>
+> Until it is fixed: plain `IF NOT EXISTS` DDL splits correctly and is always
+> preferred. If a `DO` block is genuinely needed, close it with a bare `$$;` on
+> its own line. Never trust "Done" for a file with a `DO` block — run
+> `pnpm db:check-drift`.
+
 - Connection: `lib/db/drizzle.ts` reads `DATABASE_URL`. **Production must use the Supabase transaction pooler (port 6543)**, not the direct connection (5432).
 - Schema lives entirely in `lib/db/schema.ts`. Core tables: `users`, `landlords`, `listings`, `listing_views`, `saved_searches`, `business_accounts`, `business_account_members`, `user_contact_numbers`, `listing_contact_numbers`, `notifications`, `password_reset_tokens`, `audit_logs`.
 - Enums: `listing_status` = `pending | active | rented | archived | rejected | expired`; `user_role`, `business_account_status`, `audit_action`.
@@ -209,6 +227,14 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
   of that table*, not just the new feature. Adding four columns to `listings` and
   deploying first is what 500'd the whole site on 2026-08-22; a feature flag does
   not protect you, because the ORM names the columns whether the flag is on or not.
+- **Then prove it with `pnpm db:check-drift`.** It compares every table, column and
+  enum value `schema.ts` declares against the live database and exits non-zero on
+  anything the code needs and the database lacks. `db:migrate-all` reporting
+  "Done" is *not* proof — it swallows `already exists` errors, and a swallowed
+  error can abort the rest of a file (see the `splitStatements` note above). This
+  check is what would have caught both the 2026-08-22 outage and the untracked
+  `0044`. It only reports the outage-causing direction; extra columns in the
+  database are ignored, because migrations here never drop anything.
 - New admin action? Add an `audit_action` enum value and log it.
 - Preserve secure, generic auth messaging (no account enumeration) on sign-in/forgot-password flows.
 - Sri Lanka context is the point: prices are LKR, locations are Sri Lankan cities/districts, and resilience fields (power/water/fiber) are first-class, not afterthoughts.

@@ -335,7 +335,15 @@ All verified directly against the code.
 
 14. **`0044_social_manual_takedown.sql` is untracked in git.** Commit it and confirm it has been applied to production before adding anything numbered higher.
 15. **Migration `0023` contains two unguarded `UPDATE`s** that replay on every `db:migrate-all` run. They are derivations rather than destruction, so they are currently safe — but do not model new migrations on that file.
-16. **`splitStatements()` in `run-all-migrations.ts`** sets `inDollarBlock` on `/DO\s+\$\$/` and only clears it on a line matching `^\s*\$\$;?\s*$`. The established convention `END $$;` does **not** match, so a DO block swallows everything to EOF. Existing files survive only because their DO block is last. **One DO block per file, and it must be last.**
+16. **`splitStatements()` in `run-all-migrations.ts`** sets `inDollarBlock` on `/DO\s+\$\$/` (and `/AS\s+\$\$/`) and only clears it on a line matching `^\s*\$\$;?\s*$`. The established convention `END $$;` does **not** match, so a DO block swallows everything to EOF.
+
+    ⚠️ **Corrected 2026-08-27 by measurement.** This entry originally said "existing files survive only because their DO block is last" and prescribed *"one DO block per file, and it must be last."* **Both halves are wrong.** 13 files have a DO block with statements after it, and 9 have **zero** bare-`$$` terminator lines — `0007_audit_log.sql`, `0020_auth_user_trigger.sql`, `0031_auth_user_trigger_hardening.sql` and `0036_listing_address_optional.sql` each collapse into a **single** statement.
+
+    They survive for a different reason: `postgres.js` `.unsafe()` uses the simple query protocol, which executes a multi-statement string happily. First runs work.
+
+    The real hazard is **replay**. The swallowed blob is one implicit transaction, so the first `already exists` error aborts everything after it, and the catch (`already exists` / `duplicate` / `multiple primary keys`) logs `⏭ Skipped` and moves on. A genuinely new statement added below a DO block in one of those files silently never applies — and the runner reports success.
+
+    Practical rule until `splitStatements` is fixed: **prefer migrations with no DO block at all** (plain `IF NOT EXISTS` DDL splits correctly), and if one is unavoidable, terminate it with a bare `$$;` on its own line rather than `END $$;`. Do not trust a "Done" for a file containing a DO block — verify with `pnpm db:check-drift`.
 
 ---
 
