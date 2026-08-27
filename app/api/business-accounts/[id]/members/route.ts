@@ -17,12 +17,28 @@ export async function POST(
     const resolvedParams = params instanceof Promise ? await params : params;
     const businessAccountId = Number(resolvedParams.id);
 
+    // Every other dynamic route validates this; these two did not. `Number('x')`
+    // is NaN, which reaches Drizzle and fails as a 500 rather than a 400.
+    if (isNaN(businessAccountId) || businessAccountId <= 0) {
+      return NextResponse.json({ error: 'Invalid business account ID' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { userId, role = 'member' } = body;
 
-    if (!userId) {
+    if (!userId || typeof userId !== 'number' || !Number.isInteger(userId) || userId <= 0) {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { error: 'A valid user ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // `role` was written straight through from the body. It drives
+    // business-account-scoped permissions, so it must be one of the three the
+    // rest of the app understands — not an arbitrary string.
+    if (!['owner', 'admin', 'member'].includes(role)) {
+      return NextResponse.json(
+        { error: 'Role must be one of: owner, admin, member' },
         { status: 400 }
       );
     }
