@@ -33,7 +33,9 @@ const RENTER_PLANS = [
       'Exclusive listings first',
     ],
     cta: 'Upgrade to Premium',
-    href: '/sign-up?plan=premium',
+    // Not `?plan=premium` — the tier is a billing outcome, activated manually by
+    // ops after payment, never a signup query parameter.
+    href: '/sign-up',
     highlighted: true,
     icon: Zap,
   },

@@ -20,6 +20,7 @@ import { photoCap } from '@/lib/images/cap';
 import { isModerationConfigured } from '@/lib/moderation/config';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
+import { bodyTouchesTrustFields, patchListingSchema } from '@/lib/listings/patch-schema';
 
 export async function PATCH(
   request: NextRequest,
@@ -38,7 +39,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid listing ID' }, { status: 400 });
     }
 
-    const body = await request.json();
+    const parsed = patchListingSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
     const {
       status,
       verified,
@@ -47,7 +54,7 @@ export async function PATCH(
       visitedAt,
       rejectionReason,
       rejectedAt,
-    } = body;
+    } = parsed.data;
 
     // Verify listing exists
     const listing = await db.query.listings.findFirst({
@@ -67,6 +74,15 @@ export async function PATCH(
 
     if (!isAdminOrOps && !isOwner) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Reject the whole request rather than silently dropping the field, so a
+    // caller is never told "ok" for a badge it did not get.
+    if (!isAdminOrOps && bodyTouchesTrustFields(parsed.data)) {
+      return NextResponse.json(
+        { error: 'Only ops or admin can set verification status' },
+        { status: 403 }
+      );
     }
 
     // Landlords can only:
@@ -112,31 +128,36 @@ export async function PATCH(
       }
     }
 
-    if (verified !== undefined) {
-      updates.verified = verified;
-      if (verified && !verifiedAt) {
-        updates.verifiedAt = new Date();
-        updates.verifiedBy = user.id;
-      } else if (!verified) {
-        updates.verifiedAt = null;
-        updates.verifiedBy = null;
-      } else if (verifiedAt) {
-        updates.verifiedAt = new Date(verifiedAt);
-        updates.verifiedBy = user.id;
+    // Second layer. The 403 above already rejected these for non-ops callers;
+    // this makes it structurally impossible for a future edit to the guard
+    // above to re-open the hole without also deleting this condition.
+    if (isAdminOrOps) {
+      if (verified !== undefined) {
+        updates.verified = verified;
+        if (verified && !verifiedAt) {
+          updates.verifiedAt = new Date();
+          updates.verifiedBy = user.id;
+        } else if (!verified) {
+          updates.verifiedAt = null;
+          updates.verifiedBy = null;
+        } else if (verifiedAt) {
+          updates.verifiedAt = new Date(verifiedAt);
+          updates.verifiedBy = user.id;
+        }
       }
-    }
 
-    if (visited !== undefined) {
-      updates.visited = visited;
-      if (visited && !visitedAt) {
-        updates.visitedAt = new Date();
-        updates.visitedBy = user.id;
-      } else if (!visited) {
-        updates.visitedAt = null;
-        updates.visitedBy = null;
-      } else if (visitedAt) {
-        updates.visitedAt = new Date(visitedAt);
-        updates.visitedBy = user.id;
+      if (visited !== undefined) {
+        updates.visited = visited;
+        if (visited && !visitedAt) {
+          updates.visitedAt = new Date();
+          updates.visitedBy = user.id;
+        } else if (!visited) {
+          updates.visitedAt = null;
+          updates.visitedBy = null;
+        } else if (visitedAt) {
+          updates.visitedAt = new Date(visitedAt);
+          updates.visitedBy = user.id;
+        }
       }
     }
 

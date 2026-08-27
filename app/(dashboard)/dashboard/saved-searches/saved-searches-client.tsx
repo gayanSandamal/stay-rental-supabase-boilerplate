@@ -128,7 +128,7 @@ export function SavedSearchesClient({
         <Card className="border-teal-200 bg-teal-50/50">
           <CardContent className="py-4">
             <p className="text-sm text-teal-800">
-              Upgrade to <Link href="/sign-up?plan=premium" className="font-semibold underline">Premium</Link> for unlimited saved alerts.
+              Upgrade to <Link href="/sign-up" className="font-semibold underline">Premium</Link> for unlimited saved alerts.
             </p>
           </CardContent>
         </Card>
