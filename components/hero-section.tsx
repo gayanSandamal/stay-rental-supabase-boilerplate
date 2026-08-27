@@ -70,14 +70,19 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
       {/* ── Floating glass feature cards (desktop only) ── */}
       <FloatingCard
         icon={ShieldCheck}
-        label="Verified Listings"
-        value="Platform Verified"
+        label="Every listing"
+        value="Contacts verified"
         className="top-[22%] left-[6%] animate-float-slow"
         />
+      {/* Neither branch may state a promise or a count we cannot stand behind.
+          "List Free, Forever" was a perpetual pricing commitment with nothing
+          recording who it was made to, and "150+ Properties" was a fabricated
+          number — a landmine, because turning showFoundingStageCopy off would
+          publish it instantly. Wire a real count here before claiming one. */}
       <FloatingCard
         icon={Building2}
         label={foundingMode ? 'Founding Landlords' : 'Across Sri Lanka'}
-        value={foundingMode ? 'List Free, Forever' : '150+ Properties'}
+        value={foundingMode ? 'Free to list' : 'Direct from owners'}
         className="top-[18%] right-[5%] animate-float-reverse"
         />
       <FloatingCard

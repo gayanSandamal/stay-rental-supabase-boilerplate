@@ -20,8 +20,11 @@ const STEPS = [
     icon: Phone,
     num: '02',
     title: 'Contact the Owner',
+    // Contact numbers are fully public — no sign-in, no reveal endpoint. The
+    // old copy ("Sign in to see verified contact numbers") described a gate
+    // that does not exist and asked for a signup the product does not need.
     description:
-      'Sign in to see verified contact numbers. Call directly or message via WhatsApp — no middlemen.',
+      'Call the owner directly or message them on WhatsApp. No sign-in, no middlemen, no booking fees.',
     gradient: 'from-amber-500 to-amber-700',
     ringColor: 'ring-amber-400/40',
     accentBg: 'bg-amber-500',

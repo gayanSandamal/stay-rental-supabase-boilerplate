@@ -1,37 +1,41 @@
 import { Star } from 'lucide-react';
 import { ScrollReveal } from './scroll-reveal';
 
-const TESTIMONIALS = [
-  {
-    name: 'Sarah Mendis',
-    role: 'Software Developer',
-    location: 'Colombo 05',
-    rating: 5,
-    text: 'Found my perfect apartment in just 2 weeks. The verification process gave me real confidence, and I contacted the landlord directly — moved in within a month.',
-    initials: 'SM',
-    gradient: 'from-teal-600 to-teal-800',
-  },
-  {
-    name: 'David Karunaratne',
-    role: 'Expat Professional',
-    location: 'Kandy',
-    rating: 5,
-    text: 'The power backup and fiber internet filters are genuinely game-changing. I found a place with solar and SLT fiber in one search — could not have done it anywhere else.',
-    initials: 'DK',
-    gradient: 'from-emerald-600 to-teal-700',
-  },
-  {
-    name: 'Priya Senanayake',
-    role: 'Postgraduate Student',
-    location: 'Nugegoda',
-    rating: 5,
-    text: 'As a student on a budget I was worried about scams. Every listing here is verified and affordable — I rented with full confidence. Direct contact made it so easy.',
-    initials: 'PS',
-    gradient: 'from-amber-500 to-amber-700',
-  },
-];
+type Testimonial = {
+  name: string;
+  role: string;
+  location: string;
+  rating: number;
+  text: string;
+  initials: string;
+  gradient: string;
+};
+
+/**
+ * EMPTY ON PURPOSE — do not repopulate with examples.
+ *
+ * This held three invented renters ("Sarah Mendis", "David Karunaratne",
+ * "Priya Senanayake") with invented roles, locations, 5-star ratings and
+ * quotes, under a "Real Stories" badge. They were never real people and no
+ * renter has ever left a review.
+ *
+ * It was invisible only because `showFoundingStageCopy` is on and
+ * `app/(dashboard)/page.tsx` renders <FoundingLandlordCta /> instead. Flipping
+ * that flag — a one-click DB override in Back Office → Settings — would have
+ * published fabricated customer reviews. That is not a copy problem, it is
+ * passing off invented endorsements as genuine, and it directly contradicts
+ * this site's own promise of "no fake counts, no fake reviews".
+ *
+ * The layout below is kept so real testimonials can be dropped straight in.
+ * Add an entry ONLY with the named person's permission. Until then the section
+ * renders nothing, which is the honest state and makes the flag safe to flip.
+ */
+const TESTIMONIALS: Testimonial[] = [];
 
 export function Testimonials() {
+  // No real testimonials yet — render nothing rather than anything invented.
+  if (TESTIMONIALS.length === 0) return null;
+
   return (
     <section className="py-20 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px divider-gradient" />
@@ -48,7 +52,7 @@ export function Testimonials() {
               <span className="gradient-text">Perfect Home</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-              Thousands of Sri Lankan renters have moved in stress-free. Here are a few of their stories.
+              Renters who found a home through Easy Rent, in their own words.
             </p>
           </div>
         </ScrollReveal>
