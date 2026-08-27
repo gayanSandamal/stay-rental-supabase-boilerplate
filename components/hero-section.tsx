@@ -116,9 +116,12 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
 
         {/* 3 · Subtitle */}
         <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
-          Affordable, verified rentals for{' '}
+          {/* Was "verified landlords, no scams" — no landlord has ever been
+              KYC-verified (there is no document or ID upload anywhere). What is
+              verified is the CONTACT NUMBER, by WhatsApp OTP. */}
+          Affordable rentals for{' '}
           <span className="text-amber-300 font-semibold">renters</span>.
-          Mid- to long-term — <span className="text-teal-300 font-semibold">verified</span> landlords, no scams.
+          Mid- to long-term — <span className="text-teal-300 font-semibold">verified</span> contact numbers, straight from the owner.
         </p>
 
         {/* 4 · Search bar with breathing glow */}

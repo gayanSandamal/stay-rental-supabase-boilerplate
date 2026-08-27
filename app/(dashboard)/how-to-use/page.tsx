@@ -130,8 +130,11 @@ const LANDLORD_STEPS: Step[] = [
   {
     num: '3',
     title: 'Verification',
+    // "and may visit the property" removed — no property visit has ever
+    // happened. What actually runs: WhatsApp OTP on the contact number,
+    // automated text and image checks, then an ops review.
     description:
-      'Our team reviews your listing and may visit the property. Once approved, it goes live and appears in search results.',
+      'We verify your contact number and run automated checks on your listing, then our team reviews it. Once approved, it goes live in search results.',
     icon: Shield,
     optional: false,
     illustration: VerificationIllustration,
@@ -139,8 +142,17 @@ const LANDLORD_STEPS: Step[] = [
   {
     num: '4',
     title: 'Manage your listing',
+    // This step used to instruct landlords to "renew when your listing expires
+    // (30 days)" and "mark as rented when you find a tenant". Neither is
+    // possible for a landlord today: the only renewal path is `bulk-renew`,
+    // hard-gated to the Agency plan, and `rented` can only be set from the
+    // ops-only approval form. Telling someone to do something the UI will not
+    // let them do is worse than saying nothing.
+    //
+    // Restore both sentences when the lifecycle work ships (free renewal for
+    // every tier, a Mark as Rented button, and the WhatsApp RENTED command).
     description:
-      'View status, edit details, and renew when your listing expires (30 days). Mark as rented when you find a tenant.',
+      'View status, edit details, and see how your listing is performing. Listings run for 30 days — contact us if you need yours extended or taken down.',
     icon: Eye,
     optional: false,
     illustration: ManageListingIllustration,
@@ -439,7 +451,7 @@ export default async function HowToUsePage() {
                       </div>
                       <div>
                         <h2 className="text-xl font-bold text-white">For Renters</h2>
-                        <p className="text-sm text-teal-100/80">Find verified rentals, no middlemen</p>
+                        <p className="text-sm text-teal-100/80">Find a rental, contact the owner directly</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">

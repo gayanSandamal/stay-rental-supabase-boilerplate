@@ -55,7 +55,7 @@ const benefits = [
     icon: Users,
     title: 'Dedicated Ops Support',
     description:
-      'Our ops team verifies your listing, optionally visits the property, and publishes it. You handle tenant contact directly.',
+      'Our ops team verifies your contact number, checks your listing, and publishes it. You handle tenant contact directly.',
     tag: 'Verification',
     gradient: 'from-amber-500 to-amber-700',
     tagColor: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -121,7 +121,7 @@ const restOfSteps = [
     number: '3',
     title: 'We Verify & Publish',
     description:
-      'Our ops team reviews your listing, optionally visits the property, and publishes it.',
+      'Our ops team reviews your listing, verifies your contact number, and publishes it.',
   },
   {
     number: '4',

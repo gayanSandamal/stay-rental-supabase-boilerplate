@@ -5,10 +5,17 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'Verified Listings',
+    title: 'Checked Before It Goes Live',
+    // Was: "Every landlord provides ownership documents and a government-issued
+    // ID. Our ops team cross-checks before publishing." None of that exists —
+    // there is no document, ID or deed upload anywhere in the app, and
+    // `landlords.kycVerified` is written only by the seed scripts. What DOES
+    // happen: WhatsApp OTP verification of the contact number, automated text
+    // and image moderation, unverified numbers stripped from descriptions, and
+    // an ops review before publishing.
     description:
-      'Every landlord provides ownership documents and a government-issued ID. Our ops team cross-checks before publishing.',
-    tag: 'Zero Scams',
+      'Contact numbers are verified by WhatsApp, and every listing passes automated checks and an ops review before it publishes.',
+    tag: 'Scam Resistant',
     gradient: 'from-emerald-600 to-teal-700',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },

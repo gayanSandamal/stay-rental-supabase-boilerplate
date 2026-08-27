@@ -40,7 +40,7 @@ export async function FeaturedListings() {
                 {hasFeatured
                   ? 'Top placement for maximum visibility'
                   : isVerified
-                  ? 'Verified and site-visited by our team'
+                  ? 'Checked by our team before going live'
                   : 'Explore available rentals across Sri Lanka'}
               </p>
             </div>
