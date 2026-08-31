@@ -47,9 +47,24 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /*
+   * Bounded: this runs on every non-asset request (see matcher), so an
+   * unbounded hang here takes down the whole site, not one page. On timeout we
+   * fall through as anonymous rather than hanging — a protected route then
+   * redirects to sign-in, which is a recoverable outcome.
+   */
+  let user = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('middleware auth.getUser exceeded 8000ms')), 8000)
+      ),
+    ]);
+    user = result.data.user;
+  } catch (err) {
+    console.error('[middleware] auth lookup failed or timed out:', err);
+  }
 
   if (isProtectedRoute && !user) {
     return signInWithRedirect();

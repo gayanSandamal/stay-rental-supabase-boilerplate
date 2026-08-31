@@ -11,6 +11,9 @@ import {
 } from './schema';
 import { createClient } from '@/lib/supabase/server';
 import { businessAccountMembers } from './schema';
+import { withDeadline } from '@/lib/observability/phase-timer';
+
+const AUTH_DEADLINE_MS = 10_000;
 
 export async function getUser() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,7 +27,26 @@ export async function getUser() {
 
   const supabase = await createClient();
 
-  const { data: { user: authUser } } = await supabase.auth.getUser();
+  /*
+   * Bounded, because this is a network call on EVERY authenticated render and
+   * nothing else limits it. An unbounded hang here is invisible: no error, no
+   * stack, just a function that never returns until the platform kills it at
+   * 300s and the operator sees a blank page. Failing closed (null -> sign-in)
+   * is worse than succeeding but far better than hanging, and the log line
+   * says which it was.
+   */
+  let authUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'];
+  try {
+    const result = await withDeadline(
+      'supabase.auth.getUser',
+      supabase.auth.getUser(),
+      AUTH_DEADLINE_MS
+    );
+    authUser = result.data.user;
+  } catch (err) {
+    console.error('[getUser] auth lookup failed or timed out:', err);
+    return null;
+  }
 
   if (!authUser) {
     return null;

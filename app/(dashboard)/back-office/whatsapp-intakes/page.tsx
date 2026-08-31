@@ -17,9 +17,16 @@ import {
   parseListParams,
   type RawSearchParams,
 } from '@/lib/back-office/list-params';
+import { phase } from '@/lib/observability/phase-timer';
 import { IntakeList, type IntakeRow } from './intake-list';
 
 export const dynamic = 'force-dynamic';
+/*
+ * Fail in 60s rather than the platform default of 300. A back-office page
+ * that hangs for five minutes is indistinguishable from a dead site to the
+ * operator, and it burns a full function invocation to tell them nothing.
+ */
+export const maxDuration = 60;
 
 const BASE_PATH = '/back-office/whatsapp-intakes';
 
@@ -122,13 +129,13 @@ export default async function WhatsAppIntakesPage({
    * a capped page. The old screen derived its sense of volume from a
    * `limit(100)` list, so it under-reported exactly when the queue was worst.
    */
-  const [statusCounts, pastCapRows] = await Promise.all([
+  const [statusCounts, pastCapRows] = await phase('intakes:counts', () => Promise.all([
     db
       .select({ status: whatsappIntakes.status, n: count() })
       .from(whatsappIntakes)
       .groupBy(whatsappIntakes.status),
     db.select({ n: count() }).from(whatsappIntakes).where(pastCapCondition()),
-  ]);
+  ]));
 
   const byStatus = countsByKey(statusCounts);
   const pastCap = Number(pastCapRows[0]?.n ?? 0);
@@ -149,7 +156,7 @@ export default async function WhatsAppIntakesPage({
       ? [asc(whatsappIntakes.lastMessageAt)]
       : [desc(whatsappIntakes.lastMessageAt)];
 
-  const [rows, totalRows] = await Promise.all([
+  const [rows, totalRows] = await phase('intakes:rows', () => Promise.all([
     db.query.whatsappIntakes.findMany({
       where,
       orderBy,
@@ -157,7 +164,7 @@ export default async function WhatsAppIntakesPage({
       offset: params.offset,
     }),
     db.select({ n: count() }).from(whatsappIntakes).where(where),
-  ]);
+  ]));
 
   const total = Number(totalRows[0]?.n ?? 0);
 
