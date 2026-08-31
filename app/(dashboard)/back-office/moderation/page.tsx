@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { and, count, desc, eq, ilike, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
@@ -55,11 +55,6 @@ const neverCheckedCondition = () =>
 
 /** Queued for over half an hour means the sweeper is not draining. */
 const STUCK_MINUTES = 30;
-const stuckCondition = () =>
-  and(
-    eq(listings.moderationStatus, 'queued'),
-    lt(listings.updatedAt, new Date(Date.now() - STUCK_MINUTES * 60 * 1000))
-  )!;
 
 function tabCondition(tab: string): SQL | undefined {
   switch (tab) {
@@ -103,41 +98,63 @@ export default async function ModerationQueuePage({
     defaultTab: 'held',
   });
 
-  const [coverage, neverCheckedRows, stuckRows] = await phase('moderation:counts', () => Promise.all([
+  /*
+   * ONE query, not three concurrent ones.
+   *
+   * On Vercel the pool is max: 1 (see lib/db/drizzle.ts) and the connection is
+   * Supabase's transaction pooler. Pipelining concurrent queries onto a single
+   * PgBouncer-backed connection wedges: the request never returns and the
+   * platform kills it. Concurrency also bought nothing here — one connection
+   * serialises them regardless — while costing three round trips to a pooler in
+   * ap-southeast-1. FILTER aggregates get every count in a single trip.
+   */
+  const [tallies] = await phase('moderation:counts', () =>
     db
-      .select({ status: listings.moderationStatus, n: count() })
+      .select({
+        held: sql<number>`count(*) filter (where ${listings.moderationStatus} = 'held')`,
+        queued: sql<number>`count(*) filter (where ${listings.moderationStatus} in ('queued','running'))`,
+        errored: sql<number>`count(*) filter (where ${listings.moderationStatus} = 'error')`,
+        passed: sql<number>`count(*) filter (where ${listings.moderationStatus} = 'passed')`,
+        neverChecked: sql<number>`count(*) filter (where ${listings.moderationStatus} = 'skipped' and ${listings.status} in ('active','pending'))`,
+        // Cutoff computed in SQL: a JS Date does not bind inside a raw sql
+        // template, and updated_at is `timestamp without time zone` holding
+        // UTC, so the comparison has to be made in UTC too.
+        stuck: sql<number>`count(*) filter (where ${listings.moderationStatus} = 'queued' and ${listings.updatedAt} < (now() at time zone 'utc') - make_interval(mins => ${STUCK_MINUTES}))`,
+        all: sql<number>`count(*)`,
+      })
       .from(listings)
-      .groupBy(listings.moderationStatus),
-    db.select({ n: count() }).from(listings).where(neverCheckedCondition()),
-    db.select({ n: count() }).from(listings).where(stuckCondition()),
-  ]));
+  );
 
-  const byStatus = countsByKey(coverage);
-  // True aggregates. The old page derived `neverChecked.length` from a
-  // `limit(50)` query, so past 50 the count under-reported its own severity.
-  const neverChecked = Number(neverCheckedRows[0]?.n ?? 0);
-  const stuck = Number(stuckRows[0]?.n ?? 0);
+  // True aggregates over the whole table. The old page derived
+  // `neverChecked.length` from a `limit(50)` query, so past 50 the count
+  // under-reported its own severity.
+  const neverChecked = Number(tallies?.neverChecked ?? 0);
+  const stuck = Number(tallies?.stuck ?? 0);
 
   const counts = {
-    held: byStatus.held ?? 0,
+    held: Number(tallies?.held ?? 0),
     never_checked: neverChecked,
-    queued: (byStatus.queued ?? 0) + (byStatus.running ?? 0),
-    error: byStatus.error ?? 0,
-    passed: byStatus.passed ?? 0,
-    all: Object.values(byStatus).reduce((a, b) => a + b, 0),
+    queued: Number(tallies?.queued ?? 0),
+    error: Number(tallies?.errored ?? 0),
+    passed: Number(tallies?.passed ?? 0),
+    all: Number(tallies?.all ?? 0),
   };
 
   const where = and(tabCondition(params.tab), searchCondition(params.q));
 
-  const [rows, totalRows] = await phase('moderation:rows', () => Promise.all([
+  // Sequential, for the same reason: never two queries in flight on one pooled
+  // connection.
+  const rows = await phase('moderation:rows', () =>
     db.query.listings.findMany({
       where,
       orderBy: [desc(listings.moderatedAt), desc(listings.createdAt)],
       limit: params.perPage,
       offset: params.offset,
-    }),
-    db.select({ n: count() }).from(listings).where(where),
-  ]));
+    })
+  );
+  const totalRows = await phase('moderation:total', () =>
+    db.select({ n: count() }).from(listings).where(where)
+  );
 
   const total = Number(totalRows[0]?.n ?? 0);
 

@@ -98,16 +98,6 @@ function searchCondition(q: string): SQL | undefined {
   return or(...clauses);
 }
 
-/** Distinct listings matching a post-level condition. */
-async function countListings(condition: SQL | undefined): Promise<number> {
-  const rows = await db
-    .select({ n: sql<number>`count(distinct ${listingSocialPosts.listingId})` })
-    .from(listingSocialPosts)
-    .leftJoin(listings, eq(listingSocialPosts.listingId, listings.id))
-    .where(condition);
-  return Number(rows[0]?.n ?? 0);
-}
-
 export default async function SocialPage({
   searchParams,
 }: {
@@ -155,29 +145,53 @@ export default async function SocialPage({
   const search = searchCondition(params.q);
   const where = and(tabCondition(params.tab), search);
 
-  const [counts, total, pageRows] = await Promise.all([
-    Promise.all(
-      TABS.map(async (tab) => [
-        tab,
-        await countListings(and(tabCondition(tab), search)),
-      ] as const)
-    ).then((entries) => Object.fromEntries(entries) as Record<string, number>),
-    countListings(where),
-    // Page over LISTINGS, not posts: the unit of work here is a listing, and a
-    // page that cut a listing's platforms in half would be unreadable.
-    db
-      .select({
-        listingId: listingSocialPosts.listingId,
-        lastActivity: max(listingSocialPosts.createdAt),
-      })
-      .from(listingSocialPosts)
-      .leftJoin(listings, eq(listingSocialPosts.listingId, listings.id))
-      .where(where)
-      .groupBy(listingSocialPosts.listingId)
-      .orderBy(desc(max(listingSocialPosts.createdAt)))
-      .limit(params.perPage)
-      .offset(params.offset),
-  ]);
+  /*
+   * Every tab count in ONE query, and nothing concurrent.
+   *
+   * This was seven queries, six of them fired together. On Vercel the pool is
+   * max: 1 against Supabase's transaction pooler, and pipelining concurrent
+   * queries onto a single PgBouncer-backed connection wedges the request until
+   * the platform kills it. Counting distinct listings per tab with FILTER gets
+   * all six in one trip to ap-southeast-1.
+   */
+  const [tallies] = await db
+    .select({
+      failed: sql<number>`count(distinct ${listingSocialPosts.listingId}) filter (where ${listingSocialPosts.status} = 'failed')`,
+      queued: sql<number>`count(distinct ${listingSocialPosts.listingId}) filter (where ${listingSocialPosts.status} in ('queued','running'))`,
+      posted: sql<number>`count(distinct ${listingSocialPosts.listingId}) filter (where ${listingSocialPosts.status} = 'posted' and (${listingSocialPosts.remotePostId} is null or ${listingSocialPosts.remotePostId} not like ${DRY_RUN_ID_PREFIX + '%'}))`,
+      dryrun: sql<number>`count(distinct ${listingSocialPosts.listingId}) filter (where ${listingSocialPosts.remotePostId} like ${DRY_RUN_ID_PREFIX + '%'})`,
+      drafts: sql<number>`count(distinct ${listingSocialPosts.listingId}) filter (where ${listingSocialPosts.platform} = 'facebook_group')`,
+      all: sql<number>`count(distinct ${listingSocialPosts.listingId})`,
+    })
+    .from(listingSocialPosts)
+    .leftJoin(listings, eq(listingSocialPosts.listingId, listings.id))
+    .where(search);
+
+  const counts: Record<string, number> = {
+    failed: Number(tallies?.failed ?? 0),
+    queued: Number(tallies?.queued ?? 0),
+    posted: Number(tallies?.posted ?? 0),
+    dryrun: Number(tallies?.dryrun ?? 0),
+    drafts: Number(tallies?.drafts ?? 0),
+    all: Number(tallies?.all ?? 0),
+  };
+
+  const total = counts[params.tab] ?? counts.all;
+
+  // Page over LISTINGS, not posts: the unit of work here is a listing, and a
+  // page that cut a listing's platforms in half would be unreadable.
+  const pageRows = await db
+    .select({
+      listingId: listingSocialPosts.listingId,
+      lastActivity: max(listingSocialPosts.createdAt),
+    })
+    .from(listingSocialPosts)
+    .leftJoin(listings, eq(listingSocialPosts.listingId, listings.id))
+    .where(where)
+    .groupBy(listingSocialPosts.listingId)
+    .orderBy(desc(max(listingSocialPosts.createdAt)))
+    .limit(params.perPage)
+    .offset(params.offset);
 
   const listingIds = pageRows.map((r) => r.listingId);
 

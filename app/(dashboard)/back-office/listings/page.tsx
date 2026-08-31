@@ -105,28 +105,32 @@ export default async function BackOfficeListingsPage({
    * as a full card. That degrades until it times out; it is the one item here
    * that was a live bug rather than a scaling concern.
    */
-  const [rows, totalRows, statusCounts, account] = await Promise.all([
-    db
-      .select()
-      .from(listings)
-      .where(where)
-      .orderBy(desc(listings.createdAt))
-      .limit(params.perPage)
-      .offset(params.offset),
-    db.select({ n: count() }).from(listings).where(where),
-    db
-      .select({ status: listings.status, n: count() })
-      .from(listings)
-      .where(baseWhere)
-      .groupBy(listings.status),
-    Number.isFinite(businessAccountId)
-      ? db
-          .select({ name: businessAccounts.name })
-          .from(businessAccounts)
-          .where(eq(businessAccounts.id, businessAccountId))
-          .limit(1)
-      : Promise.resolve([]),
-  ]);
+  /*
+   * Sequential, never concurrent: on Vercel the pool is max: 1 against
+   * Supabase's transaction pooler, and pipelining concurrent queries onto one
+   * PgBouncer-backed connection wedges the request until the platform kills it.
+   * With a single connection they serialise anyway, so nothing is lost.
+   */
+  const rows = await db
+    .select()
+    .from(listings)
+    .where(where)
+    .orderBy(desc(listings.createdAt))
+    .limit(params.perPage)
+    .offset(params.offset);
+  const totalRows = await db.select({ n: count() }).from(listings).where(where);
+  const statusCounts = await db
+    .select({ status: listings.status, n: count() })
+    .from(listings)
+    .where(baseWhere)
+    .groupBy(listings.status);
+  const account = Number.isFinite(businessAccountId)
+    ? await db
+        .select({ name: businessAccounts.name })
+        .from(businessAccounts)
+        .where(eq(businessAccounts.id, businessAccountId))
+        .limit(1)
+    : [];
 
   const total = Number(totalRows[0]?.n ?? 0);
   const counts = countsByKey(statusCounts);
