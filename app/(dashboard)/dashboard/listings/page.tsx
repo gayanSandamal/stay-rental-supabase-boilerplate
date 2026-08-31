@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, Shield, MapPin, Eye, Building2, User, Calendar, CheckCircle2 } from 'lucide-react';
 import { ListingActionsDropdown } from './listing-actions-dropdown';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db/drizzle';
-import { businessAccounts, users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { getDailyViewCounts, type DailyViewBucket } from '@/lib/db/queries';
+import { ViewSparkline } from '@/components/view-sparkline';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 // Force dynamic rendering to avoid build-time issues
 export const dynamic = 'force-dynamic';
@@ -35,48 +36,46 @@ export default async function ListingsPage(props: {
 
   const listings = await getListingsForOps(filters);
 
-  // Fetch additional data for business accounts and creators
-  const listingsWithPublisher = await Promise.all(
-    listings.map(async (listing) => {
-      let publisherName = listing.landlordUserName || listing.landlordUserEmail || 'Unknown';
-      let publisherType: 'individual' | 'business' = 'individual';
-      let teamMemberName: string | null = null;
-      let businessAccountName: string | null = null;
-
-      // Check if listing was created by a business account
-      if (listing.businessAccountId) {
-        try {
-          const businessAccount = await db.query.businessAccounts.findFirst({
-            where: eq(businessAccounts.id, listing.businessAccountId),
-          });
-          
-          if (businessAccount) {
-            publisherType = 'business';
-            businessAccountName = businessAccount.name;
-            publisherName = businessAccount.name;
-
-            // Get the team member who created it
-            if (listing.createdBy) {
-              const creator = await db.query.users.findFirst({
-                where: eq(users.id, listing.createdBy),
-              });
-              teamMemberName = creator?.name || creator?.email || null;
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching business account:', error);
-        }
-      }
-
-      return {
-        ...listing,
-        publisherName,
-        publisherType,
-        teamMemberName,
-        businessAccountName,
-      };
-    })
+  /*
+   * Publisher names for the whole page in three queries, not two per row.
+   *
+   * This was a `Promise.all` over the listings, each iteration fetching its own
+   * business account and then its own creator — 50 listings could fire 100
+   * concurrent queries onto the `max: 1` pool (lib/db/drizzle.ts) behind
+   * Supabase's transaction pooler, which is the wedge commit a3ac4f9 removed
+   * from the back office and defect D2 removed from the analytics page. The
+   * resolver is shared with the two public search paths, which had their own
+   * copies of the same fan-out.
+   */
+  const publishers = await resolvePublishers(
+    listings,
+    (listing) => listing.landlordUserName || listing.landlordUserEmail || 'Unknown'
   );
+  const listingsWithPublisher = listings.map((listing) => ({
+    ...listing,
+    ...(publishers.get(listing.id) ?? {
+      publisherName: 'Unknown',
+      publisherType: 'individual' as const,
+      teamMemberName: null,
+      businessAccountName: null,
+    }),
+  }));
+
+  /*
+   * View counts for EVERY tier, from one grouped query for the whole page.
+   *
+   * A platform whose model is "free unlimited listings, paid visibility" was
+   * withholding the evidence that listing here works at all — a free landlord
+   * saw inventory counts and nothing else. The deep comparisons stay on the
+   * paid analytics page; the existence of numbers is not what we sell.
+   */
+  const showViewCounts = isFeatureEnabled('showViewCountsToAllTiers');
+  const viewsByListing: Map<number, DailyViewBucket[]> = showViewCounts
+    ? await getDailyViewCounts(
+        listings.map((l) => l.id),
+        30
+      )
+    : new Map();
 
   return (
     <section className="flex-1 p-4 lg:p-8">
@@ -143,6 +142,12 @@ export default async function ListingsPage(props: {
                 <span>{listing.bedrooms} bed</span>
                 <span>LKR {Number(listing.rentPerMonth).toLocaleString()}/mo</span>
               </div>
+
+              {showViewCounts && (
+                <div className="mb-3">
+                  <ViewSparkline buckets={viewsByListing.get(listing.id) ?? []} />
+                </div>
+              )}
 
               <div className="border-t pt-3 mb-4">
                 <div className="flex items-center text-xs text-gray-500 mb-1">

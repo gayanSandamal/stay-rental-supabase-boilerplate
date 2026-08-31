@@ -119,7 +119,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 
 ## Key env vars
 
-`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET`. Never put secrets in `NEXT_PUBLIC_*`.
+`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
 
 ## Where to look
 
@@ -214,6 +214,54 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
   that as a `dry run` badge with no takedown button — a row reading `posted` for
   something never sent is the same lie as claiming an Instagram deletion we
   cannot perform.
+
+## Landlord analytics (2026-08-31)
+
+Migrations `0045`–`0048`. The retention roadmap this implements is in
+`docs/analytics-retention-roadmap.md`; items 5 and 7 are NOT built, because they extend
+a WhatsApp landlord *report* (`lib/reports/**`) that does not exist in this
+repository.
+
+- **No per-listing insight helper exists, on purpose.** `getPortfolioInsights`
+  in `lib/db/queries.ts` answers a whole portfolio in FIVE queries whatever its
+  size. The old `getRentComparisonForListing` / `getListingPerformanceData` were
+  called inside a nested `Promise.all` — ~70 concurrent queries for a
+  ten-listing landlord, on a `max: 1` pool behind the transaction pooler, which
+  wedges the request (commit `a3ac4f9`). `resolvePublishers`
+  (`lib/listings/publisher-info.ts`) is the same fix for the three pages that
+  each had their own copy of a per-row publisher lookup.
+  `tests/unit/analytics-gates.test.ts` fails if `Promise.all` returns to any of
+  them.
+- **A statistic without the sample size for it is not printed.**
+  `lib/analytics/comparables.ts` owns every floor (`MIN_COMPARABLES_FOR_RENT`,
+  `MIN_COMPARABLES_FOR_PERCENTILE`, `MIN_MARKET_MOVE_PCT`) and returns `null`
+  below them; the page says *why* rather than hiding the row. The percentile
+  floor is higher than the rent floor because a percentile over three samples
+  can only return 0, 33, 67 or 100.
+- **Views and people are reported side by side, never swapped.**
+  `listing_views.visitor_hash` is `sha256(ip + ua + VIEW_HASH_SALT + yyyy-mm-dd)`
+  — the date component rotates it daily, so it is a per-day bucket, never a
+  cross-day identity. Rows from before `0046` have no hash: a window containing
+  any of them reports `uniqueViewersLast7d: null`, because counting only the
+  hashed rows would render a historical week as a traffic collapse.
+- **A tracked tap can never break a tap.** `ContactLink`
+  (`components/contact-click-tracker.tsx`) is a plain `<a>` with a `sendBeacon`
+  in `onClick` — no `preventDefault`, no awaited fetch. Blocking
+  `/api/listings/[id]/contact` entirely must still open the dialer, and a test
+  asserts the component never gains the ability to cancel the click.
+- **Impressions are counted where listings are SERVED, not in
+  `getActiveListings`.** The ranking function is the single search path, but
+  "fetched" is not "seen": the homepage strip pulls 1000 rows to render six, and
+  the saved-search cron pulls results nobody looks at. Counts accumulate in an
+  in-process `Map` (per-instance, like `lib/rate-limit.ts`) and flush as ONE
+  upsert via `after()` — on the instance holding the buffer, since a cron would
+  land elsewhere and find it empty. The figure is therefore a **floor**; never
+  present it to a landlord as exact.
+- **`market_rent_snapshots` is written long before it is read.** Its entire
+  value is history and history cannot be backfilled, so the weekly cron is ON by
+  default while the reader stays silent until ~8 weeks have accumulated.
+  `sample_size` is stored per row so a reading taken while the market was too
+  thin can be discarded afterwards.
 
 ## When making changes
 

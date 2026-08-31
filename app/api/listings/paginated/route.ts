@@ -1,10 +1,8 @@
-import { publisherDisplayName } from '@/lib/publisher-name';
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
-import { db } from '@/lib/db/drizzle';
-import { businessAccounts, users, landlords } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { trackImpressions } from '@/lib/analytics/impressions';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,63 +75,24 @@ export async function GET(request: NextRequest) {
     const hasMore = listings.length > limit;
     const listingsToReturn = hasMore ? listings.slice(0, limit) : listings;
 
-    // Fetch publisher information for each listing
-    const listingsWithPublisher = await Promise.all(
-      listingsToReturn.map(async (listing) => {
-        let publisherName = 'Unknown';
-        let publisherType: 'individual' | 'business' = 'individual';
-        let teamMemberName: string | null = null;
+    // Only what this page actually returns — the extra row fetched to detect
+    // `hasMore` is never rendered and must not be counted as seen.
+    trackImpressions(listingsToReturn.map((l) => l.id));
 
-        // Check if listing was created by a business account
-        if (listing.businessAccountId) {
-          try {
-            const businessAccount = await db.query.businessAccounts.findFirst({
-              where: eq(businessAccounts.id, listing.businessAccountId),
-            });
-            
-            if (businessAccount) {
-              publisherType = 'business';
-              publisherName = businessAccount.name;
-
-              // Get the team member who created it
-              if (listing.createdBy) {
-                const creator = await db.query.users.findFirst({
-                  where: eq(users.id, listing.createdBy),
-                });
-                teamMemberName = creator ? publisherDisplayName(creator) : null;
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching business account:', error);
-          }
-        }
-
-        // If not a business account, get landlord info
-        if (publisherType === 'individual' && !listing.businessAccountId) {
-          try {
-            const landlordInfo = await db.query.landlords.findFirst({
-              where: eq(landlords.id, listing.landlordId),
-              with: {
-                user: true,
-              },
-            });
-            
-            if (landlordInfo?.user) {
-              publisherName = publisherDisplayName(landlordInfo.user);
-            }
-          } catch (error) {
-            console.error('Error fetching landlord info:', error);
-          }
-        }
-
-        return {
-          ...listing,
-          publisherName,
-          publisherType,
-          teamMemberName,
-        };
-      })
-    );
+    /*
+     * Three queries for the page, not two per row — see resolvePublishers.
+     * Infinite scroll makes this the most frequently hit handler in the app,
+     * and the pool it runs against is `max: 1`.
+     */
+    const publishers = await resolvePublishers(listingsToReturn);
+    const listingsWithPublisher = listingsToReturn.map((listing) => ({
+      ...listing,
+      ...(publishers.get(listing.id) ?? {
+        publisherName: 'Unknown',
+        publisherType: 'individual' as const,
+        teamMemberName: null,
+      }),
+    }));
 
     return NextResponse.json({
       success: true,

@@ -44,6 +44,9 @@ const VIEW_LIMIT: RateLimitConfig = { maxRequests: 30, windowMs: 60_000 }; // 30
 // Access-link redemptions. Suppresses scanning noise; with 256-bit tokens,
 // guessing was never the threat model.
 const ACCESS_LINK_LIMIT: RateLimitConfig = { maxRequests: 10, windowMs: 60_000 };
+// Contact taps. Much tighter than views: a genuine Call or WhatsApp tap is
+// rare — a renter shortlists a handful of homes, they do not dial thirty.
+const CONTACT_LIMIT: RateLimitConfig = { maxRequests: 10, windowMs: 60_000 };
 
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -69,6 +72,13 @@ export function checkRateLimit(
   if (!config && method === 'POST' && /\/api\/listings\/\d+\/view$/.test(pathname)) {
     config = VIEW_LIMIT;
     routeKey = 'POST:/api/listings/:id/view'; // Normalize so all view requests share limit
+  }
+  // Same normalisation as views, and for the same reason: the listing id is in
+  // the path, so without collapsing it every listing would get its own bucket
+  // and the limit would do nothing at all.
+  if (!config && method === 'POST' && /\/api\/listings\/\d+\/contact$/.test(pathname)) {
+    config = CONTACT_LIMIT;
+    routeKey = 'POST:/api/listings/:id/contact';
   }
   // Access links carry the token IN THE PATH, so without normalising, every
   // attempt would land in its own bucket and the limit would do nothing.

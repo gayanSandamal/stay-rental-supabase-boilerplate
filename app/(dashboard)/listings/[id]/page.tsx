@@ -22,6 +22,7 @@ import { PropertyImagesGallery } from '@/components/property-images-gallery';
 import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
 import { ListingViewTracker } from '@/components/listing-view-tracker';
+import { ContactLink } from '@/components/contact-click-tracker';
 import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -599,15 +600,24 @@ export default async function ListingDetailPage({
                                   )}
                                 </div>
                                 <div className="flex gap-2">
-                                  <a
+                                  {/* ContactLink is a plain <a> that also fires a
+                                      beacon. The href is never gated on it — a
+                                      blocked endpoint must still open the dialer. */}
+                                  <ContactLink
+                                    listingId={listing.id}
+                                    channel="call"
+                                    contactNumberId={lc.id}
                                     href={`tel:${contact.phoneNumber}`}
                                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition-colors"
                                   >
                                     <Phone className="h-3.5 w-3.5" />
                                     Call
-                                  </a>
+                                  </ContactLink>
                                   {contact.isWhatsApp && (
-                                    <a
+                                    <ContactLink
+                                      listingId={listing.id}
+                                      channel="whatsapp"
+                                      contactNumberId={lc.id}
                                       href={`https://wa.me/${contact.phoneNumber.replace(/[^0-9+]/g, '')}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
@@ -615,7 +625,7 @@ export default async function ListingDetailPage({
                                     >
                                       <MessageCircle className="h-3.5 w-3.5" />
                                       WhatsApp
-                                    </a>
+                                    </ContactLink>
                                   )}
                                 </div>
                               </div>
@@ -632,13 +642,17 @@ export default async function ListingDetailPage({
                             <span className="font-semibold text-sm text-gray-900">{publisherPhone}</span>
                             <span className="text-xs text-gray-500">· Publisher</span>
                           </div>
-                          <a
+                          {/* No listing_contact_numbers row exists on this
+                              path, so the event is recorded without one. */}
+                          <ContactLink
+                            listingId={listing.id}
+                            channel="call"
                             href={`tel:${publisherPhone}`}
                             className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition-colors"
                           >
                             <Phone className="h-3.5 w-3.5" />
                             Call
-                          </a>
+                          </ContactLink>
                         </div>
                       );
                     }

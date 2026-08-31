@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listingViews } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rate-limit';
+import { visitorHash } from '@/lib/analytics/visitor-hash';
 
 /**
  * POST /api/listings/[id]/view
@@ -13,8 +14,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip') || '127.0.0.1';
+  const ip = getClientIp(request);
   const rl = checkRateLimit(ip, 'POST', '/api/listings/[id]/view');
   if (!rl.allowed) return rateLimitResponse(rl.resetAt);
 
@@ -36,10 +36,20 @@ export async function POST(
     return NextResponse.json({ ok: true }); // Silently ignore
   }
 
-  // Rate limit (30/min per IP) prevents spam. No per-listing dedup for MVP.
+  /*
+   * The rate limit (30/min per IP) bounds abuse; the visitor hash is what makes
+   * the resulting number honest. It is sha256(ip + user-agent + salt + today),
+   * so it separates "views" from "people" WITHIN a day and cannot follow anyone
+   * across days — see lib/analytics/visitor-hash.ts.
+   *
+   * Every view is still one row. Deduplication happens at read time, so the raw
+   * count stays a real count and the two figures can be reported side by side
+   * ("120 views from 34 people") instead of one silently replacing the other.
+   */
   await db.insert(listingViews).values({
     listingId,
     viewedAt: new Date(),
+    visitorHash: visitorHash(ip, request.headers.get('user-agent')),
   });
 
   return NextResponse.json({ ok: true });

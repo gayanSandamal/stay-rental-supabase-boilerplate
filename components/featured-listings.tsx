@@ -1,4 +1,5 @@
 import { getActiveListings, getUser } from '@/lib/db/queries';
+import { trackImpressions } from '@/lib/analytics/impressions';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { ListingCard } from './listing-card';
 import { ScrollReveal } from './scroll-reveal';
@@ -18,6 +19,11 @@ export async function FeaturedListings() {
   // Ranking already: Featured > Boost > Plan > Urgent > verified > newest. Take top 6.
   const display = allListings.slice(0, 6);
   if (display.length === 0) return null;
+
+  // The SIX that are rendered, not the thousand that were fetched. This strip
+  // is where a Featured purchase earns its money, so counting the whole query
+  // here would inflate exactly the number a landlord is being sold on.
+  trackImpressions(display.map((l) => l.id));
 
   const isFeatured = (l: { featuredUntil?: string | Date | null }) =>
     l.featuredUntil && new Date(l.featuredUntil) > new Date();

@@ -1,4 +1,4 @@
-import { desc, and, eq, ne, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
+import { desc, and, eq, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
   users,
@@ -8,10 +8,22 @@ import {
   businessAccounts,
   auditLogs,
   listingViews,
+  listingContactEvents,
+  listingImpressions,
+  marketRentSnapshots,
 } from './schema';
 import { createClient } from '@/lib/supabase/server';
 import { businessAccountMembers } from './schema';
 import { withDeadline } from '@/lib/observability/phase-timer';
+import {
+  TREND_TOLERANCE_DAYS,
+  TREND_WINDOWS_WEEKS,
+  computePercentile,
+  computeRentComparison,
+  pickMarketTrend,
+  type MarketRentTrend,
+  type RentComparison,
+} from '@/lib/analytics/comparables';
 
 const AUTH_DEADLINE_MS = 10_000;
 
@@ -728,96 +740,306 @@ export async function getAnalyticsDashboardData() {
   };
 }
 
-/** Rent comparison for a listing: similar listings (city + bedrooms) market stats. */
-export async function getRentComparisonForListing(listingId: number) {
-  const listing = await db.query.listings.findFirst({
-    where: eq(listings.id, listingId),
-    columns: { city: true, bedrooms: true, rentPerMonth: true },
-  });
-  if (!listing) return null;
+/*
+ * Portfolio analytics.
+ *
+ * These replace the old per-listing `getRentComparisonForListing` and
+ * `getListingPerformanceData`. Those were correct but were called from inside a
+ * `Promise.all` over the portfolio, so a ten-listing landlord fired ~70 mostly
+ * concurrent queries. On Vercel the pool is `max: 1` (lib/db/drizzle.ts) against
+ * Supabase's transaction pooler, and pipelining concurrent queries onto that one
+ * PgBouncer-backed connection wedges the request until the platform kills it —
+ * the same failure commit a3ac4f9 removed from the back office. The agency
+ * landlord who hits it hardest is also the one most likely to be paying.
+ *
+ * They are gone rather than deprecated: a per-listing insight helper sitting in
+ * this file is an invitation to reintroduce the fan-out somewhere new.
+ */
 
-  const similar = await db
-    .select({ rentPerMonth: listings.rentPerMonth })
-    .from(listings)
-    .where(
-      and(
-        eq(listings.status, 'active'),
-        eq(listings.city, listing.city),
-        eq(listings.bedrooms, listing.bedrooms),
-        ne(listings.id, listingId),
-        or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date()))
-      )
-    );
+export type PortfolioListingInput = {
+  id: number;
+  city: string;
+  bedrooms: number;
+  rentPerMonth: string | number;
+};
 
-  const rents = similar.map((r) => Number(r.rentPerMonth));
-  const yourRent = Number(listing.rentPerMonth);
-  if (rents.length === 0) {
-    return { yourRent, avgRent: yourRent, minRent: yourRent, maxRent: yourRent, similarCount: 0, position: 'at' as const };
-  }
-  const avgRent = Math.round(rents.reduce((a, b) => a + b, 0) / rents.length);
-  const minRent = Math.min(...rents);
-  const maxRent = Math.max(...rents);
-  const pct = yourRent < avgRent ? (1 - yourRent / avgRent) * 100 : yourRent > avgRent ? ((yourRent / avgRent) - 1) * 100 : 0;
-  const position = yourRent < avgRent ? 'below' as const : yourRent > avgRent ? 'above' as const : 'at' as const;
-  return { yourRent, avgRent, minRent, maxRent, similarCount: rents.length, position, pctBelowAbove: Math.round(pct) };
-}
+export type ListingRentComparison = RentComparison;
+export type { MarketRentTrend };
 
-/** Listing performance: views total, views last 7d, percentile vs similar. */
-export async function getListingPerformanceData(listingId: number) {
-  const listing = await db.query.listings.findFirst({
-    where: eq(listings.id, listingId),
-    columns: { city: true, bedrooms: true },
-  });
-  if (!listing) return null;
+export type ListingInsights = {
+  /**
+   * Times this listing was served on a results page. A FLOOR, not an exact
+   * total: counts buffered in an instance that is recycled before its next
+   * flush are lost (lib/analytics/impressions.ts), and nothing was recorded at
+   * all before migration 0048.
+   */
+  impressions: number;
+  impressionsLast7d: number;
+  totalViews: number;
+  viewsLast7d: number;
+  /**
+   * Distinct daily visitor hashes in the last 7 days, or NULL when part of that
+   * window predates migration 0046 and therefore has no hashes. Null means "we
+   * cannot say", never "zero": counting only the rows that happen to carry a
+   * hash would under-report a historical week as a traffic collapse.
+   */
+  uniqueViewersLast7d: number | null;
+  totalContacts: number;
+  contactsLast7d: number;
+  callClicks: number;
+  whatsappClicks: number;
+  /** Null below MIN_COMPARABLES_FOR_RENT — the caller must say why, not hide the row. */
+  rentComparison: ListingRentComparison | null;
+  /** Null below MIN_COMPARABLES_FOR_PERCENTILE. */
+  percentile: number | null;
+  /** Active listings in the same (city, bedrooms) market, excluding this one. */
+  comparableCount: number;
+  /**
+   * How this listing's market has moved since an earlier weekly snapshot, or
+   * null while there is not yet enough history. Silence here is the normal
+   * state for the first couple of months after migration 0047 lands.
+   */
+  marketTrend: MarketRentTrend | null;
+};
+
+/**
+ * Every insight the analytics page renders, for a whole portfolio, in FIVE
+ * queries — the same five whether the landlord has one listing or two hundred.
+ *
+ * Dates are bound through Drizzle's own operators even inside the raw `sql`
+ * FILTER fragments (`${gte(col, date)}` rather than an interpolated string), so
+ * the driver gets a real bind parameter and nothing depends on the session
+ * timezone or on remembering a `::timestamp` cast.
+ */
+export async function getPortfolioInsights(
+  portfolioListings: PortfolioListingInput[]
+): Promise<Map<number, ListingInsights>> {
+  const insights = new Map<number, ListingInsights>();
+  if (portfolioListings.length === 0) return insights;
 
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const ids = portfolioListings.map((l) => l.id);
 
-  const [totalViews, viewsLast7d] = await Promise.all([
-    db.select({ count: drizzleCount() }).from(listingViews).where(eq(listingViews.listingId, listingId)),
-    db
-      .select({ count: drizzleCount() })
-      .from(listingViews)
-      .where(and(eq(listingViews.listingId, listingId), gte(listingViews.viewedAt, sevenDaysAgo))),
-  ]);
-
-  const total = Number(totalViews[0]?.count ?? 0);
-  const last7 = Number(viewsLast7d[0]?.count ?? 0);
-
-  // Benchmark: avg views per similar listing (city + bedrooms)
-  const similarListingIds = await db
-    .select({ id: listings.id })
-    .from(listings)
-    .where(
-      and(
-        eq(listings.status, 'active'),
-        eq(listings.city, listing.city),
-        eq(listings.bedrooms, listing.bedrooms),
-        or(isNull(listings.expiresAt), gte(listings.expiresAt, now))
-      )
-    );
-
-  const ids = similarListingIds.map((r) => r.id);
-  if (ids.length === 0) return { totalViews: total, viewsLast7d: last7, percentile: 100 };
-
-  const viewCounts = await db
+  // 1 — views, one grouped aggregate for the whole portfolio.
+  const viewRows = await db
     .select({
       listingId: listingViews.listingId,
-      count: drizzleCount(),
+      total: drizzleCount(),
+      last7d: sql<number>`count(*) filter (where ${gte(listingViews.viewedAt, sevenDaysAgo)})`,
+      unique7d: sql<number>`count(distinct ${listingViews.visitorHash}) filter (where ${gte(
+        listingViews.viewedAt,
+        sevenDaysAgo
+      )})`,
+      // Views in the window with no hash at all. Non-zero means the window
+      // straddles the deploy, so `unique7d` is not a number we may show.
+      untracked7d: sql<number>`count(*) filter (where ${gte(
+        listingViews.viewedAt,
+        sevenDaysAgo
+      )} and ${listingViews.visitorHash} is null)`,
     })
     .from(listingViews)
     .where(inArray(listingViews.listingId, ids))
     .groupBy(listingViews.listingId);
 
-  const counts = ids.map((id) => {
-    const row = viewCounts.find((v) => v.listingId === id);
-    return row ? Number(row.count) : 0;
-  });
-  counts.sort((a, b) => a - b);
-  const rank = counts.filter((c) => c < total).length;
-  const percentile = counts.length > 0 ? Math.round((rank / counts.length) * 100) : 100;
+  // 2 — impressions, from the daily rollup (migration 0048).
+  const impressionRows = await db
+    .select({
+      listingId: listingImpressions.listingId,
+      total: sql<number>`sum(${listingImpressions.count})`,
+      last7d: sql<number>`sum(${listingImpressions.count}) filter (where ${gte(
+        listingImpressions.day,
+        sevenDaysAgo.toISOString().slice(0, 10)
+      )})`,
+    })
+    .from(listingImpressions)
+    .where(inArray(listingImpressions.listingId, ids))
+    .groupBy(listingImpressions.listingId);
 
-  return { totalViews: total, viewsLast7d: last7, percentile };
+  // 3 — contact clicks, same shape.
+  const contactRows = await db
+    .select({
+      listingId: listingContactEvents.listingId,
+      total: drizzleCount(),
+      last7d: sql<number>`count(*) filter (where ${gte(
+        listingContactEvents.occurredAt,
+        sevenDaysAgo
+      )})`,
+      calls: sql<number>`count(*) filter (where ${listingContactEvents.channel} = ${'call'})`,
+      whatsapps: sql<number>`count(*) filter (where ${listingContactEvents.channel} = ${'whatsapp'})`,
+    })
+    .from(listingContactEvents)
+    .where(inArray(listingContactEvents.listingId, ids))
+    .groupBy(listingContactEvents.listingId);
+
+  // 4 — the comparable market: every active listing sharing a (city, bedrooms)
+  // pair with something in this portfolio, with its own view count. One query
+  // serves BOTH the rent comparison and the percentile, because both are
+  // computed over exactly this row set.
+  const pairs = new Map<string, { city: string; bedrooms: number }>();
+  for (const listing of portfolioListings) {
+    pairs.set(`${listing.city}|${listing.bedrooms}`, {
+      city: listing.city,
+      bedrooms: listing.bedrooms,
+    });
+  }
+  const pairPredicates = [...pairs.values()].map((pair) =>
+    and(eq(listings.city, pair.city), eq(listings.bedrooms, pair.bedrooms))
+  );
+
+  const comparableRows = await db
+    .select({
+      id: listings.id,
+      city: listings.city,
+      bedrooms: listings.bedrooms,
+      rentPerMonth: listings.rentPerMonth,
+      views: sql<number>`count(${listingViews.id})`,
+    })
+    .from(listings)
+    .leftJoin(listingViews, eq(listingViews.listingId, listings.id))
+    .where(
+      and(
+        eq(listings.status, 'active'),
+        or(isNull(listings.expiresAt), gte(listings.expiresAt, now)),
+        or(...pairPredicates)
+      )
+    )
+    .groupBy(listings.id, listings.city, listings.bedrooms, listings.rentPerMonth);
+
+  /*
+   * 5 — the weekly market history for those same pairs (migration 0047).
+   *
+   * Bounded by one row per market per week, so ~13 rows per pair. The trend is
+   * chosen in memory rather than with a lateral join per listing, for the same
+   * reason as everything else here: a fixed number of round trips.
+   */
+  const trendHorizon = new Date(now.getTime() - (Math.max(...TREND_WINDOWS_WEEKS) * 7 + TREND_TOLERANCE_DAYS) * 24 * 60 * 60 * 1000);
+  const snapshotRows = await db
+    .select({
+      city: marketRentSnapshots.city,
+      bedrooms: marketRentSnapshots.bedrooms,
+      avgRent: marketRentSnapshots.avgRent,
+      sampleSize: marketRentSnapshots.sampleSize,
+      capturedOn: marketRentSnapshots.capturedOn,
+    })
+    .from(marketRentSnapshots)
+    .where(
+      and(
+        gte(marketRentSnapshots.capturedOn, trendHorizon.toISOString().slice(0, 10)),
+        or(
+          ...[...pairs.values()].map((pair) =>
+            and(
+              eq(marketRentSnapshots.city, pair.city),
+              eq(marketRentSnapshots.bedrooms, pair.bedrooms)
+            )
+          )
+        )
+      )
+    )
+    .orderBy(desc(marketRentSnapshots.capturedOn));
+
+  const snapshotsByPair = new Map<string, typeof snapshotRows>();
+  for (const row of snapshotRows) {
+    const key = `${row.city}|${row.bedrooms}`;
+    const bucket = snapshotsByPair.get(key);
+    if (bucket) bucket.push(row);
+    else snapshotsByPair.set(key, [row]);
+  }
+
+  const viewsById = new Map(viewRows.map((r) => [r.listingId, r]));
+  const impressionsById = new Map(impressionRows.map((r) => [r.listingId, r]));
+  const contactsById = new Map(contactRows.map((r) => [r.listingId, r]));
+  const comparablesByPair = new Map<string, typeof comparableRows>();
+  for (const row of comparableRows) {
+    const key = `${row.city}|${row.bedrooms}`;
+    const bucket = comparablesByPair.get(key);
+    if (bucket) bucket.push(row);
+    else comparablesByPair.set(key, [row]);
+  }
+
+  for (const listing of portfolioListings) {
+    const views = viewsById.get(listing.id);
+    const contacts = contactsById.get(listing.id);
+    const impressions = impressionsById.get(listing.id);
+    const totalViews = Number(views?.total ?? 0);
+    const viewsLast7d = Number(views?.last7d ?? 0);
+    const untracked7d = Number(views?.untracked7d ?? 0);
+
+    const market = comparablesByPair.get(`${listing.city}|${listing.bedrooms}`) ?? [];
+    const others = market.filter((row) => row.id !== listing.id);
+    const rents = others.map((row) => Number(row.rentPerMonth));
+    const yourRent = Number(listing.rentPerMonth);
+
+    // Both of these return null below their sample-size floor. That decision is
+    // pure and lives in lib/analytics/comparables.ts, so the boundary is
+    // testable without a database and there is ONE threshold, not three.
+    const rentComparison = computeRentComparison(yourRent, rents);
+    const percentile = computePercentile(
+      totalViews,
+      market.map((row) => Number(row.views))
+    );
+
+    const pairKey = `${listing.city}|${listing.bedrooms}`;
+    insights.set(listing.id, {
+      impressions: Number(impressions?.total ?? 0),
+      impressionsLast7d: Number(impressions?.last7d ?? 0),
+      totalViews,
+      viewsLast7d,
+      uniqueViewersLast7d: untracked7d > 0 ? null : Number(views?.unique7d ?? 0),
+      totalContacts: Number(contacts?.total ?? 0),
+      contactsLast7d: Number(contacts?.last7d ?? 0),
+      callClicks: Number(contacts?.calls ?? 0),
+      whatsappClicks: Number(contacts?.whatsapps ?? 0),
+      rentComparison,
+      percentile,
+      comparableCount: others.length,
+      marketTrend: pickMarketTrend(snapshotsByPair.get(pairKey) ?? [], now),
+    });
+  }
+
+  return insights;
+}
+
+export type DailyViewBucket = { day: string; count: number };
+
+/**
+ * Daily view counts for a set of listings over the last `days` days — ONE
+ * grouped query for a whole page of listing cards.
+ *
+ * This is the free-tier sparkline's only data source. It exists as its own
+ * function precisely so nobody reaches for a per-card insight call: that is
+ * defect D2 in a new place.
+ *
+ * Days with no views are absent from the result; the renderer fills the gaps,
+ * because a sparkline that skips empty days draws a flat line over a dead week.
+ */
+export async function getDailyViewCounts(
+  listingIds: number[],
+  days = 30
+): Promise<Map<number, DailyViewBucket[]>> {
+  const byListing = new Map<number, DailyViewBucket[]>();
+  if (listingIds.length === 0) return byListing;
+
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      listingId: listingViews.listingId,
+      // Rendered as text rather than a date so the key is a stable string on
+      // both sides of the driver, whatever the session timezone.
+      day: sql<string>`to_char(date_trunc('day', ${listingViews.viewedAt}), 'YYYY-MM-DD')`,
+      count: drizzleCount(),
+    })
+    .from(listingViews)
+    .where(and(inArray(listingViews.listingId, listingIds), gte(listingViews.viewedAt, since)))
+    .groupBy(listingViews.listingId, sql`date_trunc('day', ${listingViews.viewedAt})`);
+
+  for (const row of rows) {
+    const bucket = byListing.get(row.listingId);
+    const entry = { day: row.day, count: Number(row.count) };
+    if (bucket) bucket.push(entry);
+    else byListing.set(row.listingId, [entry]);
+  }
+  return byListing;
 }
 
 /** Portfolio data for a landlord: listings with rent comparison and performance. */
