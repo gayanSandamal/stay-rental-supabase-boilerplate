@@ -40,6 +40,23 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
+        /*
+         * The REQUEST cookies must be updated too, not just the response.
+         *
+         * Refreshing ROTATES the refresh token: the old one is invalidated the
+         * moment a new one is issued. Writing only to `response` meant the
+         * refreshed token went to the browser while every Server Component
+         * downstream still read the OLD token off the unchanged request — then
+         * tried to refresh with it and got `Invalid Refresh Token: Refresh
+         * Token Not Found`. A Server Component cannot set cookies, so it could
+         * never persist a fix; it just retried, and the request hung until the
+         * platform killed it at 300s.
+         *
+         * Rebuilding `response` from the mutated request is what hands the
+         * fresh token forward within this same request.
+         */
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options)
         );
