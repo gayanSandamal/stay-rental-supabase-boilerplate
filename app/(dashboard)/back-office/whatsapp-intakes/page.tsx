@@ -12,7 +12,6 @@ import { ListSlab } from '@/components/back-office/list-slab';
 import { Pager } from '@/components/back-office/pager';
 import { EmptyState } from '@/components/back-office/empty-state';
 import {
-  countsByKey,
   listHref,
   parseListParams,
   type RawSearchParams,
@@ -129,23 +128,30 @@ export default async function WhatsAppIntakesPage({
    * a capped page. The old screen derived its sense of volume from a
    * `limit(100)` list, so it under-reported exactly when the queue was worst.
    */
-  const [statusCounts, pastCapRows] = await phase('intakes:counts', () => Promise.all([
+  /*
+   * ONE query. Two concurrent ones deadlocked on Vercel, where the pool is
+   * max: 1 and the connection is Supabase's transaction pooler — pipelining
+   * onto a single PgBouncer-backed connection wedges the request until the
+   * platform kills it.
+   */
+  const [tallies] = await phase('intakes:counts', () =>
     db
-      .select({ status: whatsappIntakes.status, n: count() })
+      .select({
+        needsHuman: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'manual_review' or (${whatsappIntakes.status} = 'needs_info' and ${whatsappIntakes.needsInfoRounds} >= ${NEEDS_INFO_MAX_ROUNDS}))`,
+        talking: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'received' or (${whatsappIntakes.status} = 'needs_info' and ${whatsappIntakes.needsInfoRounds} < ${NEEDS_INFO_MAX_ROUNDS}))`,
+        published: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'published')`,
+        rejected: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'rejected')`,
+        all: sql<number>`count(*)`,
+      })
       .from(whatsappIntakes)
-      .groupBy(whatsappIntakes.status),
-    db.select({ n: count() }).from(whatsappIntakes).where(pastCapCondition()),
-  ]));
-
-  const byStatus = countsByKey(statusCounts);
-  const pastCap = Number(pastCapRows[0]?.n ?? 0);
+  );
 
   const counts = {
-    needs_human: (byStatus.manual_review ?? 0) + pastCap,
-    talking: (byStatus.received ?? 0) + Math.max(0, (byStatus.needs_info ?? 0) - pastCap),
-    published: byStatus.published ?? 0,
-    rejected: byStatus.rejected ?? 0,
-    all: Object.values(byStatus).reduce((a, b) => a + b, 0),
+    needs_human: Number(tallies?.needsHuman ?? 0),
+    talking: Number(tallies?.talking ?? 0),
+    published: Number(tallies?.published ?? 0),
+    rejected: Number(tallies?.rejected ?? 0),
+    all: Number(tallies?.all ?? 0),
   };
 
   const where = and(tabCondition(params.tab), searchCondition(params.q));
@@ -156,15 +162,17 @@ export default async function WhatsAppIntakesPage({
       ? [asc(whatsappIntakes.lastMessageAt)]
       : [desc(whatsappIntakes.lastMessageAt)];
 
-  const [rows, totalRows] = await phase('intakes:rows', () => Promise.all([
+  const rows = await phase('intakes:rows', () =>
     db.query.whatsappIntakes.findMany({
       where,
       orderBy,
       limit: params.perPage,
       offset: params.offset,
-    }),
-    db.select({ n: count() }).from(whatsappIntakes).where(where),
-  ]));
+    })
+  );
+  const totalRows = await phase('intakes:total', () =>
+    db.select({ n: count() }).from(whatsappIntakes).where(where)
+  );
 
   const total = Number(totalRows[0]?.n ?? 0);
 
