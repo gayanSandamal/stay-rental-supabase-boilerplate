@@ -1,6 +1,6 @@
 'use server';
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db/drizzle';
 import { imageModerationCache, listings } from '@/lib/db/schema';
@@ -157,5 +157,112 @@ export async function restorePhotoAction(formData: FormData): Promise<void> {
     action: 'restore_photo',
     contentHash: entry.h,
   });
+  revalidatePath('/back-office/moderation');
+}
+
+/** Ids from a bulk form field, clamped so a hand-made request can't run wild. */
+function parseIds(formData: FormData): number[] {
+  return String(formData.get('listingIds') ?? '')
+    .split(',')
+    .map((n) => Number.parseInt(n, 10))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .slice(0, 200);
+}
+
+/**
+ * Re-run the checks on a selection.
+ *
+ * The throughput lever for this queue: a promotion that dumps 180 listings in
+ * overnight is unworkable one row at a time. Safe to bulk — re-queueing only
+ * asks the engine to look again.
+ */
+export async function bulkRequeueAction(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+  const ids = parseIds(formData);
+  if (ids.length === 0) return;
+
+  await db
+    .update(listings)
+    .set({
+      moderationStatus: 'queued',
+      moderationAttempts: 0,
+      moderationLeaseUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(inArray(listings.id, ids));
+
+  // One audit row each: a bulk action stays as traceable as the same edits
+  // made individually.
+  await Promise.all(
+    ids.map((id) =>
+      logListingAction('listing_moderation_overridden', id, user.id, {
+        action: 'requeue',
+        bulk: true,
+      })
+    )
+  );
+
+  revalidatePath('/back-office/moderation');
+}
+
+/**
+ * Restore every rejected photo on a selection of listings.
+ *
+ * Most of a held backlog is the same false positive repeated, so this is the
+ * action that actually clears it. Each restore is PERMANENT for that image —
+ * the caller must have confirmed.
+ */
+export async function bulkRestorePhotosAction(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+  const ids = parseIds(formData);
+  if (ids.length === 0) return;
+
+  const rows = await db.query.listings.findMany({ where: inArray(listings.id, ids) });
+
+  for (const listing of rows) {
+    const manifest = adoptOrphanPhotos(
+      parseManifest(listing.photosManifest),
+      parsePhotos(listing.photos)
+    ).entries;
+
+    const rejected = manifest.filter((e) => e.v === 'reject');
+    if (rejected.length === 0) continue;
+
+    for (const entry of rejected) {
+      if (entry.h) {
+        await db
+          .update(imageModerationCache)
+          .set({ humanOverride: true, overriddenBy: user.id })
+          .where(
+            and(
+              eq(imageModerationCache.contentHash, entry.h),
+              eq(imageModerationCache.promptVersion, PROMPT_VERSION)
+            )
+          );
+      }
+      entry.v = 'queued';
+      delete entry.r;
+      delete entry.sev;
+    }
+
+    const urls = derivePhotos(manifest);
+    await db
+      .update(listings)
+      .set({
+        photosManifest: serializeManifest(manifest),
+        photos: urls.length ? JSON.stringify(urls) : null,
+        moderationStatus: 'queued',
+        moderationAttempts: 0,
+        updatedAt: new Date(),
+      })
+      .where(eq(listings.id, listing.id));
+
+    await logListingAction('listing_moderation_overridden', listing.id, user.id, {
+      action: 'restore_photo',
+      bulk: true,
+      restored: rejected.length,
+    });
+  }
+
   revalidatePath('/back-office/moderation');
 }

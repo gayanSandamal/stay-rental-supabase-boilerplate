@@ -1,84 +1,228 @@
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db/drizzle';
-import { listings } from '@/lib/db/schema';
-import { eq, sql, and, desc } from 'drizzle-orm';
+import { businessAccounts, listings } from '@/lib/db/schema';
+import { and, count, desc, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import Link from 'next/link';
-import { Eye } from 'lucide-react';
+import { Eye, List } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { PageHeader } from '@/components/back-office/page-header';
+import { FilterBar } from '@/components/back-office/filter-bar';
+import { ListSlab } from '@/components/back-office/list-slab';
+import { Pager } from '@/components/back-office/pager';
+import { EmptyState } from '@/components/back-office/empty-state';
+import {
+  countsByKey,
+  listHref,
+  parseListParams,
+  type RawSearchParams,
+} from '@/lib/back-office/list-params';
+import { shortAge, fullTimestamp } from '@/lib/back-office/format';
+
+export const dynamic = 'force-dynamic';
+
+const BASE_PATH = '/back-office/listings';
+
+const TABS = [
+  'all',
+  'pending',
+  'active',
+  'rented',
+  'expired',
+  'archived',
+  'rejected',
+] as const;
+
+const TAB_LABELS: Record<string, string> = {
+  all: 'All',
+  pending: 'Pending',
+  active: 'Active',
+  rented: 'Rented',
+  expired: 'Expired',
+  archived: 'Archived',
+  rejected: 'Rejected',
+};
+
+/** This screen has always been scoped to business-account listings. */
+const scopeCondition = () => isNotNull(listings.businessAccountId);
+
+function searchCondition(q: string): SQL | undefined {
+  if (!q) return undefined;
+  const like = `%${q}%`;
+  const clauses: SQL[] = [
+    ilike(listings.title, like),
+    ilike(listings.city, like),
+    ilike(listings.address, like),
+  ];
+  const asId = Number.parseInt(q.replace(/^#/, ''), 10);
+  if (Number.isFinite(asId) && asId > 0) clauses.push(eq(listings.id, asId));
+  return or(...clauses);
+}
 
 export default async function BackOfficeListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ businessAccountId?: string }>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   await requireBackOfficeAccess();
 
-  const resolvedParams = await searchParams;
-  const businessAccountId = resolvedParams.businessAccountId 
-    ? Number(resolvedParams.businessAccountId) 
-    : null;
+  const params = parseListParams(await searchParams, {
+    tabs: TABS,
+    defaultTab: 'all',
+    extraKeys: ['businessAccountId'],
+  });
 
-  const conditions = [sql`${listings.businessAccountId} IS NOT NULL`];
-  
-  if (businessAccountId) {
-    conditions.push(eq(listings.businessAccountId, businessAccountId));
-  }
+  const businessAccountId = Number.parseInt(params.extras.businessAccountId ?? '', 10);
+  const accountCondition = Number.isFinite(businessAccountId)
+    ? eq(listings.businessAccountId, businessAccountId)
+    : undefined;
 
-  const businessListings = await db
-    .select()
-    .from(listings)
-    .where(and(...conditions))
-    .orderBy(desc(listings.createdAt));
+  const baseWhere = and(scopeCondition(), accountCondition);
+
+  const where = and(
+    baseWhere,
+    params.tab === 'all' ? undefined : eq(listings.status, params.tab as 'active'),
+    searchCondition(params.q)
+  );
+
+  /*
+   * This page previously had NO limit at all — it selected every
+   * business-account listing ever created, on every load, and rendered each one
+   * as a full card. That degrades until it times out; it is the one item here
+   * that was a live bug rather than a scaling concern.
+   */
+  const [rows, totalRows, statusCounts, account] = await Promise.all([
+    db
+      .select()
+      .from(listings)
+      .where(where)
+      .orderBy(desc(listings.createdAt))
+      .limit(params.perPage)
+      .offset(params.offset),
+    db.select({ n: count() }).from(listings).where(where),
+    db
+      .select({ status: listings.status, n: count() })
+      .from(listings)
+      .where(baseWhere)
+      .groupBy(listings.status),
+    Number.isFinite(businessAccountId)
+      ? db
+          .select({ name: businessAccounts.name })
+          .from(businessAccounts)
+          .where(eq(businessAccounts.id, businessAccountId))
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
+
+  const total = Number(totalRows[0]?.n ?? 0);
+  const counts = countsByKey(statusCounts);
+  const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const tabs = TABS.map((key) => ({
+    key,
+    label: TAB_LABELS[key],
+    count: key === 'all' ? allCount : (counts[key] ?? 0),
+  }));
+
+  const accountName = account[0]?.name;
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Business Account Listings</h1>
-        {businessAccountId && (
-          <Button asChild variant="outline">
-            <Link href="/back-office/listings">View All</Link>
-          </Button>
-        )}
-      </div>
+    <section className="flex-1 p-4 lg:p-8">
+      <PageHeader
+        icon={List}
+        title="Business Account Listings"
+        summary={`${allCount.toLocaleString()} total`}
+        actions={
+          Number.isFinite(businessAccountId) ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={BASE_PATH}>View all accounts</Link>
+            </Button>
+          ) : null
+        }
+      />
 
-      {businessListings.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-gray-600">No business account listings found.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {businessListings.map((listing) => (
-            <Card key={listing.id}>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      {accountName && (
+        <p className="mb-3 text-sm text-slate-600">
+          Filtered to <span className="font-semibold text-slate-900">{accountName}</span>
+        </p>
+      )}
+
+      <FilterBar
+        basePath={BASE_PATH}
+        params={params}
+        tabs={tabs}
+        searchPlaceholder="Search title, city, address, #id"
+      />
+
+      <ListSlab>
+        {rows.length === 0 ? (
+          <EmptyState
+            basePath={BASE_PATH}
+            params={params}
+            emptyMessage="No business account listings found."
+            filterLabel={params.tab === 'all' ? undefined : TAB_LABELS[params.tab]}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-24">Status</TableHead>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead className="w-48">Location</TableHead>
+                <TableHead className="w-16 text-right">Age</TableHead>
+                <TableHead className="w-20 text-right">View</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((listing) => (
+                <TableRow key={listing.id}>
+                  <TableCell>
+                    <StatusBadge status={listing.status} />
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-slate-500 tabular-nums">
+                    #{listing.id}
+                  </TableCell>
+                  <TableCell className="max-w-0">
+                    <Link
+                      href={`/dashboard/listings/${listing.id}`}
+                      className="block truncate text-sm font-semibold text-slate-900 hover:underline"
+                    >
                       {listing.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-2">{listing.address ?? listing.city}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>Status: {listing.status}</span>
-                      {listing.createdBy && <span>Created by: {listing.createdBy}</span>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button asChild variant="outline" size="sm">
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-0 truncate text-[13px] text-slate-600">
+                    {listing.address ?? listing.city}
+                  </TableCell>
+                  <TableCell
+                    className="text-right text-xs text-slate-500 tabular-nums"
+                    title={fullTimestamp(listing.createdAt)}
+                  >
+                    {shortAge(listing.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="ghost" size="sm">
                       <Link href={`/listings/${listing.id}`} target="_blank">
-                        <Eye className="h-4 w-4 mr-2" />
-                        View
+                        <Eye className="h-4 w-4" />
+                        <span className="sr-only">View listing {listing.id} on the site</span>
                       </Link>
                     </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <Pager basePath={BASE_PATH} params={params} total={total} />
+      </ListSlab>
+    </section>
   );
 }
-
