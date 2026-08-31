@@ -1,247 +1,240 @@
 import Link from 'next/link';
-import Image from 'next/image';
-import { and, count, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
-import { Card, CardContent } from '@/components/ui/card';
-import { ShieldCheck, ExternalLink, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, EyeOff, Timer } from 'lucide-react';
 import { parseManifest, parsePhotos } from '@/lib/images/manifest';
-import { ModerationActions, RestorePhotoButton } from './moderation-actions';
+import { PageHeader } from '@/components/back-office/page-header';
+import { AlarmBanner } from '@/components/back-office/alarm-banner';
+import { FilterBar } from '@/components/back-office/filter-bar';
+import { ListSlab } from '@/components/back-office/list-slab';
+import { Pager } from '@/components/back-office/pager';
+import { EmptyState } from '@/components/back-office/empty-state';
+import {
+  countsByKey,
+  listHref,
+  parseListParams,
+  type RawSearchParams,
+} from '@/lib/back-office/list-params';
+import { ModerationList, type ModerationRow } from './moderation-list';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_STYLES: Record<string, string> = {
-  queued: 'bg-sky-100 text-sky-800',
-  running: 'bg-indigo-100 text-indigo-800',
-  passed: 'bg-emerald-100 text-emerald-800',
-  held: 'bg-rose-100 text-rose-800',
-  error: 'bg-amber-100 text-amber-800',
-  skipped: 'bg-slate-200 text-slate-700',
+const BASE_PATH = '/back-office/moderation';
+
+const TABS = ['held', 'never_checked', 'queued', 'error', 'passed', 'all'] as const;
+
+const TAB_LABELS: Record<string, string> = {
+  held: 'Held',
+  never_checked: 'Never checked',
+  queued: 'Queued',
+  error: 'Errored',
+  passed: 'Passed',
+  all: 'All',
 };
 
 /**
- * Ops queue for the automated approval engine. Shows ORIGINAL photos (never the
- * watermarked derivatives) with each one's verdict, so a false positive can be
- * seen and reversed.
+ * A listing the engine NEVER LOOKED AT. `moderation_status` defaults to
+ * 'skipped' and the sweeper only claims 'queued', so a listing nobody enqueued
+ * is never examined — and it is live. Four production listings went public
+ * this way. This is its own condition, its own count and its own banner.
  */
-export default async function ModerationQueuePage() {
+const neverCheckedCondition = () =>
+  and(
+    eq(listings.moderationStatus, 'skipped'),
+    inArray(listings.status, ['active', 'pending'])
+  )!;
+
+/** Queued for over half an hour means the sweeper is not draining. */
+const STUCK_MINUTES = 30;
+const stuckCondition = () =>
+  and(
+    eq(listings.moderationStatus, 'queued'),
+    lt(listings.updatedAt, new Date(Date.now() - STUCK_MINUTES * 60 * 1000))
+  )!;
+
+function tabCondition(tab: string): SQL | undefined {
+  switch (tab) {
+    case 'held':
+      return eq(listings.moderationStatus, 'held');
+    case 'never_checked':
+      return neverCheckedCondition();
+    case 'queued':
+      return inArray(listings.moderationStatus, ['queued', 'running']);
+    case 'error':
+      return eq(listings.moderationStatus, 'error');
+    case 'passed':
+      return eq(listings.moderationStatus, 'passed');
+    default:
+      return undefined;
+  }
+}
+
+function searchCondition(q: string): SQL | undefined {
+  if (!q) return undefined;
+  const like = `%${q}%`;
+  const clauses: SQL[] = [
+    ilike(listings.title, like),
+    ilike(listings.city, like),
+    ilike(listings.moderationSummary, like),
+  ];
+  const asId = Number.parseInt(q.replace(/^#/, ''), 10);
+  if (Number.isFinite(asId) && asId > 0) clauses.push(eq(listings.id, asId));
+  return or(...clauses);
+}
+
+export default async function ModerationQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   await requireBackOfficeAccess();
 
-  const rows = await db.query.listings.findMany({
-    where: inArray(listings.moderationStatus, ['queued', 'running', 'held', 'error']),
-    orderBy: [desc(listings.moderatedAt), desc(listings.createdAt)],
-    limit: 100,
+  const params = parseListParams(await searchParams, {
+    tabs: TABS,
+    defaultTab: 'held',
   });
 
-  const recentlyPassed = await db.query.listings.findMany({
-    where: inArray(listings.moderationStatus, ['passed']),
-    orderBy: [desc(listings.moderatedAt)],
-    limit: 15,
-  });
+  const [coverage, neverCheckedRows, stuckRows] = await Promise.all([
+    db
+      .select({ status: listings.moderationStatus, n: count() })
+      .from(listings)
+      .groupBy(listings.moderationStatus),
+    db.select({ n: count() }).from(listings).where(neverCheckedCondition()),
+    db.select({ n: count() }).from(listings).where(stuckCondition()),
+  ]);
 
-  /**
-   * NEVER CHECKED. `moderation_status` defaults to 'skipped' and the sweeper
-   * only claims 'queued', so a listing nobody enqueued is never looked at — and
-   * because this page used to list only queued/running/held/error, that was
-   * invisible to ops as well. Four production listings went public that way.
-   */
-  const neverChecked = await db.query.listings.findMany({
-    where: and(
-      eq(listings.moderationStatus, 'skipped'),
-      inArray(listings.status, ['active', 'pending'])
-    ),
-    orderBy: [desc(listings.createdAt)],
-    limit: 50,
-  });
+  const byStatus = countsByKey(coverage);
+  // True aggregates. The old page derived `neverChecked.length` from a
+  // `limit(50)` query, so past 50 the count under-reported its own severity.
+  const neverChecked = Number(neverCheckedRows[0]?.n ?? 0);
+  const stuck = Number(stuckRows[0]?.n ?? 0);
 
-  // Queued for more than half an hour means the sweeper is not draining. This
-  // is INDEPENDENT of the never-checked count — a listing nobody enqueued and a
-  // queue nobody is draining are different failures with different fixes, and
-  // hiding one behind the other loses the signal.
-  const stuckSince = new Date(Date.now() - 30 * 60 * 1000);
-  const coverage = await db
-    .select({ status: listings.moderationStatus, n: count() })
-    .from(listings)
-    .groupBy(listings.moderationStatus);
-  const stuck = await db
-    .select({ n: count() })
-    .from(listings)
-    .where(and(eq(listings.moderationStatus, 'queued'), lt(listings.updatedAt, stuckSince)))
-    .then((r) => r[0]?.n ?? 0);
-
-  const renderCard = (listing: (typeof rows)[number]) => {
-    const manifest = parseManifest(listing.photosManifest);
-    const rejected = manifest.filter((e) => e.v === 'reject');
-    // An I2 violation (a photo no manifest entry accounts for) is a bug worth
-    // seeing rather than a number worth hiding.
-    const publicCount = parsePhotos(listing.photos).length;
-    const covered = manifest.length;
-
-    return (
-      <Card key={listing.id} className="mb-4">
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded px-2 py-0.5 text-xs font-medium ${
-                STATUS_STYLES[listing.moderationStatus] ?? 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {listing.moderationStatus.replace('_', ' ')}
-            </span>
-            {listing.moderationLanguage && (
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
-                {listing.moderationLanguage}
-              </span>
-            )}
-            <Link
-              href={`/dashboard/listings/${listing.id}`}
-              className="inline-flex items-center gap-1 font-semibold text-slate-900 hover:underline"
-            >
-              {listing.title}
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-            <span className="text-sm text-slate-500">
-              #{listing.id} · {listing.city} · attempt {listing.moderationAttempts}
-            </span>
-            <span
-              className={`rounded px-2 py-0.5 text-xs ${
-                publicCount > covered ? 'bg-amber-100 text-amber-900' : 'text-slate-500'
-              }`}
-              title="public photos vs manifest entries"
-            >
-              {publicCount} public / {covered} tracked
-              {publicCount > covered ? ' — uncovered!' : ''}
-            </span>
-          </div>
-
-          {listing.moderationSummary && (
-            <p className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <span>{listing.moderationSummary}</span>
-            </p>
-          )}
-
-          {manifest.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              {manifest.map((entry) => (
-                <div key={entry.o} className="w-40">
-                  <div className="relative h-24 w-40 overflow-hidden rounded-lg bg-slate-100">
-                    <Image
-                      src={entry.o}
-                      alt=""
-                      fill
-                      className={`object-cover ${entry.v === 'reject' ? 'opacity-40' : ''}`}
-                      sizes="160px"
-                      unoptimized
-                    />
-                    <span
-                      className={`absolute left-1 top-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                        entry.v === 'reject'
-                          ? 'bg-rose-600 text-white'
-                          : entry.v === 'pass'
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-600 text-white'
-                      }`}
-                    >
-                      {entry.v}
-                    </span>
-                  </div>
-                  {entry.r && <p className="mt-1 text-xs text-slate-600">{entry.r}</p>}
-                  {entry.v === 'reject' && (
-                    <div className="mt-1">
-                      <RestorePhotoButton listingId={listing.id} originalUrl={entry.o} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4">
-            <ModerationActions
-              listingId={listing.id}
-              canPublish={listing.moderationStatus !== 'passed'}
-            />
-          </div>
-
-          {rejected.length > 0 && (
-            <p className="mt-3 text-xs text-slate-500">
-              Restoring a photo is remembered permanently — the same image will pass on every future
-              check.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    );
+  const counts = {
+    held: byStatus.held ?? 0,
+    never_checked: neverChecked,
+    queued: (byStatus.queued ?? 0) + (byStatus.running ?? 0),
+    error: byStatus.error ?? 0,
+    passed: byStatus.passed ?? 0,
+    all: Object.values(byStatus).reduce((a, b) => a + b, 0),
   };
+
+  const where = and(tabCondition(params.tab), searchCondition(params.q));
+
+  const [rows, totalRows] = await Promise.all([
+    db.query.listings.findMany({
+      where,
+      orderBy: [desc(listings.moderatedAt), desc(listings.createdAt)],
+      limit: params.perPage,
+      offset: params.offset,
+    }),
+    db.select({ n: count() }).from(listings).where(where),
+  ]);
+
+  const total = Number(totalRows[0]?.n ?? 0);
+
+  const items: ModerationRow[] = rows.map((listing) => {
+    const manifest = parseManifest(listing.photosManifest);
+    return {
+      id: listing.id,
+      title: listing.title,
+      city: listing.city,
+      status: listing.status,
+      moderationStatus: listing.moderationStatus,
+      moderationLanguage: listing.moderationLanguage,
+      moderationSummary: listing.moderationSummary,
+      moderationAttempts: listing.moderationAttempts,
+      // An I2 violation — a public photo no manifest entry accounts for — is a
+      // bug worth seeing rather than a number worth hiding.
+      publicCount: parsePhotos(listing.photos).length,
+      trackedCount: manifest.length,
+      photos: manifest.map((entry) => ({
+        url: entry.o,
+        verdict: entry.v,
+        reason: entry.r ?? null,
+      })),
+    };
+  });
+
+  const tabs = TABS.map((key) => ({
+    key,
+    label: TAB_LABELS[key],
+    count: counts[key],
+    urgent: key === 'held' || key === 'never_checked',
+  }));
 
   return (
     <section className="flex-1 p-4 lg:p-8">
-      <div className="mb-6 flex items-center gap-3">
-        <ShieldCheck className="h-6 w-6 text-teal-700" />
-        <h1 className="text-2xl font-bold text-slate-900">Moderation</h1>
-      </div>
+      <PageHeader
+        icon={ShieldCheck}
+        title="Moderation"
+        summary={`${counts.all.toLocaleString()} listings tracked`}
+      />
 
-      {/* Coverage first: the failure that matters most is a listing the engine
-          never looked at, which by definition never appears in a queue. */}
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4 text-sm">
-            {coverage.map((c) => (
-              <span key={c.status} className="flex items-center gap-1.5">
-                <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    STATUS_STYLES[c.status] ?? 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  {c.status}
-                </span>
-                <span className="font-semibold text-slate-900">{c.n}</span>
-              </span>
-            ))}
-          </div>
-          {neverChecked.length > 0 && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <strong>{neverChecked.length} live or pending listing(s) have never been
-              checked.</strong>{' '}
-              They were created before anything enqueued them. Re-queue each one below.
-            </p>
-          )}
-          {stuck > 0 && (
-            <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-900">
-              <strong>{stuck} listing(s) have been queued for over 30 minutes.</strong> The sweeper
-              may not be running — check the cron and{' '}
-              <code>GET /api/cron/moderate-listings</code>&apos;s <code>imageToolchain</code>.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {neverChecked.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold text-slate-900">Never checked</h2>
-          {neverChecked.map(renderCard)}
-        </div>
+      {/*
+        TWO banners, never merged. A listing nobody enqueued and a queue nobody
+        is draining are different failures with different fixes; hiding one
+        behind the other loses the signal. Both counts are unbounded aggregates.
+      */}
+      {neverChecked > 0 && (
+        <AlarmBanner
+          icon={EyeOff}
+          title={`${neverChecked} live or pending listing(s) have never been checked`}
+        >
+          <p>
+            They were created before anything enqueued them, and they are public
+            now. Nothing will pick them up on its own.{' '}
+            <Link
+              href={listHref(BASE_PATH, params, { tab: 'never_checked' })}
+              className="font-semibold underline"
+            >
+              Re-queue them
+            </Link>
+          </p>
+        </AlarmBanner>
       )}
 
-      {rows.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-slate-500">
-            Nothing needs attention. Listings appear here when the automated checks hold them, or
-            while they are queued.
-          </CardContent>
-        </Card>
-      ) : (
-        rows.map(renderCard)
+      {stuck > 0 && (
+        <AlarmBanner
+          tone="caution"
+          icon={Timer}
+          title={`${stuck} listing(s) have been queued for over ${STUCK_MINUTES} minutes`}
+        >
+          <p>
+            The sweeper may not be running — check the cron and{' '}
+            <code className="font-mono">GET /api/cron/moderate-listings</code>&apos;s{' '}
+            <code className="font-mono">imageToolchain</code>.{' '}
+            <Link
+              href={listHref(BASE_PATH, params, { tab: 'queued' })}
+              className="font-semibold underline"
+            >
+              See the queue
+            </Link>
+          </p>
+        </AlarmBanner>
       )}
 
-      {recentlyPassed.length > 0 && (
-        <>
-          <h2 className="mb-3 mt-10 text-lg font-semibold text-slate-900">Recently passed</h2>
-          {recentlyPassed.map(renderCard)}
-        </>
-      )}
+      <FilterBar
+        basePath={BASE_PATH}
+        params={params}
+        tabs={tabs}
+        searchPlaceholder="Search title, city, summary, #id"
+      />
+
+      <ListSlab>
+        {items.length === 0 ? (
+          <EmptyState
+            basePath={BASE_PATH}
+            params={params}
+            emptyMessage="Nothing needs attention. Listings appear here when the automated checks hold them, or while they are queued."
+            filterLabel={params.tab === 'all' ? undefined : TAB_LABELS[params.tab]}
+          />
+        ) : (
+          <ModerationList rows={items} />
+        )}
+        <Pager basePath={BASE_PATH} params={params} total={total} />
+      </ListSlab>
     </section>
   );
 }
