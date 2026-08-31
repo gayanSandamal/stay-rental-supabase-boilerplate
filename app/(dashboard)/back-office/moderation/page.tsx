@@ -5,6 +5,7 @@ import { db } from '@/lib/db/drizzle';
 import { listings } from '@/lib/db/schema';
 import { ShieldCheck, EyeOff, Timer } from 'lucide-react';
 import { parseManifest, parsePhotos } from '@/lib/images/manifest';
+import { phase } from '@/lib/observability/phase-timer';
 import { PageHeader } from '@/components/back-office/page-header';
 import { AlarmBanner } from '@/components/back-office/alarm-banner';
 import { FilterBar } from '@/components/back-office/filter-bar';
@@ -20,6 +21,12 @@ import {
 import { ModerationList, type ModerationRow } from './moderation-list';
 
 export const dynamic = 'force-dynamic';
+/*
+ * Fail in 60s rather than the platform default of 300. A back-office page
+ * that hangs for five minutes is indistinguishable from a dead site to the
+ * operator, and it burns a full function invocation to tell them nothing.
+ */
+export const maxDuration = 60;
 
 const BASE_PATH = '/back-office/moderation';
 
@@ -96,14 +103,14 @@ export default async function ModerationQueuePage({
     defaultTab: 'held',
   });
 
-  const [coverage, neverCheckedRows, stuckRows] = await Promise.all([
+  const [coverage, neverCheckedRows, stuckRows] = await phase('moderation:counts', () => Promise.all([
     db
       .select({ status: listings.moderationStatus, n: count() })
       .from(listings)
       .groupBy(listings.moderationStatus),
     db.select({ n: count() }).from(listings).where(neverCheckedCondition()),
     db.select({ n: count() }).from(listings).where(stuckCondition()),
-  ]);
+  ]));
 
   const byStatus = countsByKey(coverage);
   // True aggregates. The old page derived `neverChecked.length` from a
@@ -122,7 +129,7 @@ export default async function ModerationQueuePage({
 
   const where = and(tabCondition(params.tab), searchCondition(params.q));
 
-  const [rows, totalRows] = await Promise.all([
+  const [rows, totalRows] = await phase('moderation:rows', () => Promise.all([
     db.query.listings.findMany({
       where,
       orderBy: [desc(listings.moderatedAt), desc(listings.createdAt)],
@@ -130,7 +137,7 @@ export default async function ModerationQueuePage({
       offset: params.offset,
     }),
     db.select({ n: count() }).from(listings).where(where),
-  ]);
+  ]));
 
   const total = Number(totalRows[0]?.n ?? 0);
 

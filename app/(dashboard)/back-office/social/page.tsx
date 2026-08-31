@@ -36,6 +36,12 @@ import { ConfirmManualTakedown, RetryAllFailed } from './social-actions';
 import { SocialGroupList, type SocialGroupView } from './social-group-list';
 
 export const dynamic = 'force-dynamic';
+/*
+ * Fail in 60s rather than the platform default of 300. A back-office page
+ * that hangs for five minutes is indistinguishable from a dead site to the
+ * operator, and it burns a full function invocation to tell them nothing.
+ */
+export const maxDuration = 60;
 
 const BASE_PATH = '/back-office/social';
 
