@@ -1,4 +1,3 @@
-import { publisherDisplayName } from '@/lib/publisher-name';
 import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
@@ -7,9 +6,8 @@ import { LandlordCrossSellBanner } from '@/components/landlord-cross-sell-banner
 import { Suspense } from 'react';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
-import { db } from '@/lib/db/drizzle';
-import { businessAccounts, users, landlords } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { trackImpressions } from '@/lib/analytics/impressions';
 import type { Metadata } from 'next';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
@@ -112,63 +110,32 @@ export default async function ListingsPage(props: {
 
   const listings = await getActiveListings(filters);
 
-  // Fetch publisher information for each listing
-  const listingsWithPublisher = await Promise.all(
-    listings.map(async (listing) => {
-      let publisherName = 'Unknown';
-      let publisherType: 'individual' | 'business' = 'individual';
-      let teamMemberName: string | null = null;
+  /*
+   * Impressions are counted at the surfaces that SERVE listings, not inside
+   * getActiveListings. The ranking function is the single search path, but
+   * "fetched" is not "seen": the homepage strip pulls a thousand rows to show
+   * six, and the saved-search cron pulls results nobody looks at. Counting what
+   * was actually rendered is the only figure the funnel can honestly use.
+   *
+   * Synchronous map write — nothing is awaited on the search path.
+   */
+  trackImpressions(listings.map((l) => l.id));
 
-      // Check if listing was created by a business account
-      if (listing.businessAccountId) {
-        try {
-          const businessAccount = await db.query.businessAccounts.findFirst({
-            where: eq(businessAccounts.id, listing.businessAccountId),
-          });
-          
-          if (businessAccount) {
-            publisherType = 'business';
-            publisherName = businessAccount.name;
-
-            // Get the team member who created it
-            if (listing.createdBy) {
-              const creator = await db.query.users.findFirst({
-                where: eq(users.id, listing.createdBy),
-              });
-              teamMemberName = creator ? publisherDisplayName(creator) : null;
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching business account:', error);
-        }
-      }
-
-      // If not a business account, get landlord info
-      if (publisherType === 'individual' && !listing.businessAccountId) {
-        try {
-          const landlordInfo = await db.query.landlords.findFirst({
-            where: eq(landlords.id, listing.landlordId),
-            with: {
-              user: true,
-            },
-          });
-          
-          if (landlordInfo?.user) {
-            publisherName = publisherDisplayName(landlordInfo.user);
-          }
-        } catch (error) {
-          console.error('Error fetching landlord info:', error);
-        }
-      }
-
-      return {
-        ...listing,
-        publisherName,
-        publisherType,
-        teamMemberName,
-      };
-    })
-  );
+  /*
+   * Publisher names for the whole result set in three queries, not two per row.
+   * This was a `Promise.all` over the results, each iteration running its own
+   * business-account and landlord lookups, on the busiest page in the product
+   * and a `max: 1` pool. Same defect as D2 on the analytics page.
+   */
+  const publishers = await resolvePublishers(listings);
+  const listingsWithPublisher = listings.map((listing) => ({
+    ...listing,
+    ...(publishers.get(listing.id) ?? {
+      publisherName: 'Unknown',
+      publisherType: 'individual' as const,
+      teamMemberName: null,
+    }),
+  }));
 
   const showSignedUpBanner = searchParams.signed_up === '1';
 

@@ -127,6 +127,34 @@ export const featureFlagDefaults = {
   // controls whether ops get a paste-ready draft to post by hand.
   socialDraftFacebookGroup: true,
 
+  // Record a tapped Call / WhatsApp button on a listing (migration 0045). The
+  // closest thing this marketplace has to a lead, and the number landlords ask
+  // about instead of views. OFF stops new events being recorded; the analytics
+  // page still reports whatever was already collected, because hiding history
+  // when a switch flips is how a landlord learns not to trust the numbers.
+  trackContactClicks: true,
+
+  // Show view counts (a 30-day sparkline and a 7-day total) on every listing
+  // card in /dashboard/listings, on every tier including free. The deep
+  // comparisons stay paid; the EXISTENCE of numbers should not be paywalled on
+  // a platform whose whole model is free unlimited listings and paid
+  // visibility. OFF reverts the cards to inventory-only.
+  showViewCountsToAllTiers: true,
+
+  // Count how many times a listing is SERVED on a results page (migration
+  // 0048). Impressions + opens give a click-through rate, which is what makes
+  // every other nudge diagnostic rather than vague, and it is the only way to
+  // show a landlord what a Boost bought. Costs one in-memory map write per
+  // search and one batched upsert a minute. OFF stops the counting entirely.
+  trackSearchImpressions: true,
+
+  // Weekly market rent snapshots (migration 0047). ON by default because the
+  // value is entirely in the accumulated history and history cannot be
+  // backfilled — a week not captured is a week gone. The reader stays silent
+  // until there is enough of it, so switching this on early costs one grouped
+  // query a week and nothing else.
+  enableMarketRentSnapshots: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
   // Instagram's carousel ceiling. Also bounds how many images the proxy has to
@@ -375,6 +403,38 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   watermarkListingImages: {
     label: '— apply watermark',
     description: 'Sub-switch: compress without branding when off.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  trackSearchImpressions: {
+    label: 'Search impression counting',
+    description:
+      'Count how many times each listing appears on a results page, so landlords see impressions → opens → contacts instead of views alone. Counts are buffered in memory and written in batches; counts held when an instance is recycled are lost, so the figure is a floor rather than an exact total. Off stops the counting; what was already written stays.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableMarketRentSnapshots: {
+    label: 'Weekly market rent snapshots',
+    description:
+      'Record the average and median rent per city + bedroom count once a week, for markets with enough active listings to average. Feeds the "the market moved and you did not" line on the analytics page, which needs about eight weeks of history before it says anything. Off stops the recording; the history already captured is kept.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  trackContactClicks: {
+    label: 'Contact click tracking',
+    description:
+      'Record when a renter taps Call or WhatsApp on a listing, so landlords can see leads rather than only views. The buttons themselves never depend on this — the dialer opens whether or not the event is recorded. Off stops new events; already-recorded ones stay visible.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  showViewCountsToAllTiers: {
+    label: 'View counts for every tier',
+    description:
+      'Show a 30-day view sparkline and 7-day total on each card in the landlord listings page, for free landlords as well as paid ones. Rent comparison and percentiles stay on the paid analytics page. Off hides the sparkline everywhere.',
     group: 'Platform',
     appWide: true,
     public: false,

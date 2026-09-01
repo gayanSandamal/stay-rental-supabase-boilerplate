@@ -9,6 +9,7 @@ import {
   decimal,
   pgEnum,
   uuid,
+  date,
   primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -245,6 +246,66 @@ export const listingViews = pgTable('listing_views', {
     .notNull()
     .references(() => listings.id, { onDelete: 'cascade' }),
   viewedAt: timestamp('viewed_at').notNull().defaultNow(),
+  // sha256(ip + user-agent + VIEW_HASH_SALT + yyyy-mm-dd). Rotates daily, so it
+  // separates "views" from "people" within a day without ever becoming a
+  // cross-day identity. NULL on every row written before migration 0046 — a
+  // window containing NULLs has no honest unique count, so readers report views
+  // only rather than counting the rows that happen to carry a hash.
+  visitorHash: varchar('visitor_hash', { length: 64 }),
+});
+
+// Contact clicks — a tapped Call or WhatsApp button on a listing (migration
+// 0045). Deliberately NOT a `type` column on listing_views: views are
+// high-volume and disposable, contact events are low-volume and are what the
+// analytics actually join and chart.
+export const listingContactEvents = pgTable('listing_contact_events', {
+  id: serial('id').primaryKey(),
+  listingId: integer('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  // 'call' | 'whatsapp' — see CONTACT_CHANNELS in lib/analytics/contact-events.
+  channel: varchar('channel', { length: 16 }).notNull(),
+  // Which of the listing's numbers was tapped, when it is one of ours. NULL for
+  // the publisher-phone fallback, which has no listing_contact_numbers row.
+  contactNumberId: integer('contact_number_id').references(
+    () => listingContactNumbers.id,
+    { onDelete: 'set null' }
+  ),
+  occurredAt: timestamp('occurred_at').notNull().defaultNow(),
+});
+
+// Daily rollup of search impressions (migration 0048): how many times a listing
+// was served on a results page. A rollup rather than an event log — twenty rows
+// per search on the busiest query in the product is not a cost this pool can
+// carry. Written by lib/analytics/impressions.ts.
+export const listingImpressions = pgTable(
+  'listing_impressions',
+  {
+    listingId: integer('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.listingId, table.day] })]
+);
+
+// Weekly market rent snapshots (migration 0047). Written by the weekly cron,
+// read to say how a landlord's rent has moved RELATIVE to their market — a
+// question live data cannot answer at all, which is why the writer ships long
+// before the reader has enough history to be useful.
+export const marketRentSnapshots = pgTable('market_rent_snapshots', {
+  id: serial('id').primaryKey(),
+  city: varchar('city', { length: 100 }).notNull(),
+  bedrooms: integer('bedrooms').notNull(),
+  avgRent: integer('avg_rent').notNull(),
+  medianRent: integer('median_rent'),
+  // How many active listings the reading was taken over. A later reader uses
+  // this to discard a snapshot captured while the market was too thin to mean
+  // anything, exactly as MIN_COMPARABLES_FOR_RENT does for live data.
+  sampleSize: integer('sample_size').notNull(),
+  capturedOn: date('captured_on').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 // Saved searches table (for tenants)
@@ -728,6 +789,7 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
     references: [businessAccounts.id],
   }),
   contactNumbers: many(listingContactNumbers),
+  contactEvents: many(listingContactEvents),
 }));
 
 export const savedSearchesRelations = relations(savedSearches, ({ one }) => ({
@@ -769,6 +831,17 @@ export const userContactNumbersRelations = relations(userContactNumbers, ({ one,
     references: [businessAccounts.id],
   }),
   listingContacts: many(listingContactNumbers),
+}));
+
+export const listingContactEventsRelations = relations(listingContactEvents, ({ one }) => ({
+  listing: one(listings, {
+    fields: [listingContactEvents.listingId],
+    references: [listings.id],
+  }),
+  listingContactNumber: one(listingContactNumbers, {
+    fields: [listingContactEvents.contactNumberId],
+    references: [listingContactNumbers.id],
+  }),
 }));
 
 export const listingContactNumbersRelations = relations(listingContactNumbers, ({ one }) => ({
@@ -859,6 +932,12 @@ export type UserContactNumber = typeof userContactNumbers.$inferSelect;
 export type NewUserContactNumber = typeof userContactNumbers.$inferInsert;
 export type ListingContactNumber = typeof listingContactNumbers.$inferSelect;
 export type NewListingContactNumber = typeof listingContactNumbers.$inferInsert;
+export type ListingImpression = typeof listingImpressions.$inferSelect;
+export type NewListingImpression = typeof listingImpressions.$inferInsert;
+export type MarketRentSnapshot = typeof marketRentSnapshots.$inferSelect;
+export type NewMarketRentSnapshot = typeof marketRentSnapshots.$inferInsert;
+export type ListingContactEvent = typeof listingContactEvents.$inferSelect;
+export type NewListingContactEvent = typeof listingContactEvents.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;

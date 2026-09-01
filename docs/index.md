@@ -18,6 +18,8 @@ Detailed exhaustive analysis of specific areas:
 - `SUPABASE_DATABASE.md` — DB/Supabase details
 - `LAUNCH_TEST_PLAN.md` — pre-launch QA plan
 - `USER_ADMIN_FLOWS.md` — user/admin journey docs
+- `analytics-retention-roadmap.md` — landlord analytics plan; the status header
+  records which items are built and which cannot be as written
 - `email-templates/` — branded Supabase auth email templates + deliverability guide
 
 ## Root-Level Guides
