@@ -25,8 +25,12 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata: Metadata = {
   title: 'List Your Property',
+  // "viewing coordination" removed: migration 0014 dropped the viewings table
+  // outright ("visitors contact landlords directly"), so the platform has never
+  // coordinated a viewing. This string is the Google snippet — the one piece of
+  // copy that gets read by people who never reach the page.
   description:
-    'List your rental property on Easy Rent. Reach verified tenants, get viewing coordination, and enjoy a hassle-free listing experience in Sri Lanka.',
+    'List your rental property on Easy Rent — free, unlimited listings for Sri Lanka. Verified contact numbers, direct tenant calls and WhatsApp, and view counts on every listing.',
   alternates: {
     canonical: `${baseUrl}/list-your-property`,
   },
@@ -42,12 +46,24 @@ const benefits = [
     gradient: 'from-emerald-600 to-teal-700',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
+  /*
+   * The card here used to read "Our team visits your property and awards a
+   * 'Visited' badge". The homepage dropped that same claim as untrue — no
+   * property visit has ever happened and nothing records one — but this page
+   * kept it. Replaced rather than re-worded, with something the platform
+   * actually does as of migrations 0045-0048.
+   *
+   * Modest on purpose: a count, not an identity. The visitor hash rotates
+   * daily and cannot follow anyone, so this must never imply we can say WHO
+   * looked. "Counts start the day you publish" sets the expectation that a new
+   * listing opens on an empty graph rather than a broken one.
+   */
   {
     icon: Eye,
-    title: 'Property Visit Badge',
+    title: 'See How Your Listing Is Doing',
     description:
-      'Our team visits your property and awards a "Visited" badge, increasing trust and attracting more tenants.',
-    tag: 'Trust Signal',
+      'Every listing shows a 30-day view graph and a 7-day total — on every plan, including free. Counts start the day you publish.',
+    tag: 'Free Insight',
     gradient: 'from-teal-600 to-teal-800',
     tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
   },
@@ -88,6 +104,16 @@ const benefits = [
     tagColor: 'bg-amber-50 text-amber-800 border-amber-200',
   },
 ];
+
+/**
+ * The view-counts card is dropped when the flag that renders the graph is off,
+ * for the same reason the homepage gates it: a benefit the dashboard does not
+ * deliver is a broken promise, and the grid reads fine at five cards.
+ */
+function buildBenefits(viewCountsEnabled: boolean) {
+  if (viewCountsEnabled) return benefits;
+  return benefits.filter((b) => b.tag !== 'Free Insight');
+}
 
 // Step 1 depends on whether the reader already has an account — telling a
 // signed-in landlord to go and create one is the same dead end as pointing
@@ -133,7 +159,7 @@ const restOfSteps = [
 
 // Objection-handling FAQ. `conciergeOnly` entries render only when the
 // WhatsApp concierge is enabled + configured.
-function buildFaqs(conciergeAvailable: boolean) {
+function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
   const faqs = [
     {
       q: 'Is it really free?',
@@ -162,6 +188,17 @@ function buildFaqs(conciergeAvailable: boolean) {
       a: 'Yes — unlimited properties, all free. Agencies and portfolio landlords can also get a business account to manage listings as a team.',
     },
   ];
+  if (viewCountsEnabled) {
+    /*
+     * The honest answer to the question landlords actually ask. It promises a
+     * count and refuses the thing we cannot do: the visitor hash rotates every
+     * day and was built so nobody — us included — can tell who looked.
+     */
+    faqs.push({
+      q: 'Will I know if anyone is looking at my listing?',
+      a: 'Yes. Every listing shows a 30-day view graph and a 7-day total in your dashboard, free on every plan. Counts start the day you publish. We can tell you how many times a listing was opened, not who opened it — we do not track visitors between days.',
+    });
+  }
   if (conciergeAvailable) {
     faqs.push({
       q: 'Can you create the listing for me?',
@@ -181,6 +218,7 @@ export default async function ListYourPropertyPage() {
   const quickListEnabled = isFeatureEnabled('enableQuickList');
   const conciergeAvailable =
     isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink();
+  const viewCountsEnabled = isFeatureEnabled('showViewCountsToAllTiers');
 
   // Where every "list your property" CTA on this page is ultimately headed.
   const listingFormHref = quickListEnabled
@@ -188,7 +226,7 @@ export default async function ListYourPropertyPage() {
     : '/dashboard/listings/new';
   const primaryCtaHref = accountGatedHref(!!user, listingFormHref);
 
-  const faqs = buildFaqs(conciergeAvailable);
+  const faqs = buildFaqs(conciergeAvailable, viewCountsEnabled);
   const faqJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -387,13 +425,17 @@ export default async function ListYourPropertyPage() {
                   <span className="gradient-text">Effortless</span>
                 </h2>
                 <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-                  From verification to viewing coordination — we handle the heavy lifting so you can focus on finding the right tenant.
+                  {/* See the note on the page metadata: we do not coordinate
+                      viewings and never have. Verification and publishing are
+                      the parts we actually do. */}
+                  We verify and publish your listing, then get out of the way — tenants
+                  reach you directly, and you can see how the listing is doing.
                 </p>
               </div>
             </ScrollReveal>
 
             <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {benefits.map((benefit) => {
+              {buildBenefits(viewCountsEnabled).map((benefit) => {
                 const Icon = benefit.icon;
                 return (
                   <div

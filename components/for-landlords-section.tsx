@@ -1,12 +1,16 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
-import { Shield, Users, ArrowRight } from 'lucide-react';
+import { Shield, Users, LineChart, ArrowRight } from 'lucide-react';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { WhatsAppConciergeButton } from './whatsapp-concierge-button';
 
 export function ForLandlordsSection() {
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
   const conciergeEnabled = isFeatureEnabled('enableWhatsAppConcierge');
+  // Advertise the view counts only while the flag that actually renders them is
+  // on. A card promising a graph that the dashboard no longer draws is the same
+  // broken promise as the property-visit claim this section already dropped.
+  const viewCountsEnabled = isFeatureEnabled('showViewCountsToAllTiers');
   return (
     <section className="py-20 lg:py-28 bg-[#F7F4ED] relative overflow-hidden">
       <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
@@ -30,7 +34,11 @@ export function ForLandlordsSection() {
         </ScrollReveal>
 
         <ScrollReveal stagger>
-          <div className="grid md:grid-cols-2 gap-6 mb-12">
+          <div
+            className={`grid gap-6 mb-12 ${
+              viewCountsEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'
+            }`}
+          >
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
               <Shield className="h-10 w-10 text-teal-600 mb-4" />
               <h3 className="text-lg font-bold text-slate-900 mb-2">
@@ -53,6 +61,27 @@ export function ForLandlordsSection() {
                 before it goes live. You handle tenant contact directly.
               </p>
             </div>
+            {viewCountsEnabled && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+                <LineChart className="h-10 w-10 text-teal-600 mb-4" />
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  See How It’s Doing
+                </h3>
+                {/*
+                  * Deliberately modest, and deliberately not "see who viewed
+                  * your listing": the visitor hash rotates daily and cannot
+                  * identify anyone. It promises a count, which is what we have.
+                  * The deeper comparisons are paid, so they are named only when
+                  * paid visibility is actually on sale.
+                  */}
+                <p className="text-slate-600 text-sm">
+                  Every listing shows a 30-day view graph and a 7-day total — on every
+                  plan, including free. Counts start the day you publish.
+                  {pricingEnabled &&
+                    ' Rent comparisons and contact stats come with the paid plans.'}
+                </p>
+              </div>
+            )}
           </div>
         </ScrollReveal>
 
