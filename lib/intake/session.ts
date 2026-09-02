@@ -100,8 +100,18 @@ export interface AppendOutcome {
      * listing shared on Easy Rent's own social accounts.
      */
     | 'social_consent_granted'
-    | 'social_consent_declined';
+    | 'social_consent_declined'
+    /**
+     * STOP / START REPORTS: scheduled performance reports switched off or back
+     * on. The preference WRITE deliberately happens in the webhook rather than
+     * here — see the handler for why a second connection inside this
+     * transaction is not safe.
+     */
+    | 'reports_off'
+    | 'reports_on';
   intakeId?: number;
+  /** reports_off/reports_on: whose preference to change, null if not a landlord. */
+  landlordId?: number | null;
   /** attach_media / edit_link / delete / location_saved: the listing concerned. */
   listingId?: number | null;
   listingTitle?: string | null;
@@ -516,6 +526,28 @@ export async function appendToIntake(
     if (command === 'help') {
       await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
       return { action: 'help' } as const;
+    }
+    if (command === 'reports_off' || command === 'reports_on') {
+      // Resolve only. The preference write and its audit entry happen in the
+      // webhook AFTER this transaction commits: `logAudit` goes through the
+      // module-level `db`, and on Vercel that pool is max: 1 — taking a second
+      // connection while this transaction still holds the only one is the
+      // deadlock the pooled-connection rule exists to prevent.
+      await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+      const e164 = msg.senderId.startsWith('+') ? msg.senderId : `+${msg.senderId}`;
+      const owner = await tx
+        .select({ landlordId: landlords.id })
+        .from(landlords)
+        .innerJoin(users, eq(landlords.userId, users.id))
+        .where(and(eq(users.waPhone, e164), isNull(users.deletedAt)))
+        .limit(1);
+      // A sender with no landlord row is acknowledged anyway. They cannot be
+      // receiving reports (those need a landlord row AND a verified number), so
+      // the confirmation is true — and an opt-out is never worth arguing with.
+      return {
+        action: command,
+        landlordId: owner[0]?.landlordId ?? null,
+      } as const;
     }
     if (command === 'link') {
       await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);

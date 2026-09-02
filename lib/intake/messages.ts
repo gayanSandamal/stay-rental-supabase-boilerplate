@@ -518,6 +518,30 @@ export function helpMessage(lang: ReplyLang = 'en'): string {
  * Someone messaged an intake that is held for human review. Says the thread is
  * alive without promising a listing — the hold may be a genuine scam flag.
  */
+/**
+ * Confirming a report opt-out.
+ *
+ * Always names the way back. STOP is a word landlords type for several reasons
+ * (see command-words.ts), so a confirmation that does not say how to undo it
+ * turns an ambiguous message into a permanent, silent loss of the one channel
+ * we have to tell them their listing expired.
+ */
+export function reportsOffMessage(): string {
+  return [
+    '👍 Done — no more listing reports.',
+    '',
+    'Your numbers are always on your dashboard, and you can reply START REPORTS any time to get the weekly summary back.',
+  ].join('\n');
+}
+
+export function reportsOnMessage(): string {
+  return [
+    '📊 You’re back on — we’ll send a short summary of how your listings are doing each week.',
+    '',
+    'Reply STOP any time to turn it off.',
+  ].join('\n');
+}
+
 export function manualReviewPendingMessage(lang: ReplyLang = 'en'): string {
   return (
     t(lang, 'manualReviewPending') ??

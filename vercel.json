@@ -27,6 +27,10 @@
     {
       "path": "/api/cron/market-snapshot",
       "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/landlord-reports",
+      "schedule": "0 4 * * *"
     }
   ]
 }

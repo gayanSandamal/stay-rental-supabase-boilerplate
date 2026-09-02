@@ -10,7 +10,8 @@ export type NotificationType =
   | 'viewing_scheduled'
   | 'listing_approved'
   | 'whatsapp_intake'
-  | 'social_publish';
+  | 'social_publish'
+  | 'performance_report';
 
 export async function createNotification(params: {
   userId: number;

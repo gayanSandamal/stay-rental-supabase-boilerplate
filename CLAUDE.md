@@ -218,9 +218,8 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
 ## Landlord analytics (2026-08-31)
 
 Migrations `0045`–`0048`. The retention roadmap this implements is in
-`docs/analytics-retention-roadmap.md`; items 5 and 7 are NOT built, because they extend
-a WhatsApp landlord *report* (`lib/reports/**`) that does not exist in this
-repository.
+`docs/analytics-retention-roadmap.md`. Items 5 and 7 extend the WhatsApp
+landlord report in `lib/reports/**` — see the next section, which added it.
 
 - **No per-listing insight helper exists, on purpose.** `getPortfolioInsights`
   in `lib/db/queries.ts` answers a whole portfolio in FIVE queries whatever its
@@ -262,6 +261,47 @@ repository.
   default while the reader stays silent until ~8 weeks have accumulated.
   `sample_size` is stored per row so a reading taken while the market was too
   thin can be discarded afterwards.
+
+## Landlord performance reports (2026-08-31)
+
+Scheduled "how your listings did" summaries over WhatsApp — weekly for everyone,
+daily as a paid-plan option. Flag-gated (`enableLandlordReports`), OFF by
+default. Rollout steps and ops signals are in `docs/whatsapp-golive-runbook.md`.
+
+- **A scheduled message is not a reply.** Every other outbound WhatsApp message
+  in this codebase rides inside the 24-hour customer-service window the
+  landlord's own message opened. A report never does, so it MUST go out as an
+  approved Meta **template** (`sendWhatsAppTemplate`), never `sendWhatsAppText`
+  — free-form outside the window is rejected with 131047 for every recipient.
+  There is deliberately **no free-form fallback**: it cannot succeed, and
+  repeated failed business-initiated sends degrade the WABA quality rating that
+  every landlord's messages depend on.
+- **`REPORT_TEMPLATE_TEXT` in `lib/reports/message.ts` is the contract.** It is
+  the exact body registered with Meta. Changing the variable count without
+  re-registering breaks delivery for everyone at once with nothing failing
+  locally; `tests/unit/landlord-reports.test.ts` holds code and template in
+  agreement. Template params can contain **no newlines, tabs or 5+ spaces**, and
+  every declared variable must always be non-empty — hence one label per line
+  rather than optional blocks.
+- **Daily is the paid cadence, weekly is for everyone.** Gating the weekly
+  report would defeat its purpose: it exists to retain the landlord who never
+  opens the dashboard. The tier check runs at SEND time
+  (`effectiveReportFrequency`), never at write time, so a lapsed plan drops back
+  to weekly instead of billing 30 templates a month against a dead subscription
+  — while preserving the landlord's stored choice for when they renew.
+- **Only `users.wa_phone` may be messaged.** `users.phone` is user-typed and
+  unverified; a performance report about someone's property must never reach a
+  stranger who typed their number.
+- **A failed send still advances `report_last_period_end`.** The job runs daily,
+  so leaving it untouched would retry a dead number every day forever. A report
+  is a snapshot, not a ledger. `dryRun` (no template configured) is counted
+  separately from `failed` (WhatsApp rejected it) — reporting unfinished setup
+  as failure sends ops hunting an outage that doesn't exist.
+- **The job is strictly sequential and set-based.** Two queries per landlord,
+  never concurrent — see commit a3ac4f9 for what `Promise.all` does to a `max: 1`
+  pool on Supabase's transaction pooler. Raw `sql` fragments must cast Dates
+  (`ts()` in `lib/reports/data.ts`); drizzle's own operators bind them, hand-
+  written fragments throw at bind time inside the driver.
 
 ## When making changes
 

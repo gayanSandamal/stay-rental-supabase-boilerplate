@@ -13,6 +13,7 @@ import { Suspense } from 'react';
 import { Shield } from 'lucide-react';
 import Link from 'next/link';
 import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
+import { ReportPreferencesCard } from '@/components/report-preferences-card';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -269,6 +270,10 @@ export default function GeneralPage() {
       </Card>
 
       <ProfileUrlCard />
+
+      <div className="mb-6">
+        <ReportPreferencesCard />
+      </div>
 
       <Card>
         <CardHeader>

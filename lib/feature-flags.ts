@@ -155,6 +155,14 @@ export const featureFlagDefaults = {
   // query a week and nothing else.
   enableMarketRentSnapshots: true,
 
+  // Scheduled listing-performance reports over WhatsApp (migration 0049).
+  // OFF by default for two independent reasons, either of which is sufficient:
+  // it sends BUSINESS-INITIATED messages, which need an approved Meta template
+  // and a WABA in good standing; and every one of those templates is billed.
+  // Switch on only once WHATSAPP_REPORT_TEMPLATE names an approved template —
+  // with it unset the job runs and logs but delivers nothing.
+  enableLandlordReports: false,
+
   // Numeric / config flags
   listingExpirationDays: 30,
   // Instagram's carousel ceiling. Also bounds how many images the proxy has to
@@ -238,6 +246,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
   enableAnalyticsDashboard: {
     label: 'Analytics dashboard',
     description: 'Enable the landlord analytics dashboard.',
+    group: 'Platform',
+    appWide: true,
+    public: true,
+  },
+  enableLandlordReports: {
+    label: 'Landlord performance reports',
+    description:
+      'Scheduled WhatsApp reports on how a landlord\'s listings performed — weekly for everyone, daily as a paid-plan option. Sends business-initiated messages, so it needs an approved Meta template named in WHATSAPP_REPORT_TEMPLATE and it bills per message; with no template set the job runs and logs but delivers nothing.',
     group: 'Platform',
     appWide: true,
     public: true,
