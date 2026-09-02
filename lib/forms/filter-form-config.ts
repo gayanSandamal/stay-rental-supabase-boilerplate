@@ -357,7 +357,27 @@ export const filterFormConfig: FormConfig = {
       name: 'sortBy',
       label: 'Sort By',
       type: 'select',
+      // DEFAULT IS EMPTY, AND THAT IS THE WHOLE POINT.
+      //
+      // `getActiveListings` applies the paid-visibility ranking (Featured >
+      // Boost > plan tier > Urgent > verified > completeness > newest) ONLY when
+      // `sortBy` is falsy. Any explicit value — 'newest' included — falls
+      // through to a plain column sort and bypasses the ranking entirely.
+      //
+      // This field used to default to 'newest', and `applyFilters` writes every
+      // non-empty value to the URL, so `sortBy=newest` rode along on every
+      // filter apply. It was harmless only because all four consumers dropped
+      // the key on the floor. The moment `parseListingFilters` started honouring
+      // all 33 filters, that accident would have become a silent, site-wide
+      // disabling of Boost and Featured — no error, no failing test, just
+      // landlords reporting weeks later that the thing they paid for did
+      // nothing.
+      //
+      // '' means "Recommended": omitted from the URL, omitted from the filters,
+      // ranking preserved. A renter who deliberately picks "Newest First" still
+      // gets newest and still bypasses the ranking, which is correct.
       options: [
+        { label: 'Recommended', value: '' },
         { label: 'Newest First', value: 'newest' },
         { label: 'Oldest First', value: 'oldest' },
         { label: 'Price: Low to High', value: 'price_asc' },
@@ -367,7 +387,7 @@ export const filterFormConfig: FormConfig = {
         { label: 'Bedrooms: Most First', value: 'bedrooms_desc' },
         { label: 'Bedrooms: Least First', value: 'bedrooms_asc' },
       ],
-      defaultValue: 'newest',
+      defaultValue: '',
     },
   ],
   submitButton: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { ListingCard } from './listing-card';
 import { Listing } from '@/lib/db/schema';
@@ -31,44 +31,6 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const observerTarget = useRef<HTMLDivElement>(null);
-  const [filters, setFilters] = useState({
-    search: '',
-    city: '',
-    minPrice: '',
-    maxPrice: '',
-    bedrooms: '',
-    propertyType: '',
-    powerBackup: '',
-    waterSource: '',
-    hasFiber: false,
-  });
-
-  // Update filters from URL params
-  useEffect(() => {
-    setFilters({
-      search: searchParams.get('search') || '',
-      city: searchParams.get('city') || '',
-      minPrice: searchParams.get('minPrice') || '',
-      maxPrice: searchParams.get('maxPrice') || '',
-      bedrooms: searchParams.get('bedrooms') || '',
-      propertyType: searchParams.get('propertyType') || '',
-      powerBackup: searchParams.get('powerBackup') || '',
-      waterSource: searchParams.get('waterSource') || '',
-      hasFiber: searchParams.get('hasFiber') === 'true',
-    });
-  }, [searchParams]);
-
-  // Listen for filter updates
-  useEffect(() => {
-    const handleFilterUpdate = (event: CustomEvent) => {
-      setFilters(event.detail);
-    };
-    window.addEventListener('updateFilters' as any, handleFilterUpdate);
-    return () => {
-      window.removeEventListener('updateFilters' as any, handleFilterUpdate);
-    };
-  }, []);
-
   // Reset listings when filters change
   useEffect(() => {
     setListings(initialListings);
@@ -83,13 +45,14 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
     setIsLoadingMore(true);
     try {
       const params = new URLSearchParams();
-      params.set('page', String(currentPage + 1));
-      params.set('limit', '20');
-
-      // Add all search params
+      // URL filters first, pagination second. The other order let a URL that
+      // carried its own ?page= overwrite the cursor, so infinite scroll kept
+      // refetching the same page.
       searchParams.forEach((value, key) => {
         params.set(key, value);
       });
+      params.set('page', String(currentPage + 1));
+      params.set('limit', '20');
 
       const response = await fetch(`/api/listings/paginated?${params.toString()}`);
       const data = await response.json();
@@ -129,74 +92,24 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
     };
   }, [hasMore, isLoadingMore, loadMoreListings]);
 
-  // Filter listings - need to include ALL filters from URL
-  const filteredListings = useMemo(() => {
-    return listings.filter((listing) => {
-      // Search filter
-      const search = searchParams.get('search');
-      if (search) {
-        const searchLower = search.toLowerCase();
-        const matchesSearch =
-          listing.title?.toLowerCase().includes(searchLower) ||
-          listing.address?.toLowerCase().includes(searchLower) ||
-          listing.description?.toLowerCase().includes(searchLower);
-        if (!matchesSearch) return false;
-      }
-
-      // City filter
-      const city = searchParams.get('city');
-      if (city && listing.city?.toLowerCase() !== city.toLowerCase()) {
-        return false;
-      }
-
-      // Price filters
-      const rent = Number(listing.rentPerMonth);
-      const minPrice = searchParams.get('minPrice');
-      const maxPrice = searchParams.get('maxPrice');
-      if (minPrice && rent < Number(minPrice)) return false;
-      if (maxPrice && rent > Number(maxPrice)) return false;
-
-      // Bedrooms filter
-      const bedrooms = searchParams.get('bedrooms');
-      if (bedrooms && listing.bedrooms !== Number(bedrooms)) return false;
-
-      // Property type filter
-      const propertyType = searchParams.get('propertyType');
-      if (propertyType && listing.propertyType !== propertyType) return false;
-
-      // Power backup filter
-      const powerBackup = searchParams.get('powerBackup');
-      if (powerBackup && listing.powerBackup !== powerBackup) return false;
-
-      // Water source filter
-      const waterSource = searchParams.get('waterSource');
-      if (waterSource && listing.waterSource !== waterSource) return false;
-
-      // Fiber filter
-      const hasFiber = searchParams.get('hasFiber');
-      if (hasFiber === 'true' && !listing.hasFiber) return false;
-
-      // Add more filters as needed from searchParams
-      const verifiedOnly = searchParams.get('verifiedOnly');
-      if (verifiedOnly === 'true' && !listing.verified) return false;
-
-      const visitedOnly = searchParams.get('visitedOnly');
-      if (visitedOnly === 'true' && !listing.visited) return false;
-
-      const parking = searchParams.get('parking');
-      if (parking === 'true' && !listing.parking) return false;
-
-      const petsAllowed = searchParams.get('petsAllowed');
-      if (petsAllowed === 'true' && !listing.petsAllowed) return false;
-
-      return true;
-    });
-  }, [listings, searchParams]);
-
-  // Get active filter count
-  const activeFilterCount = useMemo(() => {
-    return Object.values(filters).filter(v => v !== '' && v !== false).length;
-  }, [filters]);
+  /*
+   * NO CLIENT-SIDE RE-FILTER. There used to be one here, and it could only ever
+   * do harm:
+   *
+   *  - It cannot add correctness. The server already applied these filters; the
+   *    client can only REMOVE rows the server said matched.
+   *  - Its semantics differed from the server's, so it removed real matches.
+   *    `search` is Postgres full-text with prefix matching server-side and was a
+   *    naive `String.includes` here; `city` is an exact `eq` server-side and was
+   *    `.toLowerCase()` here.
+   *  - It broke counts and pagination. Rows were hidden AFTER the server had
+   *    computed `offset` and `hasMore`, so "Showing N" disagreed with the server
+   *    and hiding enough of a 20-row page could leave the infinite-scroll
+   *    sentinel above the fold forever.
+   *
+   * It also only implemented 13 of the 33 filters, which is the same drift that
+   * `lib/listings/filter-params.ts` now exists to prevent.
+   */
 
   // Remove filter
   const removeFilter = (key: string) => {
@@ -211,7 +124,7 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center gap-4 flex-wrap">
           <p className="text-sm text-gray-600">
-            Showing <span className="font-semibold text-gray-900">{filteredListings.length}</span> {filteredListings.length === 1 ? 'listing' : 'listings'}
+            Showing <span className="font-semibold text-gray-900">{listings.length}</span> {listings.length === 1 ? 'listing' : 'listings'}
           </p>
           <SaveSearchButton />
         </div>
@@ -247,12 +160,12 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
       </div>
 
       {/* Listings Display */}
-      {filteredListings.length > 0 ? (
+      {listings.length > 0 ? (
         <>
           {viewMode === 'grid' && (
             <>
               <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
-                {filteredListings.map((listing) => (
+                {listings.map((listing) => (
                   <ListingCard key={listing.id} listing={listing} showPublisher={showPublisher} />
                 ))}
               </div>
@@ -264,7 +177,7 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
                     <span>Loading more listings...</span>
                   </div>
                 )}
-                {!hasMore && filteredListings.length > 20 && (
+                {!hasMore && listings.length > 20 && (
                   <p className="text-gray-500 text-sm">No more listings to load</p>
                 )}
               </div>
@@ -273,7 +186,7 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
           {viewMode === 'list' && (
             <>
               <div className="space-y-4">
-                {filteredListings.map((listing) => (
+                {listings.map((listing) => (
                   <ListingCard key={listing.id} listing={listing} viewMode="list" showPublisher={showPublisher} />
                 ))}
               </div>
@@ -285,7 +198,7 @@ export function EnhancedListingsGrid({ initialListings, showPublisher = true }: 
                     <span>Loading more listings...</span>
                   </div>
                 )}
-                {!hasMore && filteredListings.length > 20 && (
+                {!hasMore && listings.length > 20 && (
                   <p className="text-gray-500 text-sm">No more listings to load</p>
                 )}
               </div>

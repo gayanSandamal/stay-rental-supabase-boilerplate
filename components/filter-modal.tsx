@@ -6,6 +6,7 @@ import { FormBuilder, FormConfig } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
 import { Button } from '@/components/ui/button';
 import { X, SlidersHorizontal } from 'lucide-react';
+import { FILTER_KEYS, isBooleanFilterKey } from '@/lib/listings/filter-params';
 
 interface FilterModalProps {
   isOpen: boolean;
@@ -17,45 +18,24 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
   const searchParams = useSearchParams();
 
   // Get all possible filter keys
-  const getAllFilterKeys = () => {
-    return [
-      'search', 'city', 'district', 'locationRadius',
-      'propertyType', 'bedrooms', 'bathrooms', 'minArea', 'maxArea',
-      'minPrice', 'maxPrice', 'depositMonths', 'utilitiesIncluded', 'maxServiceCharge',
-      'powerBackup', 'waterSource', 'minWaterTankSize',
-      'hasFiber', 'fiberISP',
-      'minACUnits', 'minFans', 'ventilation',
-      'isGated', 'hasGuard', 'hasCCTV', 'hasBurglarBars',
-      'parking', 'minParkingSpaces', 'petsAllowed',
-      'maxNoticePeriod',
-      'verifiedOnly', 'visitedOnly',
-      'sortBy',
-    ];
-  };
 
   // Get initial values from URL params
   const getInitialValues = () => {
     const values: Record<string, any> = {};
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       const value = searchParams.get(key);
       if (value !== null) {
-        if (key === 'utilitiesIncluded' || key === 'hasFiber' || 
-            key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-            key === 'hasBurglarBars' || key === 'parking' || key === 'petsAllowed' ||
-            key === 'verifiedOnly' || key === 'visitedOnly') {
+        if (isBooleanFilterKey(key)) {
           values[key] = value === 'true';
         } else {
           values[key] = value || '';
         }
       } else {
         if (key === 'sortBy') {
-          values[key] = 'newest';
-        } else if (key.includes('Only') || key === 'hasFiber' || key === 'parking' || 
-                   key === 'petsAllowed' || key === 'utilitiesIncluded' ||
-                   key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-                   key === 'hasBurglarBars') {
+          values[key] = '';
+        } else if (isBooleanFilterKey(key)) {
           values[key] = false;
         } else {
           values[key] = '';
@@ -75,7 +55,7 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
 
   const applyFilters = (filters: Record<string, any>) => {
     const params = new URLSearchParams();
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       const value = filters[key];
@@ -104,15 +84,12 @@ export function FilterModal({ isOpen, onClose }: FilterModalProps) {
 
   const clearFilters = () => {
     const clearedFilters: Record<string, any> = {};
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       if (key === 'sortBy') {
-        clearedFilters[key] = 'newest';
-      } else if (key.includes('Only') || key === 'hasFiber' || key === 'parking' || 
-                 key === 'petsAllowed' || key === 'utilitiesIncluded' ||
-                 key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-                 key === 'hasBurglarBars') {
+        clearedFilters[key] = '';
+      } else if (isBooleanFilterKey(key)) {
         clearedFilters[key] = false;
       } else {
         clearedFilters[key] = '';

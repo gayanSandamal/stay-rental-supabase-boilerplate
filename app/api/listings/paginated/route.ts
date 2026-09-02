@@ -3,64 +3,31 @@ import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { resolvePublishers } from '@/lib/listings/publisher-info';
 import { trackImpressions } from '@/lib/analytics/impressions';
+import { parseListingFilters } from '@/lib/listings/filter-params';
 
 export const dynamic = 'force-dynamic';
+
+/** Upper bound on rows one request may ask for. */
+const MAX_PAGE_SIZE = 50;
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    // Clamped. `limit` used to be read straight off the URL, so `?limit=999999`
+    // bought a caller a full-table scan plus a resolvePublishers pass on the
+    // most frequently hit handler in the app, against a max:1 pool.
+    const requested = parseInt(searchParams.get('limit') || '20') || 20;
+    const limit = Math.min(Math.max(1, requested), MAX_PAGE_SIZE);
     const offset = (page - 1) * limit;
 
-    // Build filters from search params
+    // One parser, all 33 filters. Server-derived keys are set below, never read
+    // from the URL — see the note in lib/listings/filter-params.ts.
     const filters: any = {
-      limit: limit + 1, // Fetch one extra to check if there's more
+      ...parseListingFilters(searchParams),
+      limit: limit + 1, // one extra row to detect `hasMore`
       offset,
     };
-
-    // Add all filter parameters
-    const search = searchParams.get('search');
-    if (search) filters.search = search;
-
-    const city = searchParams.get('city');
-    if (city) filters.city = city;
-
-    const district = searchParams.get('district');
-    if (district) filters.district = district;
-
-    const minPrice = searchParams.get('minPrice');
-    if (minPrice) filters.minPrice = parseInt(minPrice);
-
-    const maxPrice = searchParams.get('maxPrice');
-    if (maxPrice) filters.maxPrice = parseInt(maxPrice);
-
-    const bedrooms = searchParams.get('bedrooms');
-    if (bedrooms) filters.bedrooms = parseInt(bedrooms);
-
-    const propertyType = searchParams.get('propertyType');
-    if (propertyType) filters.propertyType = propertyType;
-
-    const powerBackup = searchParams.get('powerBackup');
-    if (powerBackup) filters.powerBackup = powerBackup;
-
-    const waterSource = searchParams.get('waterSource');
-    if (waterSource) filters.waterSource = waterSource;
-
-    const hasFiber = searchParams.get('hasFiber');
-    if (hasFiber === 'true') filters.hasFiber = true;
-
-    const verifiedOnly = searchParams.get('verifiedOnly');
-    if (verifiedOnly === 'true') filters.verifiedOnly = true;
-
-    const visitedOnly = searchParams.get('visitedOnly');
-    if (visitedOnly === 'true') filters.visitedOnly = true;
-
-    const parking = searchParams.get('parking');
-    if (parking === 'true') filters.parking = true;
-
-    const petsAllowed = searchParams.get('petsAllowed');
-    if (petsAllowed === 'true') filters.petsAllowed = true;
 
     const user = await getUser();
     const isPremium = isUserPremium(user);
