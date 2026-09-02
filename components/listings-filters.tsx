@@ -8,43 +8,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState as useReactState } from 'react';
+import { FILTER_KEYS, isBooleanFilterKey } from '@/lib/listings/filter-params';
 
 export function ListingsFilters() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Get all possible filter keys from URL params
-  const getAllFilterKeys = () => {
-    const keys = [
-      'search', 'city', 'district', 'locationRadius',
-      'propertyType', 'bedrooms', 'bathrooms', 'minArea', 'maxArea',
-      'minPrice', 'maxPrice', 'depositMonths', 'utilitiesIncluded', 'maxServiceCharge',
-      'powerBackup', 'waterSource', 'minWaterTankSize',
-      'hasFiber', 'fiberISP',
-      'minACUnits', 'minFans', 'ventilation',
-      'isGated', 'hasGuard', 'hasCCTV', 'hasBurglarBars',
-      'parking', 'minParkingSpaces', 'petsAllowed',
-      'maxNoticePeriod',
-      'verifiedOnly', 'visitedOnly',
-      'sortBy',
-    ];
-    return keys;
-  };
 
   // Get initial values from URL params
   const getInitialValues = () => {
     const values: Record<string, any> = {};
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       const value = searchParams.get(key);
       if (value !== null) {
         // Handle boolean values
-        if (key === 'utilitiesIncluded' || key === 'hasFiber' || 
-            key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-            key === 'hasBurglarBars' || key === 'parking' || key === 'petsAllowed' ||
-            key === 'verifiedOnly' || key === 'visitedOnly') {
+        if (isBooleanFilterKey(key)) {
           values[key] = value === 'true';
         } else {
           values[key] = value || '';
@@ -52,11 +33,8 @@ export function ListingsFilters() {
       } else {
         // Set defaults
         if (key === 'sortBy') {
-          values[key] = 'newest';
-        } else if (key.includes('Only') || key === 'hasFiber' || key === 'parking' || 
-                   key === 'petsAllowed' || key === 'utilitiesIncluded' ||
-                   key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-                   key === 'hasBurglarBars') {
+          values[key] = '';
+        } else if (isBooleanFilterKey(key)) {
           values[key] = false;
         } else {
           values[key] = '';
@@ -76,7 +54,7 @@ export function ListingsFilters() {
 
   const applyFilters = (filters: Record<string, any>) => {
     const params = new URLSearchParams();
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       const value = filters[key];
@@ -102,15 +80,12 @@ export function ListingsFilters() {
 
   const clearFilters = () => {
     const clearedFilters: Record<string, any> = {};
-    const keys = getAllFilterKeys();
+    const keys = FILTER_KEYS;
     
     keys.forEach(key => {
       if (key === 'sortBy') {
-        clearedFilters[key] = 'newest';
-      } else if (key.includes('Only') || key === 'hasFiber' || key === 'parking' || 
-                 key === 'petsAllowed' || key === 'utilitiesIncluded' ||
-                 key === 'isGated' || key === 'hasGuard' || key === 'hasCCTV' || 
-                 key === 'hasBurglarBars') {
+        clearedFilters[key] = '';
+      } else if (isBooleanFilterKey(key)) {
         clearedFilters[key] = false;
       } else {
         clearedFilters[key] = '';

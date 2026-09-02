@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
 import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { parseListingFilters } from '@/lib/listings/filter-params';
 import { trackImpressions } from '@/lib/analytics/impressions';
 import type { Metadata } from 'next';
 
@@ -84,23 +85,14 @@ export default async function ListingsPage(props: {
   const searchParams = await props.searchParams;
   // Load initial batch of listings (first page)
   const initialLimit = 20;
-  const filters: any = { limit: initialLimit };
-  
-  // Apply filters from search params
-  if (searchParams.search) filters.search = String(searchParams.search);
-  if (searchParams.city) filters.city = String(searchParams.city);
-  if (searchParams.district) filters.district = String(searchParams.district);
-  if (searchParams.minPrice) filters.minPrice = parseInt(String(searchParams.minPrice));
-  if (searchParams.maxPrice) filters.maxPrice = parseInt(String(searchParams.maxPrice));
-  if (searchParams.bedrooms) filters.bedrooms = parseInt(String(searchParams.bedrooms));
-  if (searchParams.propertyType) filters.propertyType = String(searchParams.propertyType);
-  if (searchParams.powerBackup) filters.powerBackup = String(searchParams.powerBackup);
-  if (searchParams.waterSource) filters.waterSource = String(searchParams.waterSource);
-  if (searchParams.hasFiber === 'true') filters.hasFiber = true;
-  if (searchParams.verifiedOnly === 'true') filters.verifiedOnly = true;
-  if (searchParams.visitedOnly === 'true') filters.visitedOnly = true;
-  if (searchParams.parking === 'true') filters.parking = true;
-  if (searchParams.petsAllowed === 'true') filters.petsAllowed = true;
+  // Every renter-supplied filter comes through the one parser, which honours all
+  // 33 the form offers. The server-derived keys below are set AFTER it, from
+  // authenticated truth — the parser deliberately refuses to read them from the
+  // URL so a visitor cannot grant themselves early access or exclusive listings.
+  const filters: any = {
+    ...parseListingFilters(searchParams),
+    limit: initialLimit,
+  };
 
   const user = await getUser();
   const isPremium = isUserPremium(user);

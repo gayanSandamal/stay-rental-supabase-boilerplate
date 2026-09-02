@@ -1,4 +1,4 @@
-import { desc, and, eq, isNull, sql, gte, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
+import { desc, and, eq, isNull, sql, gte, gt, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
   users,
@@ -155,8 +155,19 @@ export async function getActiveListings(filters?: {
   limit?: number;
   offset?: number;
 
-  // For saved search alerts: only listings created after this date
-  createdAtSince?: Date;
+  /*
+   * Saved-search alerts: the window of listings to consider, by PUBLICATION
+   * time, not creation time.
+   *
+   * This used to be `createdAtSince` against `listings.createdAt`, and it meant
+   * alerts silently skipped every listing that spent time in moderation. A
+   * listing created Monday and approved Thursday is `active` on Thursday, but
+   * its `createdAt` is Monday's — older than the alert cursor — so it was never
+   * matched, ever. `publishedAt` is set when a listing is first published and is
+   * indexed (migration 0005).
+   */
+  publishedSince?: Date;
+  publishedUntil?: Date;
 
   // Early access: free users don't see listings newer than X hours (Premium sees all)
   hideNewListingsHours?: number;
@@ -258,13 +269,21 @@ export async function getActiveListings(filters?: {
     // Exclusive: free users cannot see exclusive listings
     filters?.excludeExclusive ? eq(listings.exclusive, false) : undefined,
 
-    // Created since (for saved search alerts)
-    filters?.createdAtSince ? gte(listings.createdAt, filters.createdAtSince) : undefined,
+    // Published window (for saved search alerts). See the note on the params.
+    filters?.publishedSince ? gt(listings.publishedAt, filters.publishedSince) : undefined,
+    filters?.publishedUntil ? lte(listings.publishedAt, filters.publishedUntil) : undefined,
 
-    // Early access: free users don't see listings newer than X hours
+    /*
+     * Early access: free users don't see listings published in the last X hours.
+     *
+     * Also `publishedAt`, and for the same reason as above: keyed on `createdAt`
+     * a listing held three days in moderation counted as three days old the
+     * instant it went live, so the perk premium renters pay for did nothing for
+     * exactly the listings moderation had delayed.
+     */
     filters?.hideNewListingsHours
       ? lte(
-          listings.createdAt,
+          listings.publishedAt,
           new Date(Date.now() - filters.hideNewListingsHours * 60 * 60 * 1000)
         )
       : undefined,
@@ -313,6 +332,20 @@ export async function getActiveListings(filters?: {
         break;
       case 'bedrooms_asc':
         orderByClause = listings.bedrooms;
+        break;
+      case 'published_asc':
+        /*
+         * Oldest-published first. Internal only — not offered in the filter
+         * form, and used by the saved-search alert job.
+         *
+         * The alert window has to be consumed in a deterministic order so the
+         * cursor can advance to the last row actually sent and the rest simply
+         * wait for the next run. Under the default ranking the survivors of a
+         * truncated window are whichever listings paid the most, which would
+         * mean telling a renter about the most-boosted homes rather than the
+         * ones that arrived.
+         */
+        orderByClause = listings.publishedAt;
         break;
       default:
         orderByClause = desc(listings.createdAt);

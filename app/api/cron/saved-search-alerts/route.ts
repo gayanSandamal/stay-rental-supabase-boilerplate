@@ -6,6 +6,7 @@ import { getActiveListings } from '@/lib/db/queries';
 import { sendSavedSearchAlert } from '@/lib/email';
 import { createNotification } from '@/lib/notifications';
 import { newListingHideHours } from '@/lib/subscription';
+import { parseListingFilters } from '@/lib/listings/filter-params';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
 
@@ -47,27 +48,20 @@ export async function GET(request: NextRequest) {
         ? search.lastAlertAt
         : new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago if first run
 
-      let filters: Record<string, unknown> = {
-        limit: 20,
-        createdAtSince: since,
-      };
-
+      let filters: Record<string, unknown>;
       try {
         const params = JSON.parse(search.searchParams) as Record<string, string>;
-        if (params.search) filters.search = params.search;
-        if (params.city) filters.city = params.city;
-        if (params.district) filters.district = params.district;
-        if (params.minPrice) filters.minPrice = parseInt(params.minPrice);
-        if (params.maxPrice) filters.maxPrice = parseInt(params.maxPrice);
-        if (params.bedrooms) filters.bedrooms = parseInt(params.bedrooms);
-        if (params.propertyType) filters.propertyType = params.propertyType;
-        if (params.powerBackup) filters.powerBackup = params.powerBackup;
-        if (params.waterSource) filters.waterSource = params.waterSource;
-        if (params.hasFiber === 'true') filters.hasFiber = true;
-        if (params.verifiedOnly === 'true') filters.verifiedOnly = true;
-        if (params.visitedOnly === 'true') filters.visitedOnly = true;
-        if (params.parking === 'true') filters.parking = true;
-        if (params.petsAllowed === 'true') filters.petsAllowed = true;
+        // The same parser the listings page and the paginated API use, so an
+        // alert can no longer match on a different set of filters than the
+        // website showed when the renter saved the search. It previously
+        // honoured 14 of the 33, silently.
+        filters = {
+          ...parseListingFilters(params),
+          limit: 20,
+          publishedSince: since,
+          // Oldest-published first so a truncated window is consumed in order.
+          sortBy: 'published_asc',
+        };
       } catch {
         // Invalid JSON - skip
         continue;
