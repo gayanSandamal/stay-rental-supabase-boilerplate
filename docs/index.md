@@ -12,6 +12,10 @@ Detailed exhaustive analysis of specific areas:
 
 - [WhatsApp → Listing Intake Pipeline Deep-Dive](./deep-dive-whatsapp-intake-pipeline.md) — Comprehensive analysis of the automated WhatsApp concierge intake pipeline (webhook → parse → checks → publish under "Easy Rent Operations") (12 files, ~1,080 LOC) — Generated 2026-07-10. **Status: live but dormant until Meta/env setup; auto-publish ON.**
 
+## Plans (not yet built)
+
+- [Landlord Analytics — Retention Roadmap](./analytics-retention-roadmap.md) — inventory of what analytics show today, the three-column data ceiling behind them, 2 known defects, and an 8-item build order for landlord retention. **Status: plan only, nothing built.** Created 2026-08-31.
+
 ## Existing Reference Docs (`docs/`)
 
 - `AUTH_CONFIGURATION.md` — Supabase Auth setup
@@ -20,6 +24,7 @@ Detailed exhaustive analysis of specific areas:
 - `USER_ADMIN_FLOWS.md` — user/admin journey docs
 - `analytics-retention-roadmap.md` — landlord analytics plan; the status header
   records which items are built and which cannot be as written
+- `whatsapp-golive-runbook.md` — WhatsApp intake + landlord performance reports rollout
 - `email-templates/` — branded Supabase auth email templates + deliverability guide
 
 ## Root-Level Guides

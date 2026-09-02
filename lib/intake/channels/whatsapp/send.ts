@@ -192,3 +192,94 @@ export async function sendWhatsAppLocationRequest(
     `location_request to=${to}`
   );
 }
+
+/**
+ * Send an APPROVED MESSAGE TEMPLATE.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `sendWhatsAppText`. Every other sender in
+ * this file rides inside the 24-hour customer-service window that the
+ * landlord's own message opened — intake replies, consent prompts, publish
+ * notices all go out minutes after the landlord wrote to us. A SCHEDULED
+ * message has no such window by definition: a weekly report lands six days
+ * after anything the landlord said. Free-form text there is rejected outright
+ * by Meta (error 131047), so a report sent with `sendWhatsAppText` would fail
+ * for every recipient while looking, in the logs, exactly like a network blip.
+ *
+ * Business-initiated messaging is templates or nothing. The template itself
+ * must be registered and approved in the WhatsApp Manager before a single one
+ * can be delivered; `whatsappTemplateName()` reads the registered name from the
+ * environment because code cannot invent one.
+ *
+ * NO FREE-FORM FALLBACK. It is tempting to retry as text when the template
+ * send fails, the way the consent prompt falls back from buttons. That would be
+ * wrong here: outside the window the fallback cannot succeed, and repeatedly
+ * pushing unsolicited free-form messages at a number is what degrades a WABA's
+ * quality rating. A failed report is dropped and reported to the caller.
+ *
+ * PARAMETERS CANNOT CONTAIN NEWLINES. Meta rejects a body parameter containing
+ * a newline, a tab, or 5+ consecutive spaces — the layout has to live in the
+ * approved template text, with the variables carrying only short scalar values.
+ * `sanitizeTemplateParam` enforces that rather than trusting callers.
+ */
+export function whatsappTemplateName(kind: 'report'): string | null {
+  if (kind === 'report') return process.env.WHATSAPP_REPORT_TEMPLATE ?? null;
+  return null;
+}
+
+/** Language the templates were APPROVED under. Meta matches on this exactly. */
+export function whatsappTemplateLanguage(): string {
+  return process.env.WHATSAPP_TEMPLATE_LANGUAGE ?? 'en';
+}
+
+/** Collapse anything Meta rejects in a body parameter into single spaces. */
+export function sanitizeTemplateParam(value: string | number): string {
+  const text = String(value).replace(/\s+/g, ' ').trim();
+  return clip(text || '-', 240);
+}
+
+export async function sendWhatsAppTemplate(
+  to: string,
+  args: {
+    name: string;
+    languageCode?: string;
+    /** Positional body variables, in {{1}}…{{n}} order. */
+    bodyParams?: Array<string | number>;
+    /** Suffix for a dynamic URL button, when the template declares one. */
+    urlButtonParam?: string;
+  }
+): Promise<boolean> {
+  const components: Array<Record<string, unknown>> = [];
+
+  if (args.bodyParams?.length) {
+    components.push({
+      type: 'body',
+      parameters: args.bodyParams.map((value) => ({
+        type: 'text',
+        text: sanitizeTemplateParam(value),
+      })),
+    });
+  }
+
+  if (args.urlButtonParam) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [{ type: 'text', text: sanitizeTemplateParam(args.urlButtonParam) }],
+    });
+  }
+
+  return postMessage(
+    {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: args.name,
+        language: { code: args.languageCode ?? whatsappTemplateLanguage() },
+        ...(components.length ? { components } : {}),
+      },
+    },
+    `template ${args.name} to=${to}: [${(args.bodyParams ?? []).join(' | ')}]`
+  );
+}

@@ -32,6 +32,8 @@ import {
   newListingTemplateMessage,
   numberVerifiedMessage,
   receivedAckMessage,
+  reportsOffMessage,
+  reportsOnMessage,
   restoreRequestedMessage,
   updateAckMessage,
   verifyCodeUnusableMessage,
@@ -39,6 +41,7 @@ import {
   socialConsentGrantedMessage,
   socialConsentDeclinedMessage,
 } from '@/lib/intake/messages';
+import { setReportFrequency } from '@/lib/reports/prefs';
 import { recordConsent } from '@/lib/social/consent';
 import { pullDownForListing } from '@/lib/social/publish';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
@@ -364,6 +367,21 @@ async function handleInbound(
       );
     } else if (outcome.action === 'help') {
       await whatsappAdapter.sendText(message.senderId, helpMessage(lang));
+    } else if (outcome.action === 'reports_off' || outcome.action === 'reports_on') {
+      // Confirm FIRST, record second. If the write fails, a landlord who asked
+      // to be left alone has still been told they will be — and the next report
+      // run is a day away, so an unrecorded opt-out costs at most one message.
+      // Silently swallowing the request because a write failed does not.
+      const off = outcome.action === 'reports_off';
+      await whatsappAdapter.sendText(
+        message.senderId,
+        off ? reportsOffMessage() : reportsOnMessage()
+      );
+      if (outcome.landlordId) {
+        await setReportFrequency(outcome.landlordId, off ? 'off' : 'weekly', {
+          source: 'whatsapp',
+        });
+      }
     } else if (outcome.action === 'link_reissue') {
       const links = await linksFor(message.senderId, outcome.listingId ?? null);
       // link_reissue means a listing EXISTS — when minting fails (legacy

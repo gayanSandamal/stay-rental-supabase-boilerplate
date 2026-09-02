@@ -14,7 +14,7 @@
  * `commands.ts` re-exports all of this, so existing imports are unaffected.
  */
 
-export type Command = 'delete' | 'link' | 'help' | 'restore';
+export type Command = 'delete' | 'link' | 'help' | 'restore' | 'reports_off' | 'reports_on';
 
 const DELETE_RE =
   /^(?:delete|remove|unlist|take\s+down|delete\s+(?:my\s+)?listing|remove\s+(?:my\s+)?listing|මකන්න|අයින්\s*කරන්න|நீக்கு|அழி)[.!]?$/i;
@@ -23,6 +23,28 @@ const HELP_RE = /^(?:help|menu|options|\?|උදව්|உதவி)[.!]?$/i;
 /** Undo a chat delete — deleteDoneMessage advertises this word explicitly. */
 const RESTORE_RE = /^(?:restore|undo|undelete|restore\s+(?:my\s+)?listing)[.!]?$/i;
 const CANCEL_RE = /^(?:cancel|stop|no|nevermind|never\s*mind|අවලංගු|ரத்து)[.!]?$/i;
+/**
+ * Turning scheduled performance reports off and back on.
+ *
+ * STOP OVERLAPS CANCEL_RE, AND THE ORDER IS THE POINT. `isCancel` is consulted
+ * only while a destructive confirmation is pending (delete_confirm) or a
+ * consent prompt is open (confirm_social); `detectCommand` runs after those. So
+ * a landlord who types STOP mid-deletion cancels the deletion, and one who
+ * types it any other time stops the reports. Cancel winning while something
+ * destructive is pending is the safe precedence — the cost of the wrong reading
+ * there is a deleted listing, versus a reversible mailing preference here.
+ *
+ * Bare STOP has to work, whatever the ambiguity: it is what the report template
+ * itself tells landlords to reply, and honouring it is what keeps the WhatsApp
+ * Business account in good standing. A landlord mid-submission who means "stop
+ * asking me questions" gets their reports turned off instead — the reply says
+ * exactly how to undo it, which is the best available answer to a genuinely
+ * ambiguous word.
+ */
+const REPORTS_OFF_RE =
+  /^(?:stop|stop\s+reports?|no\s+reports?|unsubscribe|වාර්තා\s*එපා|அறிக்கை\s*வேண்டாம்)[.!]?$/i;
+const REPORTS_ON_RE =
+  /^(?:start\s+reports?|resume\s+reports?|reports?\s+on|subscribe|වාර්තා\s*ඕන|அறிக்கை\s*வேண்டும்)[.!]?$/i;
 /** The one word that actually deletes. Case-insensitive, nothing else counts. */
 const CONFIRM_RE = /^delete[.!]?$/i;
 /**
@@ -46,6 +68,10 @@ export function detectCommand(text: string | null | undefined): Command | null {
   if (LINK_RE.test(t)) return 'link';
   if (HELP_RE.test(t)) return 'help';
   if (RESTORE_RE.test(t)) return 'restore';
+  // After RESTORE_RE so 'stop' cannot shadow a more specific word, and after
+  // the listing-shaped guards above so "stop 3 rooms 45000" is never a command.
+  if (REPORTS_ON_RE.test(t)) return 'reports_on';
+  if (REPORTS_OFF_RE.test(t)) return 'reports_off';
   return null;
 }
 

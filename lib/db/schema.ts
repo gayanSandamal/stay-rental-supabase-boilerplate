@@ -112,6 +112,14 @@ export const landlords = pgTable('landlords', {
     .notNull()
     .default(sql`gen_random_uuid()::text`)
     .unique(), // UUID for free profile URLs
+  // 0049 — scheduled performance reports. 'off' | 'weekly' | 'daily'.
+  // 'daily' is paid-tier only; the gate lives in lib/reports/prefs.ts so a
+  // lapsed plan degrades to weekly instead of billing 30 templates a month.
+  reportFrequency: varchar('report_frequency', { length: 10 }).notNull().default('weekly'),
+  // END of the period last reported on — NOT the send time. Makes the job both
+  // idempotent and gap-free: the next report covers (this, now].
+  reportLastPeriodEnd: timestamp('report_last_period_end'),
+  reportLastSentAt: timestamp('report_last_sent_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -544,6 +552,9 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_social_pulled',
   // 0044 — ops confirming a takedown an API could not perform
   'listing_social_takedown_confirmed',
+  // 0049 — scheduled landlord performance reports
+  'landlord_report_sent',
+  'landlord_report_prefs_changed',
 ]);
 
 // WhatsApp concierge intake statuses

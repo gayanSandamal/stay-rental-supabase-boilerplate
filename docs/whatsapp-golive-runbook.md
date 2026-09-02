@@ -269,3 +269,141 @@ coordinates to that listing.
 - Face blurring is not built yet: a photo with a person visible is rejected
   rather than blurred. Face bounding boxes are already captured on every check,
   so adding blurring later is a small change.
+
+---
+
+# Landlord performance reports (added 2026-08-31)
+
+Scheduled "how your listings did" summaries over WhatsApp: **weekly for every
+landlord, daily as a paid-plan option**. Flag-gated behind
+`enableLandlordReports`, OFF by default.
+
+## ⚠️ This feature CANNOT deliver anything until a template is approved
+
+Every other WhatsApp message this platform sends is a reply, inside the 24-hour
+customer-service window the landlord's own message opened. A scheduled report is
+the first **business-initiated** message we send, and Meta permits those only as
+an **approved message template**. Free-form text outside the window is rejected
+with error 131047 — for every recipient, every time.
+
+So the rollout order is not negotiable:
+
+1. Register the template (below) and wait for approval.
+2. Set `WHATSAPP_REPORT_TEMPLATE` to its name.
+3. Only then turn `enableLandlordReports` on.
+
+With the flag on and no template name set, the job still runs: it computes every
+report, writes the in-app notification, logs the message it *would* have sent as
+`[reports:dryrun] …`, and returns `dryRun: N, failed: 0, deliveryConfigured:
+false`. That is the intended way to watch real numbers before a single billable
+message goes out.
+
+## Step 1 — Register the template
+
+WhatsApp Manager → Account tools → Message templates → Create template.
+
+- **Name**: `listing_performance_report` (any name works — it must match
+  `WHATSAPP_REPORT_TEMPLATE`)
+- **Category**: **Utility**. Not Marketing. This is a report about the
+  landlord's own property that they opted into, and Utility is both cheaper and
+  much less likely to be throttled. If Meta reclassifies it as Marketing, the
+  cause will be promotional language in the nudge line — see `buildNudge` in
+  `lib/reports/message.ts`, which already drops every Boost mention while
+  `enablePricingSection` is off.
+- **Language**: must match `WHATSAPP_TEMPLATE_LANGUAGE` (default `en`).
+- **Body**: copy `REPORT_TEMPLATE_TEXT` from `lib/reports/message.ts`
+  **verbatim**. It declares exactly 7 variables and
+  `tests/unit/landlord-reports.test.ts` asserts the code supplies exactly 7. A
+  template whose variable count drifts from that file starts failing for every
+  recipient at once, with nothing failing locally to warn you.
+
+Sample values for the approval form (Meta requires one per variable):
+
+| # | Meaning | Example |
+|---|---------|---------|
+| 1 | Landlord first name | `Nimal` |
+| 2 | Period covered | `the last 7 days` |
+| 3 | Total views | `42` |
+| 4 | Trend | `up 23% vs the previous 7 days` |
+| 5 | Portfolio | `3 active, 1 expiring within 7 days` |
+| 6 | Best performer | `3BR House in Nugegoda (25 views)` |
+| 7 | The one nudge | `1 listing expires within 7 days. Renew to stay in search results.` |
+
+## Step 2 — Env vars (Vercel), then redeploy
+
+```
+WHATSAPP_REPORT_TEMPLATE=listing_performance_report
+WHATSAPP_TEMPLATE_LANGUAGE=en
+```
+
+## Step 3 — Migration, then the flag
+
+`pnpm db:migrate-all` (adds `landlords.report_frequency`,
+`report_last_period_end`, `report_last_sent_at`), then `pnpm db:check-drift`,
+**then** Back Office → Settings → Landlord performance reports.
+
+## Who actually receives one
+
+Only landlords with a verified `users.wa_phone`, i.e. WhatsApp-origin landlords.
+`users.phone` is user-typed and unverified and is never messaged — a report
+about someone's property must not reach a stranger who typed their number. A
+dashboard-only landlord gets the in-app notification and nothing over WhatsApp
+until they verify a number.
+
+The job also skips anyone with no listings at all, because a report saying
+"0 listings, 0 views" is churn, not retention.
+
+## Cost
+
+Every template is billed per message in the Utility category.
+
+- Weekly, all eligible landlords: **~4.3 messages per landlord per month**
+- Daily, paid tiers only: **~30 messages per landlord per month**
+
+Daily is deliberately the paid feature: it is the cadence with 7× the cost.
+`effectiveReportFrequency` re-checks the plan on **every run**, so a lapsed plan
+silently drops back to weekly instead of billing daily forever against a
+subscription that ended.
+
+## Ops signals
+
+`GET /api/cron/landlord-reports` (04:00 UTC = 09:30 Sri Lanka time — chosen so a
+human is awake to read it) returns:
+
+- `sent` — WhatsApp accepted it
+- `dryRun` — composed and logged, no template configured. **Not a failure.**
+- `failed` — WhatsApp rejected it. This is the one worth investigating: a number
+  that has left WhatsApp, or a template that lost its approval.
+- `skipped` — considered but not yet due
+- `saturated` — the per-run send budget (`REPORT_SEND_LIMIT`) ran out with
+  landlords still waiting. Harmless once (tomorrow's run takes them oldest-first)
+  but sustained saturation means raising the limit or splitting the job.
+
+Each report writes a `landlord_report_sent` audit entry carrying the period, the
+view counts and whether it was delivered.
+
+## Kill switches
+
+- `enableLandlordReports` OFF (Back Office → Settings) — stops the whole job.
+- Unset `WHATSAPP_REPORT_TEMPLATE` — job still runs, delivers nothing.
+- A landlord replying **STOP** — their own opt-out, honoured immediately.
+
+## Known limitations
+
+- **STOP is ambiguous and we accept that.** `stop` is already a cancel word for
+  a pending deletion. `isCancel` is only consulted while a destructive
+  confirmation is open, and `detectCommand` runs after it, so STOP cancels a
+  pending delete and otherwise stops reports. A landlord mid-submission who
+  means "stop asking me questions" turns their reports off instead — the
+  confirmation tells them to reply START REPORTS, which is the best available
+  answer to a genuinely ambiguous word. Bare STOP has to work regardless: the
+  template tells landlords to reply it, and honouring it protects the WABA
+  quality rating that every other landlord's messages depend on.
+- **A failed send does not retry.** The clock advances anyway. A daily job
+  retrying a dead number every day is exactly what degrades a quality rating,
+  and a report is a snapshot rather than a receipt — next period's is still
+  correct. Failures are counted and audit-logged so a number going bad is
+  visible rather than inferred.
+- **Reports are English only** for now. The intake pipeline answers in Sinhala
+  and Tamil (`lib/intake/i18n`), but a template is approved per language and
+  each one needs its own registration and its own name.
