@@ -27,6 +27,7 @@ import {
   getBackOfficeUserCounts,
 } from '@/lib/back-office/users-query';
 import { cn } from '@/lib/utils';
+import { ImpersonateButton } from './impersonate-button';
 
 const STATE_STYLES: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-800',
@@ -56,7 +57,7 @@ export async function UsersList({
   basePath: string;
   searchParams: Promise<RawSearchParams>;
 }) {
-  await requireBackOfficeAccess();
+  const viewer = await requireBackOfficeAccess();
 
   const params = parseListParams(await searchParams, {
     tabs: USER_TABS,
@@ -107,6 +108,7 @@ export async function UsersList({
                   <TableHead>Status</TableHead>
                   <TableHead>Last sign-in</TableHead>
                   <TableHead>Joined</TableHead>
+                  <TableHead className="w-0" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -169,6 +171,22 @@ export async function UsersList({
                         title={fullTimestamp(u.createdAt)}
                       >
                         {shortAge(u.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        {/*
+                          Admin only, and only for accounts that can actually be
+                          impersonated. Ops see the list but are never offered
+                          the identity — assuming someone's account is a
+                          different order of privilege from reading about them.
+                        */}
+                        {viewer.role === 'admin' &&
+                          state !== 'deleted' &&
+                          (u.role === 'tenant' || u.role === 'landlord') && (
+                            <ImpersonateButton
+                              userId={u.id}
+                              label={publisherDisplayName({ name: u.name, email: u.email })}
+                            />
+                          )}
                       </TableCell>
                     </TableRow>
                   );

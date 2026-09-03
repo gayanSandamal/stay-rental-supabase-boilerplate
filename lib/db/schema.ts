@@ -413,6 +413,34 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
  * expiry and a revocation column. Only the sha256 hash is stored, so an
  * issued URL can never be reprinted (rotation = mint a new row).
  */
+/**
+ * A live "view the app as this user" session.
+ *
+ * BOTH IDENTITIES ARE COLUMNS. `actorUserId` is who is really at the keyboard;
+ * `subjectUserId` is whose account they are looking at. Recording only the
+ * subject is what turns an audit log into a false statement.
+ *
+ * Only the sha256 of the token is stored (same rule as landlordAccessTokens):
+ * a database dump must not hand anyone a working session.
+ */
+export const impersonationSessions = pgTable('impersonation_sessions', {
+  id: serial('id').primaryKey(),
+  /** The admin. No cascade — deleting them must not erase the record. */
+  actorUserId: integer('actor_user_id')
+    .notNull()
+    .references(() => users.id),
+  subjectUserId: integer('subject_user_id')
+    .notNull()
+    .references(() => users.id),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Server-enforced ceiling; a forgotten tab stops working on its own. */
+  expiresAt: timestamp('expires_at').notNull(),
+  /** Set on exit or revoke. Live == ended_at IS NULL AND expires_at > now(). */
+  endedAt: timestamp('ended_at'),
+  actorIp: varchar('actor_ip', { length: 45 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const landlordAccessTokens = pgTable('landlord_access_tokens', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
@@ -555,6 +583,9 @@ export const auditActionEnum = pgEnum('audit_action', [
   // 0049 — scheduled landlord performance reports
   'landlord_report_sent',
   'landlord_report_prefs_changed',
+  // 0051 — admin viewing the app as another user
+  'impersonation_started',
+  'impersonation_ended',
 ]);
 
 // WhatsApp concierge intake statuses

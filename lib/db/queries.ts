@@ -1,4 +1,9 @@
 import { cache } from 'react';
+import { cookies } from 'next/headers';
+import {
+  IMPERSONATION_COOKIE,
+  resolveImpersonation,
+} from '@/lib/auth/impersonation';
 import { desc, and, eq, isNull, sql, gte, gt, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
@@ -93,7 +98,51 @@ export const getUser = cache(async function getUser() {
     return null;
   }
 
-  return { ...user, emailVerified: !!authUser.email_confirmed_at };
+  const self = { ...user, emailVerified: !!authUser.email_confirmed_at };
+
+  /*
+   * IMPERSONATION. If this admin holds a live session, every caller from here on
+   * sees the SUBJECT — that is the whole point: the 70 call sites of this
+   * function are what make the app render as that user.
+   *
+   * `impersonatedBy` is how anything that needs the truth can still find it, and
+   * it is why writes are blocked (middleware for every non-GET,
+   * assertNotImpersonating for server actions). Without that block, `logAudit`
+   * would record the subject as the actor and the audit trail would contain a
+   * false statement.
+   *
+   * The DB lookup is skipped entirely when the cookie is absent, so ordinary
+   * requests — effectively all of them — pay one cookie read and nothing else.
+   * That matters on a `max: 1` pool where every extra query is serialised
+   * latency.
+   */
+  const impersonationToken = (await cookies()).get(IMPERSONATION_COOKIE)?.value;
+  if (impersonationToken && self.role === 'admin') {
+    const ctx = await resolveImpersonation(impersonationToken);
+    // Only honour a session this very admin opened. A cookie carried to another
+    // admin's browser must do nothing.
+    if (ctx && ctx.actor.id === self.id) {
+      const [subject] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, ctx.subjectUserId), isNull(users.deletedAt)))
+        .limit(1);
+      if (subject) {
+        return {
+          ...subject,
+          emailVerified: true,
+          impersonatedBy: {
+            id: ctx.actor.id,
+            name: ctx.actor.name,
+            email: ctx.actor.email,
+          },
+          impersonationExpiresAt: ctx.expiresAt,
+        };
+      }
+    }
+  }
+
+  return { ...self, impersonatedBy: null, impersonationExpiresAt: null };
 });
 
 export async function getUserWithLandlord(userId: number) {

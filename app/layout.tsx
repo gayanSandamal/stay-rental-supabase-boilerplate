@@ -4,6 +4,9 @@ import { Manrope } from 'next/font/google';
 import { getUser } from '@/lib/db/queries';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { SWRConfig } from 'swr';
+import { Suspense } from 'react';
+import { ImpersonationBanner } from '@/components/impersonation-banner';
+import { publisherDisplayName } from '@/lib/publisher-name';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -109,9 +112,38 @@ export default async function RootLayout({
             }
           }}
         >
+          {/*
+            Rendered above everything, on every page. While impersonating, the
+            admin is (to every role check in the app) the subject — so they have
+            no back-office access, and the way out cannot live behind an
+            admin-only route. This banner is both the reminder and the exit.
+          */}
+          <Suspense fallback={null}>
+            <ImpersonationBannerSlot />
+          </Suspense>
           {children}
         </SWRConfig>
       </body>
     </html>
+  );
+}
+
+/**
+ * Reads the impersonation state below a Suspense boundary so the root layout
+ * itself never awaits — an await here would postpone PPR at the root for every
+ * page in the app. See the performance notes in CLAUDE.md.
+ */
+async function ImpersonationBannerSlot() {
+  const user = await getUser();
+  if (!user?.impersonatedBy) return null;
+  return (
+    <ImpersonationBanner
+      subjectLabel={publisherDisplayName({ name: user.name, email: user.email })}
+      actorLabel={publisherDisplayName({
+        name: user.impersonatedBy.name,
+        email: user.impersonatedBy.email,
+      })}
+      expiresAt={user.impersonationExpiresAt?.toISOString() ?? null}
+    />
   );
 }
