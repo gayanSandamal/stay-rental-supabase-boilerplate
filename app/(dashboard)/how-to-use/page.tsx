@@ -21,6 +21,14 @@ import {
 } from 'lucide-react';
 import { ScrollReveal } from '@/components/scroll-reveal';
 import { SiteFooter } from '@/components/site-footer';
+import { FreeBadge } from '@/components/free-badge';
+import {
+  FREE_BADGE,
+  FREE_BADGE_PAID,
+  FREE_PROMISE,
+  FREE_PROMISE_PAID,
+  isPlatformFullyFree,
+} from '@/lib/free-copy';
 import type { Metadata } from 'next';
 import {
   SearchHousesIllustration,
@@ -42,7 +50,7 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 export const metadata: Metadata = {
   title: 'How to Use Easy Rent',
   description:
-    "Learn how to find rentals as a renter or list your property as a landlord on Easy Rent. Simple step-by-step guides for Sri Lanka's verified rental platform.",
+    "Learn how to find rentals as a renter or list your property as a landlord on Easy Rent — 100% free of charge. Simple step-by-step guides for Sri Lanka's verified rental platform.",
   alternates: {
     canonical: `${baseUrl}/how-to-use`,
   },
@@ -186,6 +194,7 @@ export const dynamic = 'force-dynamic';
 export default async function HowToUsePage() {
   const user = await getUser();
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
+  const fullyFree = isPlatformFullyFree();
   const renterSteps = pricingEnabled
     ? RENTER_STEPS
     : RENTER_STEPS.filter((s) => !s.premiumOnly);
@@ -293,7 +302,8 @@ export default async function HowToUsePage() {
           <div className="absolute inset-0 dot-pattern opacity-40 pointer-events-none" />
 
           <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 text-center hero-enter">
-            <div className="flex justify-center mb-6">
+            <div className="flex flex-wrap justify-center items-center gap-2.5 mb-6">
+              <FreeBadge label={fullyFree ? FREE_BADGE : FREE_BADGE_PAID} variant="dark" />
               <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal-500/25 text-teal-200 border border-teal-400/35 backdrop-blur-sm">
                 <BookOpen className="h-3.5 w-3.5" />
                 Step-by-Step Guides
@@ -303,8 +313,11 @@ export default async function HowToUsePage() {
               How to Use{' '}
               <span className="gradient-text">Easy Rent</span>
             </h1>
-            <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed mb-12">
-              Simple guides for renters and landlords. No middlemen, no fees to list — just connect directly.
+            <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed mb-4">
+              Simple guides for renters and landlords. No middlemen — just connect directly.
+            </p>
+            <p className="text-base text-teal-200/90 max-w-xl mx-auto font-medium mb-12">
+              {fullyFree ? FREE_PROMISE : FREE_PROMISE_PAID}
             </p>
 
             {/* ── Animated SVG platform illustration ── */}
@@ -559,7 +572,7 @@ export default async function HowToUsePage() {
                       </div>
                       <div>
                         <h2 className="text-xl font-bold text-white">For Landlords</h2>
-                        <p className="text-sm text-amber-100/80">List free, verify once, tenants find you</p>
+                        <p className="text-sm text-amber-100/80">List 100% free, verify once, tenants find you</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -688,7 +701,7 @@ export default async function HowToUsePage() {
                     <Building2 className="h-5 w-5 text-white" />
                   </div>
                   <span className="font-semibold text-sm text-amber-900">List Property</span>
-                  <span className="text-xs text-amber-600/70">Free to list</span>
+                  <span className="text-xs text-amber-600/70">100% free to list</span>
                 </Link>
                 {/* Account cards are for visitors without one. Signed in, both
                     are dead ends — offer the dashboard instead. */}
@@ -713,7 +726,7 @@ export default async function HowToUsePage() {
                         <UserPlus className="h-5 w-5 text-white" />
                       </div>
                       <span className="font-semibold text-sm text-slate-800">Create Account</span>
-                      <span className="text-xs text-slate-500">Free sign up</span>
+                      <span className="text-xs text-slate-500">Free of charge</span>
                     </Link>
                     <Link
                       href="/sign-in"

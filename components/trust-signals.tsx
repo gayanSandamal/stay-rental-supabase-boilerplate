@@ -2,6 +2,7 @@ import { ShieldCheck, CheckCircle2, Phone, Building2 } from 'lucide-react';
 import { getPublicListingCounts, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { AnimatedCounter } from './animated-counter';
+import { isPlatformFullyFree } from '@/lib/free-copy';
 
 /**
  * Every card here must be either a LIVE COUNT or a standing fact about how the
@@ -63,18 +64,32 @@ const STATS: Stat[] = [
   },
   {
     icon: ShieldCheck,
-    text: 'Free',
-    label: 'To List',
-    sub: 'No fees, no commission',
+    // A standing fact about pricing, not a measurement. Overwritten below when
+    // paid visibility is switched on — see PRICED_STAT.
+    text: '100%',
+    label: 'Free of Charge',
+    sub: 'To list and to rent — no fees, no commission',
     color: 'text-emerald-600',
     bg: 'bg-emerald-50',
     border: 'border-emerald-100',
   },
 ];
 
+/**
+ * What the price card says once `enablePricingSection` is on. Listings stay
+ * free and unlimited on every tier, so the card keeps its place — it just stops
+ * speaking for the whole platform.
+ */
+const PRICED_STAT = {
+  text: 'Free',
+  label: 'To List',
+  sub: 'No listing fees, no commission',
+};
+
 export async function TrustSignals() {
   const user = await getUser();
   const isPremium = isUserPremium(user);
+  const fullyFree = isPlatformFullyFree();
   // One aggregate. This was `getActiveListings({ limit: 1000 })` — a thousand
   // full rows fetched, sorted and shipped so two integers could be counted off
   // them, on the homepage.
@@ -89,12 +104,18 @@ export async function TrustSignals() {
         {/* Was "Trusted by renters across Sri Lanka" — a claim about an
             existing user base the platform does not have yet. */}
         <p className="text-center text-xs font-semibold tracking-widest text-slate-500 uppercase mb-10">
-          Rentals direct from the owner
+          {fullyFree
+            ? 'Rentals direct from the owner — 100% free of charge'
+            : 'Rentals direct from the owner'}
         </p>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {STATS.map((stat, i) => {
             const Icon = stat.icon;
+            const priced = !fullyFree && stat.label === 'Free of Charge';
+            const text = priced ? PRICED_STAT.text : stat.text;
+            const label = priced ? PRICED_STAT.label : stat.label;
+            const sub = priced ? PRICED_STAT.sub : stat.sub;
 
             return (
               <div
@@ -105,11 +126,11 @@ export async function TrustSignals() {
                   <Icon className={`h-6 w-6 ${stat.color}`} />
                 </div>
                 <div className={`text-3xl font-extrabold ${stat.color} mb-1`}>
-                  {stat.text ? (
+                  {text ? (
                     // A standing fact, not a measurement — never animate it
                     // like a counter, which is what made a hardcoded "100%"
                     // read as though something had been counted.
-                    stat.text
+                    text
                   ) : (
                     <AnimatedCounter
                       value={counts[stat.key!]}
@@ -117,8 +138,8 @@ export async function TrustSignals() {
                     />
                   )}
                 </div>
-                <div className="text-sm font-semibold text-slate-800">{stat.label}</div>
-                <div className="text-xs text-slate-600 mt-0.5">{stat.sub}</div>
+                <div className="text-sm font-semibold text-slate-800">{label}</div>
+                <div className="text-xs text-slate-600 mt-0.5">{sub}</div>
               </div>
             );
           })}

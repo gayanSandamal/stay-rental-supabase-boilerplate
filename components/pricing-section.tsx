@@ -95,12 +95,18 @@ export function PricingSection() {
             <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest text-teal-800 bg-teal-50 border border-teal-200 rounded-full uppercase mb-4">
               Simple Pricing
             </span>
+            {/* This section renders only when paid visibility is switched on,
+                so it may not say "100% free of charge" — but free listing is
+                still the headline, because it is what the model is built on
+                (LISTING_LIMITS = 999999 on every tier) and it is what the rest
+                of the site promises. Never lead this section with a price. */}
             <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-tight">
-              Plans That Fit{' '}
-              <span className="gradient-text">Your Budget</span>
+              Listing Is Always{' '}
+              <span className="gradient-text">Free of Charge</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              List free. Pay only when you want more visibility, faster results, or included Boosts.
+              Unlimited listings cost nothing, on every plan. Pay only if you want more
+              visibility, faster results, or included Boosts — never to publish.
             </p>
           </div>
         </ScrollReveal>

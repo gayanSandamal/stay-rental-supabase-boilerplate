@@ -11,6 +11,7 @@ import {
   Zap,
   MessageCircle,
   Gift,
+  Sparkles,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import { ScrollReveal } from '@/components/scroll-reveal';
@@ -20,6 +21,14 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getConciergeWhatsAppLink } from '@/lib/site-config';
 import { getUser } from '@/lib/db/queries';
 import { accountGatedHref } from '@/lib/auth/cta';
+import { FreeBadge } from '@/components/free-badge';
+import {
+  FREE_BADGE,
+  FREE_BADGE_PAID,
+  FREE_PROMISE,
+  FREE_PROMISE_PAID,
+  isPlatformFullyFree,
+} from '@/lib/free-copy';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -30,13 +39,24 @@ export const metadata: Metadata = {
   // coordinated a viewing. This string is the Google snippet — the one piece of
   // copy that gets read by people who never reach the page.
   description:
-    'List your rental property on Easy Rent — free, unlimited listings for Sri Lanka. Verified contact numbers, direct tenant calls and WhatsApp, and view counts on every listing.',
+    'List your rental property on Easy Rent — totally, 100% free of charge. Unlimited listings for Sri Lanka, no listing fee and no commission. Verified contact numbers, direct tenant calls and WhatsApp, and view counts on every listing.',
   alternates: {
     canonical: `${baseUrl}/list-your-property`,
   },
 };
 
 const benefits = [
+  // Leads the grid on purpose: price is the first objection a Sri Lankan
+  // landlord has, because every other listing site charges them.
+  {
+    icon: Sparkles,
+    title: 'Totally, 100% Free of Charge',
+    description:
+      'No listing fee, no subscription, no commission when you find a tenant. List one property or fifty — the price is the same, and the price is nothing.',
+    tag: '100% Free',
+    gradient: 'from-emerald-500 to-teal-700',
+    tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
   {
     icon: Shield,
     title: 'Direct Tenant Contact',
@@ -110,9 +130,27 @@ const benefits = [
  * for the same reason the homepage gates it: a benefit the dashboard does not
  * deliver is a broken promise, and the grid reads fine at five cards.
  */
-function buildBenefits(viewCountsEnabled: boolean) {
-  if (viewCountsEnabled) return benefits;
-  return benefits.filter((b) => b.tag !== 'Free Insight');
+function buildBenefits(viewCountsEnabled: boolean, fullyFree: boolean) {
+  const shown = viewCountsEnabled
+    ? benefits
+    : benefits.filter((b) => b.tag !== 'Free Insight');
+
+  if (fullyFree) return shown;
+
+  // Paid visibility is live, so the platform is no longer free end to end.
+  // Listings still are, and that is still the strongest thing on this page —
+  // the card just stops speaking for everything else.
+  return shown.map((b) =>
+    b.tag === '100% Free'
+      ? {
+          ...b,
+          title: 'Free, Unlimited Listings',
+          description:
+            'No listing fee and no commission when you find a tenant. List one property or fifty. Paid visibility is optional and never required to publish.',
+          tag: 'Free to List',
+        }
+      : b,
+  );
 }
 
 // Step 1 depends on whether the reader already has an account — telling a
@@ -163,7 +201,7 @@ function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
   const faqs = [
     {
       q: 'Is it really free?',
-      a: 'Yes. Listing is free — no listing fees, no commissions, no charges when a tenant contacts you. Founding landlords keep free listings for good.',
+      a: 'Yes — totally, 100% free of charge. No listing fee, no subscription, no commission when you find a tenant, and no charge when a tenant calls you. There is no card to enter and no trial to cancel.',
     },
     {
       q: 'Do I need professional photos?',
@@ -177,7 +215,7 @@ function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
     },
     {
       q: 'I already posted on ikman or Facebook. Why list here too?',
-      a: 'It costs nothing and reaches renters who specifically want verified, scam-free listings. Your listing stays active for 30 days with no daily re-posting, and verification badges make your property stand out.',
+      a: 'Because it costs you absolutely nothing to also be here, and it reaches renters who specifically want verified, scam-free listings. Your listing stays active for 30 days with no daily re-posting, and verification badges make your property stand out.',
     },
     {
       q: 'How long until my listing goes live?',
@@ -185,7 +223,7 @@ function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
     },
     {
       q: 'Can I list more than one property?',
-      a: 'Yes — unlimited properties, all free. Agencies and portfolio landlords can also get a business account to manage listings as a team.',
+      a: 'Yes — unlimited properties, every one of them 100% free of charge. Agencies and portfolio landlords can also get a business account to manage listings as a team.',
     },
   ];
   if (viewCountsEnabled) {
@@ -219,6 +257,7 @@ export default async function ListYourPropertyPage() {
   const conciergeAvailable =
     isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink();
   const viewCountsEnabled = isFeatureEnabled('showViewCountsToAllTiers');
+  const fullyFree = isPlatformFullyFree();
 
   // Where every "list your property" CTA on this page is ultimately headed.
   const listingFormHref = quickListEnabled
@@ -262,7 +301,8 @@ export default async function ListYourPropertyPage() {
           <div className="absolute inset-0 dot-pattern opacity-40 pointer-events-none" />
 
           <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28 text-center hero-enter">
-            <div className="flex justify-center mb-6">
+            <div className="flex flex-wrap justify-center items-center gap-2.5 mb-6">
+              <FreeBadge label={fullyFree ? FREE_BADGE : FREE_BADGE_PAID} variant="dark" />
               <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal-500/25 text-teal-200 border border-teal-400/35 backdrop-blur-sm">
                 <Shield className="h-3.5 w-3.5" />
                 For Landlords & Property Owners
@@ -273,10 +313,18 @@ export default async function ListYourPropertyPage() {
               List Your Property on{' '}
               <span className="gradient-text">Easy Rent</span>
             </h1>
-            <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
+            {fullyFree && (
+              <p className="text-xl sm:text-2xl font-extrabold text-amber-300 tracking-tight mb-5">
+                Totally, 100% free of charge.
+              </p>
+            )}
+            <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-4">
               {founding
-                ? 'Free to list, checked before it goes live, and tenants contact you directly. No middlemen, no commissions.'
-                : 'Reach tenants looking for mid-to-long-term rentals in Sri Lanka. Free to list, hassle-free management.'}
+                ? 'Checked before it goes live, and tenants contact you directly. No middlemen, no commissions.'
+                : 'Reach tenants looking for mid-to-long-term rentals in Sri Lanka. Hassle-free management.'}
+            </p>
+            <p className="text-base text-teal-200/90 max-w-xl mx-auto font-medium mb-10">
+              {fullyFree ? FREE_PROMISE : FREE_PROMISE_PAID}
             </p>
 
             <div className="flex flex-wrap justify-center gap-4">
@@ -331,10 +379,11 @@ export default async function ListYourPropertyPage() {
                 <div className="text-center mb-10">
                   <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
                     Two Ways to List —{' '}
-                    <span className="gradient-text">Both Free</span>
+                    <span className="gradient-text">Both 100% Free</span>
                   </h2>
                   <p className="mt-3 text-lg text-slate-600 max-w-xl mx-auto">
-                    Pick whichever is easier. Either way, we verify before it goes live.
+                    Pick whichever is easier. Either way, we verify before it goes live — and
+                    neither one costs you a rupee.
                   </p>
                 </div>
               </ScrollReveal>
@@ -398,10 +447,10 @@ export default async function ListYourPropertyPage() {
                         Free LISTING is real and unlimited; free PLACEMENT is
                         the one thing that can never be promised. */}
                     <p className="text-sm text-amber-900">
-                      <strong>Founding landlords:</strong> listing is free and
-                      unlimited, and you deal with tenants directly by phone or
-                      WhatsApp. Early landlords set the standard — and help us
-                      decide what gets built next.
+                      <strong>Founding landlords:</strong> listing is totally, 100%
+                      free of charge and unlimited, and you deal with tenants
+                      directly by phone or WhatsApp. Early landlords set the
+                      standard — and help us decide what gets built next.
                     </p>
                   </div>
                 </ScrollReveal>
@@ -428,14 +477,15 @@ export default async function ListYourPropertyPage() {
                   {/* See the note on the page metadata: we do not coordinate
                       viewings and never have. Verification and publishing are
                       the parts we actually do. */}
-                  We verify and publish your listing, then get out of the way — tenants
-                  reach you directly, and you can see how the listing is doing.
+                  We verify and publish your listing{fullyFree ? ' free of charge' : ''}, then get
+                  out of the way — tenants reach you directly, and you can see how the
+                  listing is doing.
                 </p>
               </div>
             </ScrollReveal>
 
             <ScrollReveal stagger className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {buildBenefits(viewCountsEnabled).map((benefit) => {
+              {buildBenefits(viewCountsEnabled, fullyFree).map((benefit) => {
                 const Icon = benefit.icon;
                 return (
                   <div
@@ -470,7 +520,7 @@ export default async function ListYourPropertyPage() {
                   <span className="gradient-text">Landlords</span>
                 </h2>
                 <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-                  Four straightforward steps — no middlemen, no hidden fees.
+                  Four straightforward steps — no middlemen, no hidden fees, no fees at all.
                 </p>
               </div>
             </ScrollReveal>
@@ -544,8 +594,9 @@ export default async function ListYourPropertyPage() {
               </h2>
               <p className="text-slate-300 mb-8 text-lg max-w-xl mx-auto">
                 {founding
-                  ? "Be one of the first landlords on Sri Lanka's most transparent rental platform — free, checked, direct."
+                  ? "Be one of the first landlords on Sri Lanka's most transparent rental platform — checked, direct, and totally 100% free of charge."
                   : 'Manage your listings in one place and let qualified tenants contact you directly.'}
+                {fullyFree && !founding && ' Totally, 100% free of charge.'}
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link
@@ -553,7 +604,7 @@ export default async function ListYourPropertyPage() {
                   className="btn-amber-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-amber-800/25"
                 >
                   <CheckCircle className="h-5 w-5" />
-                  List Your Property Now
+                  {fullyFree ? 'List Your Property Free' : 'List Your Property Now'}
                 </Link>
                 {conciergeAvailable && (
                   <WhatsAppConciergeButton

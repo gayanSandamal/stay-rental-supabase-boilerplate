@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ScrollReveal } from './scroll-reveal';
-import { ShieldCheck, Mail, Phone } from 'lucide-react';
+import { ShieldCheck, Mail, Phone, Sparkles } from 'lucide-react';
 import { formatWhatsAppDisplay, getWhatsAppSupportNumber } from '@/lib/site-config';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { EasyRentMark } from '@/components/brand/easy-rent-logo';
@@ -82,11 +82,11 @@ export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                     per-listing badge carry the specifics. */}
                 {isFeatureEnabled('showFoundingStageCopy')
                   ? isLandlord
-                    ? 'List free as a founding landlord — tenants call or WhatsApp you directly.'
-                    : 'We verify contact numbers and check listings, and every listing shows you what was checked.'
+                    ? `List as a founding landlord${pricingEnabled ? ' — free and unlimited' : ' — totally, 100% free of charge'}. Tenants call or WhatsApp you directly.`
+                    : `We verify contact numbers and check listings, and every listing shows you what was checked.${pricingEnabled ? '' : ' Browsing and contacting owners is 100% free of charge.'}`
                   : isLandlord
-                    ? 'Manage your listings in one place and let qualified tenants contact you directly.'
-                    : 'Find checked, affordable mid- to long-term rentals and deal with the owner directly.'}
+                    ? `Manage your listings in one place and let qualified tenants contact you directly${pricingEnabled ? '.' : ' — 100% free of charge.'}`
+                    : `Find checked mid- to long-term rentals and deal with the owner directly${pricingEnabled ? '.' : ', 100% free of charge.'}`}
               </p>
               {/* The "Refer a friend — both get LKR 500 off" line lived here.
                   There is no referral system anywhere in the codebase — no
@@ -107,7 +107,7 @@ export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
                 href="/list-your-property"
                 className="btn-amber-gradient px-6 py-3 rounded-xl text-white font-semibold text-sm"
               >
-                List Your Property
+                {pricingEnabled ? 'List Your Property' : 'List Your Property — Free'}
               </Link>
             </div>
           </div>
@@ -124,8 +124,16 @@ export async function SiteFooter({ variant = 'default' }: SiteFooterProps) {
               <span className="text-base font-semibold tracking-[0.2em] text-white">EASY RENT</span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-5 max-w-xs">
-              Sri Lanka&apos;s affordable platform for mid- to long-term rentals. Deal with the owner directly.
+              {pricingEnabled
+                ? 'Sri Lanka’s platform for mid- to long-term rentals. Free to list. Deal with the owner directly.'
+                : 'Sri Lanka’s 100% free platform for mid- to long-term rentals. Deal with the owner directly.'}
             </p>
+            {!pricingEnabled && (
+              <div className="flex items-center gap-2 text-xs text-amber-300 mb-2 font-semibold">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Totally, 100% free of charge</span>
+              </div>
+            )}
             {/* "Verified Landlords & Listings" as a blanket claim overstates it
                 — verification is per-listing and shown on the listing itself. */}
             <div className="flex items-center gap-2 text-xs text-emerald-400 mb-2">

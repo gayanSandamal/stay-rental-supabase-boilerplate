@@ -12,27 +12,33 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
+    default: 'Easy Rent - 100% Free Verified Rentals in Sri Lanka',
     template: '%s | Easy Rent',
   },
   // "Verified landlords, property visits" was false in both halves — no
   // landlord KYC exists and no property has ever been visited. This string is
   // the site-wide SEO description, so it is what Google and every social share
-  // shows.
-  description: 'Find mid-to-long-term rentals (1-12+ months) in Sri Lanka. Verified contact numbers, listings checked before they go live, and direct contact with the owner.',
-  keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals'],
+  // shows — which is also why the price leads it: "free" in a search snippet is
+  // the reason someone clicks us instead of the paid listing site above us.
+  //
+  // Static export, so it cannot read the `enablePricingSection` flag (metadata
+  // is evaluated at build time and the flag snapshot is per-instance). It is
+  // safe anyway: it claims free listings and free browsing, both of which stay
+  // true on every tier — never "the whole platform is free".
+  description: 'Find mid-to-long-term rentals (1-12+ months) in Sri Lanka — 100% free of charge. Free to browse, free to contact owners, and free to list your property. Verified contact numbers and listings checked before they go live.',
+  keywords: ['rental', 'Sri Lanka', 'house rent', 'apartment', 'Colombo', 'mid-term rental', 'long-term rental', 'verified rentals', 'free property listing Sri Lanka', 'list property free', 'free rental listings'],
   openGraph: {
     type: 'website',
     locale: 'en_LK',
     url: baseUrl,
     siteName: 'Easy Rent',
-    title: 'Easy Rent - Verified Mid-to-Long-Term Rentals in Sri Lanka',
-    description: 'Find mid-to-long-term rentals in Sri Lanka. Verified contact numbers and direct contact with the owner — no middlemen.',
+    title: 'Easy Rent - 100% Free Verified Rentals in Sri Lanka',
+    description: 'Mid-to-long-term rentals in Sri Lanka, 100% free of charge. Free to browse, free to contact the owner, free to list your property — no fees, no commission.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Easy Rent - Verified Rentals in Sri Lanka',
-    description: 'Find verified mid-to-long-term rentals in Sri Lanka.',
+    title: 'Easy Rent - 100% Free Verified Rentals in Sri Lanka',
+    description: 'Mid-to-long-term rentals in Sri Lanka, 100% free of charge. Free to browse, free to contact, free to list.',
   },
   metadataBase: new URL(baseUrl),
 };
@@ -50,7 +56,7 @@ const organizationJsonLd = {
   name: 'Easy Rent',
   legalName: 'Easy Rent (Pvt) Ltd',
   url: baseUrl,
-  description: 'Sri Lanka\'s trusted platform for verified mid-to-long-term rentals.',
+  description: 'Sri Lanka\'s trusted platform for verified mid-to-long-term rentals — 100% free of charge to browse, to contact owners, and to list a property.',
   contactPoint: {
     '@type': 'ContactPoint',
     email: 'hello@easyrent.lk',
@@ -65,7 +71,7 @@ const websiteJsonLd = {
   '@type': 'WebSite',
   name: 'Easy Rent',
   url: baseUrl,
-  description: 'Find verified mid-to-long-term rentals in Sri Lanka.',
+  description: 'Find verified mid-to-long-term rentals in Sri Lanka, 100% free of charge.',
   publisher: {
     '@type': 'Organization',
     name: 'Easy Rent',

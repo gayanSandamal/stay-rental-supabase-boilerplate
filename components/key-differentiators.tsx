@@ -67,21 +67,27 @@ const FEATURES = [
   {
     id: 'plans',
     icon: Wallet,
-    title: 'Affordable Plans',
+    // Was "Affordable Plans" / "Budget Friendly". Affordability is a comparison
+    // — it invites the reader to go and check what ikman charges. Free of
+    // charge is not a comparison, so this card leads with the price even when
+    // paid visibility is on: listings are free and unlimited on every tier by
+    // design (LISTING_LIMITS = 999999).
+    title: 'Free to List, Free to Rent',
     description:
-      'Free to browse, view, and contact. Premium from LKR 300/month for early access to new listings, unlimited alerts, and exclusive listings.',
-    tag: 'Budget Friendly',
+      'Browsing, viewing and contacting owners costs nothing, and listing a property is free and unlimited. Optional paid visibility is the only thing we ever charge for.',
+    tag: 'No Listing Fees',
     gradient: 'from-emerald-500 to-teal-600',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
 ];
 
-// Copy for the "plans" card when paid visibility is off (everything is free).
+// Copy for the "plans" card when paid visibility is off — i.e. when literally
+// nothing on the platform costs money, which is the default and current state.
 const FREE_PLANS_CARD = {
-  title: 'Completely Free',
+  title: 'Totally, 100% Free of Charge',
   description:
-    'Browse, view, and contact landlords directly — no fees, no subscriptions. Just you and the property owner.',
-  tag: 'No Fees',
+    'Not a trial, not a first-month offer. Browse, view and contact owners free — and list unlimited properties free, with no commission when you find a tenant.',
+  tag: '100% Free',
 };
 
 export function KeyDifferentiators() {
@@ -103,7 +109,8 @@ export function KeyDifferentiators() {
               </span>
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-              Renting in Sri Lanka has unique challenges. We built every feature to tackle them head-on.
+              Renting in Sri Lanka has unique challenges. We built every feature to tackle them head-on
+              {pricingEnabled ? '.' : ' — and made the whole thing 100% free of charge.'}
             </p>
           </div>
         </ScrollReveal>
