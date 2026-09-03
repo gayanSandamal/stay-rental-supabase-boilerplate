@@ -20,6 +20,24 @@ The monetization model is **"Free listing + paid visibility"** (see `Monetizatio
 - **Payments are MANUAL.** Stripe is a dependency and the setup script supports webhooks, but **it is not wired to live payments.** Landlords pay offline (bank transfer/slip); **admin/ops then activate** Boost/Featured/Urgent/plans through the back-office. Every visibility API route (`/api/listings/[id]/boost|feature|urgent|bundle`) is **admin/ops-only** — a landlord cannot self-activate. When touching monetization, preserve this manual-activation flow unless explicitly asked to build real billing.
 - **Landlord plan tiers**: `free`, `starter`, `pro`, `agency` (plus legacy `basic`→starter, `premium`→pro). Paid plans grant *included Boosts/month* (`INCLUDED_BOOSTS_PER_MONTH`) and a search-ranking weight (`PLAN_TIER_WEIGHTS`), not listing caps.
 
+**Public positioning is "totally, 100% free of charge", never "affordable" (2026-09-03).**
+`lib/free-copy.ts` owns the phrasing and `isPlatformFullyFree()` — the negation of
+`enablePricingSection`, which is OFF by default and has no override row in
+production. Affordability invites a price comparison with ikman; free of charge
+ends it. Do not reintroduce "affordable", "budget friendly" or "best value" on a
+public surface.
+
+The claim is gated, not hardcoded, and that gate is the whole point: turning
+`enablePricingSection` on puts an LKR 500 Featured card on the homepage, and
+"100% free of charge" must not be rendering above it. Every marketing surface
+therefore reads the flag and falls back to the `*_PAID` copy, which still leads
+with free listings (they stay free and unlimited on every tier —
+`LISTING_LIMITS` is 999999) but never speaks for the whole platform. The
+homepage renders `FreePromiseSection` **or** `PricingSection`, never both.
+Client components (the hero, `how-it-works`) cannot read the flag, so either
+take `fullyFree` as a prop or keep their claim scoped to things that are free on
+every tier.
+
 **Search ranking** (the core marketplace mechanic) lives in `getActiveListings` in `lib/db/queries.ts`. Default order: **Featured → Boost → Urgent → plan tier → verified → completeness → newest**. This is intentional and is how paid visibility actually works — changing the `orderBy` here changes the product.
 
 ## Roles & access

@@ -32,7 +32,7 @@
 
 ## Overview
 
-Easy Rent is a mid-to-long-term (1–12+ months) house rental platform built specifically for Sri Lanka. The platform focuses on verified listings, Sri Lanka-specific features (power backup, water source, fiber internet), direct landlord-tenant contact, and affordable pricing.
+Easy Rent is a mid-to-long-term (1–12+ months) house rental platform built specifically for Sri Lanka. The platform focuses on verified listings, Sri Lanka-specific features (power backup, water source, fiber internet), direct landlord-tenant contact, and being totally, 100% free of charge — free to browse, free to contact owners, and free to list.
 
 **Key differentiators:**
 - Every listing verified by ops team (identity + optional property visit)
@@ -1088,7 +1088,7 @@ Listings in search results are sorted by the following priority (highest first):
 **Company:** How It Works (`/#how-it-works`), How to Use, Sign In, Create Account
 **Legal:** Privacy Policy, Terms of Service
 **Contact:** hello@easyrent.lk | +94 77 000 0000
-**Tagline:** Sri Lanka's trusted, affordable platform for verified rentals. No scams. No surprises.
+**Tagline:** Sri Lanka's trusted, 100% free platform for verified rentals. No fees. No scams. No surprises.
 
 ---
 

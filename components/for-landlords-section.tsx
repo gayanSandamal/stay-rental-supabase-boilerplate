@@ -3,6 +3,8 @@ import { ScrollReveal } from './scroll-reveal';
 import { Shield, Users, LineChart, ArrowRight } from 'lucide-react';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { WhatsAppConciergeButton } from './whatsapp-concierge-button';
+import { FreeBadge } from './free-badge';
+import { FREE_BADGE } from '@/lib/free-copy';
 
 export function ForLandlordsSection() {
   const pricingEnabled = isFeatureEnabled('enablePricingSection');
@@ -25,10 +27,15 @@ export function ForLandlordsSection() {
               List Your Property With{' '}
               <span className="gradient-text">Easy Rent</span>
             </h2>
+            {!pricingEnabled && (
+              <div className="mt-5 flex justify-center">
+                <FreeBadge label={FREE_BADGE} />
+              </div>
+            )}
             <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
               {pricingEnabled
                 ? 'Post unlimited properties free. Need more visibility? Boost from LKR 250.'
-                : 'Post unlimited properties for free.'}
+                : 'Post unlimited properties, totally free of charge. No listing fee, no commission, no subscription — we never ask you for money.'}
             </p>
           </div>
         </ScrollReveal>
@@ -91,7 +98,7 @@ export function ForLandlordsSection() {
               href="/list-your-property"
               className="btn-amber-gradient inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold text-base shadow-xl shadow-amber-800/25 hover:opacity-95 transition-opacity"
             >
-              Learn More & Get Started
+              {pricingEnabled ? 'Learn More & Get Started' : 'Start Listing — Free of Charge'}
               <ArrowRight className="h-4 w-4" />
             </Link>
             {conciergeEnabled && (

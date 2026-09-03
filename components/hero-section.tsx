@@ -2,8 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, MapPin, ArrowRight, ShieldCheck, Zap, Building2, Clock } from 'lucide-react';
+import { Search, MapPin, ArrowRight, ShieldCheck, Zap, Building2, Clock, Sparkles } from 'lucide-react';
 import { SearchInputWithSuggestions } from '@/components/search-input-with-suggestions';
+import {
+  FREE_BADGE,
+  FREE_BADGE_PAID,
+  FREE_PROMISE,
+  FREE_PROMISE_PAID,
+} from '@/lib/free-copy';
 
 const POPULAR = ['Colombo 3', 'Nugegoda', 'Kandy', 'Galle', 'Negombo', 'Battaramulla'];
 
@@ -33,7 +39,17 @@ function FloatingCard({
   );
 }
 
-export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }) {
+export function HeroSection({
+  foundingMode = false,
+  fullyFree = true,
+}: {
+  foundingMode?: boolean;
+  /**
+   * Client component, so the `enablePricingSection` flag cannot be read here —
+   * the page resolves `isPlatformFullyFree()` and passes the answer down.
+   */
+  fullyFree?: boolean;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState('');
 
@@ -74,15 +90,20 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
         value="Contacts verified"
         className="top-[22%] left-[6%] animate-float-slow"
         />
-      {/* Neither branch may state a promise or a count we cannot stand behind.
-          "List Free, Forever" was a perpetual pricing commitment with nothing
-          recording who it was made to, and "150+ Properties" was a fabricated
-          number — a landmine, because turning showFoundingStageCopy off would
-          publish it instantly. Wire a real count here before claiming one. */}
+      {/* No promise or count we cannot stand behind. "List Free, Forever" was a
+          perpetual pricing commitment with nothing recording who it was made
+          to, and "150+ Properties" was a fabricated number — a landmine,
+          because turning showFoundingStageCopy off would publish it instantly.
+          Wire a real count here before claiming one.
+
+          "100% free of charge" is a different kind of statement: it describes
+          what the platform charges TODAY, and `fullyFree` is read straight off
+          the flag that would make it stop being true. Nothing is promised
+          forever. */}
       <FloatingCard
-        icon={Building2}
-        label={foundingMode ? 'Founding Landlords' : 'Across Sri Lanka'}
-        value={foundingMode ? 'Free to list' : 'Direct from owners'}
+        icon={fullyFree ? Sparkles : Building2}
+        label={fullyFree ? 'Renters & landlords' : foundingMode ? 'Founding Landlords' : 'Across Sri Lanka'}
+        value={fullyFree ? '100% free' : foundingMode ? 'Free to list' : 'Direct from owners'}
         className="top-[18%] right-[5%] animate-float-reverse"
         />
       <FloatingCard
@@ -94,8 +115,13 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
 
       {/* ── Main content with staggered entrance ── */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 hero-enter">
-        {/* 1 · Badge */}
-        <div className="flex justify-center mb-6">
+        {/* 1 · Badges — the price claim leads, because it is the difference
+            between us and every other listing site in Sri Lanka. */}
+        <div className="flex flex-wrap justify-center items-center gap-2.5 mb-6">
+          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold bg-amber-400/20 text-amber-200 border border-amber-300/40 backdrop-blur-sm uppercase tracking-wide">
+            <Sparkles className="h-3.5 w-3.5" />
+            {fullyFree ? FREE_BADGE : FREE_BADGE_PAID}
+          </span>
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-teal-500/25 text-teal-200 border border-teal-400/35 backdrop-blur-sm">
             <ShieldCheck className="h-3.5 w-3.5" />
             {foundingMode
@@ -112,16 +138,30 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
               <span className="gradient-text">Rental in Sri Lanka</span>
             </span>
           </h1>
+          {fullyFree && (
+            <p className="mt-5 text-xl sm:text-2xl font-extrabold text-amber-300 tracking-tight">
+              Totally, 100% free of charge.
+            </p>
+          )}
         </div>
 
         {/* 3 · Subtitle */}
-        <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-10">
+        <p className="text-center text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-6">
           {/* Was "verified landlords, no scams" — no landlord has ever been
               KYC-verified (there is no document or ID upload anywhere). What is
-              verified is the CONTACT NUMBER, by WhatsApp OTP. */}
-          Affordable rentals for{' '}
-          <span className="text-amber-300 font-semibold">renters</span>.
+              verified is the CONTACT NUMBER, by WhatsApp OTP.
+
+              Was also "Affordable rentals" — which invites a price comparison
+              we do not need to win. Nothing here costs money. */}
+          Search, browse and contact owners{' '}
+          <span className="text-amber-300 font-semibold">free of charge</span>.
           Mid- to long-term — <span className="text-teal-300 font-semibold">verified</span> contact numbers, straight from the owner.
+        </p>
+
+        {/* 3b · The promise, spelled out. Renters assume a catch on a free
+            platform; naming the three things we do not charge for removes it. */}
+        <p className="text-center text-sm sm:text-base text-teal-200/90 max-w-xl mx-auto mb-10 font-medium">
+          {fullyFree ? FREE_PROMISE : FREE_PROMISE_PAID}
         </p>
 
         {/* 4 · Search bar with breathing glow */}
@@ -184,7 +224,7 @@ export function HeroSection({ foundingMode = false }: { foundingMode?: boolean }
             className="btn-saffron-gradient flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm shadow-lg"
           >
             <Zap className="h-4 w-4" />
-            List Your Property
+            {fullyFree ? 'List Your Property — Free' : 'List Your Property'}
           </button>
           <button
             onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}

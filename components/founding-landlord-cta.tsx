@@ -30,8 +30,8 @@ import { getConciergeWhatsAppLink } from '@/lib/site-config';
 const PROMISES = [
   {
     icon: ShieldCheck,
-    title: 'Free to list',
-    text: 'Listing your property is free, with no limit and no commission. We earn from optional visibility, never from your listing.',
+    title: 'Totally, 100% free of charge',
+    text: 'Listing your property costs nothing — no listing fee, no subscription, and no commission when you find a tenant. Unlimited properties, all free.',
     gradient: 'from-teal-600 to-teal-800',
   },
   {
@@ -71,8 +71,9 @@ export function FoundingLandlordCta() {
             </h2>
             <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
               We&apos;re building Sri Lanka&apos;s most trusted rental marketplace — and we&apos;re
-              starting honestly: no fake counts, no fake reviews. Checked homes and
-              direct contact. Join at the start and help set the standard.
+              starting honestly: no fake counts, no fake reviews, and no charges. Checked
+              homes, direct contact, 100% free of charge. Join at the start and help set
+              the standard.
             </p>
           </div>
         </ScrollReveal>
@@ -96,7 +97,7 @@ export function FoundingLandlordCta() {
           <div className="mt-14 flex flex-col sm:flex-row items-center justify-center gap-5 py-8 px-8 rounded-2xl bg-white border border-slate-200 shadow-sm text-center sm:text-left">
             <p className="text-slate-700 text-sm sm:text-base max-w-md">
               Have a property to rent? We&apos;ll help you create your first listing —
-              send us your photos and we&apos;ll handle the rest.
+              send us your photos and we&apos;ll handle the rest, free of charge.
             </p>
             {conciergeLink ? (
               <a

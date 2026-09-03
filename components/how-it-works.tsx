@@ -24,7 +24,7 @@ const STEPS = [
     // old copy ("Sign in to see verified contact numbers") described a gate
     // that does not exist and asked for a signup the product does not need.
     description:
-      'Call the owner directly or message them on WhatsApp. No sign-in, no middlemen, no booking fees.',
+      'Call the owner directly or message them on WhatsApp. No sign-in, no middlemen, and no charge — not to you, and not to them.',
     gradient: 'from-amber-500 to-amber-700',
     ringColor: 'ring-amber-400/40',
     accentBg: 'bg-amber-500',
@@ -383,7 +383,13 @@ export function HowItWorks() {
             <span className="gradient-text">Move-In</span>
           </h2>
           <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-            Three straightforward steps — no middlemen, no hidden fees, no surprises.
+            {/* Deliberately scoped to the three steps rather than the whole
+                platform: this component is a client component and cannot read
+                `enablePricingSection`, and searching, contacting an owner and
+                moving in stay free of charge on every tier — nothing here is
+                ever behind a paywall. */}
+            Three straightforward steps — no middlemen, no hidden fees. Searching,
+            contacting the owner and moving in are 100% free of charge.
           </p>
         </div>
 

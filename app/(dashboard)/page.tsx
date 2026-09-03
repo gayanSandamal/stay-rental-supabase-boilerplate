@@ -4,11 +4,13 @@ import { TrustSignals } from '@/components/trust-signals';
 import { KeyDifferentiators } from '@/components/key-differentiators';
 import { HowItWorks } from '@/components/how-it-works';
 import { PricingSection } from '@/components/pricing-section';
+import { FreePromiseSection } from '@/components/free-promise-section';
 import { ForLandlordsSection } from '@/components/for-landlords-section';
 import { Testimonials } from '@/components/testimonials';
 import { FoundingLandlordCta } from '@/components/founding-landlord-cta';
 import { SiteFooter } from '@/components/site-footer';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { isPlatformFullyFree } from '@/lib/free-copy';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -42,11 +44,13 @@ export default async function HomePage() {
   // Founding-stage copy: honest claims only, until real usage backs the
   // social-proof numbers (toggle in Back Office → Settings).
   const foundingMode = isFeatureEnabled('showFoundingStageCopy');
+  // The hero is a client component, so it cannot read the pricing flag itself.
+  const fullyFree = isPlatformFullyFree();
 
   return (
     <>
       <main>
-        <HeroSection foundingMode={foundingMode} />
+        <HeroSection foundingMode={foundingMode} fullyFree={fullyFree} />
 
         <Suspense fallback={
           <div className="py-14 bg-white">
@@ -62,7 +66,10 @@ export default async function HomePage() {
 
         <KeyDifferentiators />
         <HowItWorks />
-        {isFeatureEnabled('enablePricingSection') && <PricingSection />}
+        {/* One or the other, never both — a "100% free of charge" band sitting
+            above an LKR 500 Featured card is the worst thing a pricing page can
+            do. `fullyFree` is the negation of the same flag. */}
+        {fullyFree ? <FreePromiseSection /> : <PricingSection />}
         <ForLandlordsSection />
         {foundingMode ? <FoundingLandlordCta /> : <Testimonials />}
       </main>
