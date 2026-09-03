@@ -52,6 +52,7 @@ const MIGRATIONS = [
   '0047_market_rent_snapshots.sql',
   '0048_listing_impressions.sql',
   '0049_landlord_reports.sql',
+  '0050_clear_whatsapp_pilot_records.sql',
   '0051_impersonation_sessions.sql',
 ];
 
