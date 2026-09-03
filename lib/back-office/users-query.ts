@@ -39,6 +39,7 @@ const dormantCutoff = sql`now() - make_interval(days => ${DORMANT_AFTER_DAYS})`;
 const stateExpr = sql`
   CASE
     WHEN u.deleted_at IS NOT NULL THEN 'deleted'
+    WHEN u.banned_at IS NOT NULL THEN 'banned'
     WHEN a.id IS NULL THEN 'no_auth'
     WHEN a.last_sign_in_at IS NULL THEN 'dormant'
     WHEN a.last_sign_in_at < ${dormantCutoff} THEN 'dormant'
@@ -57,6 +58,8 @@ function tabPredicate(tab: UserTab) {
       return sql`(${stateExpr}) = 'dormant'`;
     case 'no_auth':
       return sql`(${stateExpr}) = 'no_auth'`;
+    case 'banned':
+      return sql`u.deleted_at IS NULL AND u.banned_at IS NOT NULL`;
     case 'deleted':
       return sql`u.deleted_at IS NOT NULL`;
     /*
@@ -92,6 +95,7 @@ export async function getBackOfficeUsers(opts: {
   const rows = await db.execute(sql`
     SELECT u.id, u.name, u.email, u.role::text AS role, u.wa_phone,
            u.subscription_tier, u.created_at, u.deleted_at,
+           u.banned_at, u.banned_reason,
            a.last_sign_in_at,
            (a.id IS NOT NULL) AS has_auth_row
     FROM users u
@@ -118,6 +122,8 @@ export async function getBackOfficeUsers(opts: {
       subscriptionTier: r.subscription_tier ?? null,
       createdAt: new Date(r.created_at),
       deletedAt: r.deleted_at ? new Date(r.deleted_at) : null,
+      bannedAt: r.banned_at ? new Date(r.banned_at) : null,
+      bannedReason: r.banned_reason ?? null,
       lastSignInAt: r.last_sign_in_at ? new Date(r.last_sign_in_at) : null,
       hasAuthRow: Boolean(r.has_auth_row),
     })),
@@ -141,6 +147,7 @@ export async function getBackOfficeUserCounts(): Promise<Record<string, number>>
       count(*) FILTER (WHERE u.deleted_at IS NULL AND u.role IN ('ops','admin'))::int AS staff,
       count(*) FILTER (WHERE (${stateExpr}) = 'dormant')::int AS dormant,
       count(*) FILTER (WHERE (${stateExpr}) = 'no_auth')::int AS no_auth,
+      count(*) FILTER (WHERE u.deleted_at IS NULL AND u.banned_at IS NOT NULL)::int AS banned,
       count(*) FILTER (WHERE u.deleted_at IS NOT NULL)::int AS deleted
     FROM users u
     LEFT JOIN auth.users a ON a.id = u.auth_user_id
@@ -153,6 +160,7 @@ export async function getBackOfficeUserCounts(): Promise<Record<string, number>>
     staff: Number(r.staff ?? 0),
     dormant: Number(r.dormant ?? 0),
     no_auth: Number(r.no_auth ?? 0),
+    banned: Number(r.banned ?? 0),
     deleted: Number(r.deleted ?? 0),
   };
 }

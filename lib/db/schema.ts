@@ -89,6 +89,15 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),
+  /*
+   * Banned. Checked in getUser() so a LIVE session stops working immediately —
+   * Supabase's own ban only stops new sign-ins, leaving the current token valid
+   * until it expires, which is the window a ban exists to close.
+   */
+  bannedAt: timestamp('banned_at'),
+  bannedReason: text('banned_reason'),
+  /** No cascade: deleting the issuing admin must not erase who issued it. */
+  bannedBy: integer('banned_by'),
 });
 
 // Landlords table (extends users with verification info)
@@ -586,6 +595,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   // 0051 — admin viewing the app as another user
   'impersonation_started',
   'impersonation_ended',
+  // 0052 — account lifecycle
+  'user_banned',
+  'user_unbanned',
+  'user_hard_deleted',
 ]);
 
 // WhatsApp concierge intake statuses
