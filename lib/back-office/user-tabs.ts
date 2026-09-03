@@ -24,6 +24,7 @@ export const DORMANT_AFTER_DAYS = 30;
 
 export const USER_TABS = [
   'all',
+  'banned',
   'tenant',
   'landlord',
   'staff',
@@ -36,6 +37,7 @@ export type UserTab = (typeof USER_TABS)[number];
 
 export const USER_TAB_LABELS: Record<UserTab, string> = {
   all: 'All',
+  banned: 'Banned',
   tenant: 'Tenants',
   landlord: 'Landlords',
   staff: 'Ops & Admin',
@@ -62,12 +64,14 @@ export type UserRow = {
   subscriptionTier: string | null;
   createdAt: Date;
   deletedAt: Date | null;
+  bannedAt: Date | null;
+  bannedReason: string | null;
   /** Null when there is no auth.users row at all — see `accountState`. */
   lastSignInAt: Date | null;
   hasAuthRow: boolean;
 };
 
-export type AccountState = 'deleted' | 'no_auth' | 'dormant' | 'active';
+export type AccountState = 'deleted' | 'banned' | 'no_auth' | 'dormant' | 'active';
 
 /**
  * The single place a row's state is decided, so the tab counts, the tab filter
@@ -79,10 +83,14 @@ export type AccountState = 'deleted' | 'no_auth' | 'dormant' | 'active';
  */
 export function accountState(row: {
   deletedAt: Date | null;
+  bannedAt?: Date | null;
   hasAuthRow: boolean;
   lastSignInAt: Date | null;
 }, now: Date = new Date()): AccountState {
   if (row.deletedAt) return 'deleted';
+  // Above no_auth on purpose: a banned account may also have lost its auth row
+  // (the ban revokes it), and "banned" is the fact an operator needs.
+  if (row.bannedAt) return 'banned';
   if (!row.hasAuthRow) return 'no_auth';
   const cutoff = now.getTime() - DORMANT_AFTER_DAYS * 24 * 60 * 60 * 1000;
   // Never signed in, but CAN — an invited account nobody has claimed yet.
@@ -92,6 +100,7 @@ export function accountState(row: {
 
 export const ACCOUNT_STATE_LABELS: Record<AccountState, string> = {
   active: 'Active',
+  banned: 'Banned',
   dormant: 'Dormant',
   no_auth: 'Cannot sign in',
   deleted: 'Deleted',

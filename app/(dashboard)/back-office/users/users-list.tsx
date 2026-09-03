@@ -28,6 +28,7 @@ import {
 } from '@/lib/back-office/users-query';
 import { cn } from '@/lib/utils';
 import { ImpersonateButton } from './impersonate-button';
+import { AccountActions } from './account-actions';
 
 const STATE_STYLES: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-800',
@@ -35,6 +36,7 @@ const STATE_STYLES: Record<string, string> = {
   // Rose, matching the urgent tab: this is a defect someone must repair, not a
   // quiet status.
   no_auth: 'bg-rose-100 text-rose-800',
+  banned: 'bg-amber-100 text-amber-900',
   deleted: 'bg-slate-100 text-slate-500',
 };
 
@@ -159,6 +161,11 @@ export async function UsersList({
                             No Supabase Auth record — this account can never sign in.
                           </p>
                         )}
+                        {state === 'banned' && u.bannedReason && (
+                          <p className="mt-1 max-w-56 text-[11px] text-amber-800">
+                            {u.bannedReason}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell
                         className="text-sm text-slate-600"
@@ -179,14 +186,40 @@ export async function UsersList({
                           the identity — assuming someone's account is a
                           different order of privilege from reading about them.
                         */}
-                        {viewer.role === 'admin' &&
-                          state !== 'deleted' &&
-                          (u.role === 'tenant' || u.role === 'landlord') && (
-                            <ImpersonateButton
-                              userId={u.id}
-                              label={publisherDisplayName({ name: u.name, email: u.email })}
-                            />
-                          )}
+                        <div className="flex flex-col items-end gap-1">
+                          {/*
+                            Impersonation is pointless on a banned account —
+                            getUser() returns null for them, so "view as" would
+                            show a signed-out app.
+                          */}
+                          {viewer.role === 'admin' &&
+                            state !== 'deleted' &&
+                            state !== 'banned' &&
+                            (u.role === 'tenant' || u.role === 'landlord') && (
+                              <ImpersonateButton
+                                userId={u.id}
+                                label={publisherDisplayName({ name: u.name, email: u.email })}
+                              />
+                            )}
+                          {/*
+                            Admin only, never an admin target, never yourself.
+                            All three are re-checked server-side — hiding a
+                            control is a courtesy, never the guard.
+                          */}
+                          {viewer.role === 'admin' &&
+                            u.role !== 'admin' &&
+                            u.id !== viewer.id &&
+                            state !== 'deleted' && (
+                              <AccountActions
+                                userId={u.id}
+                                email={u.email}
+                                label={publisherDisplayName({ name: u.name, email: u.email })}
+                                banned={state === 'banned'}
+                                canBan={u.role === 'tenant' || u.role === 'landlord'}
+                                canDelete
+                              />
+                            )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

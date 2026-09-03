@@ -98,6 +98,22 @@ export const getUser = cache(async function getUser() {
     return null;
   }
 
+  /*
+   * A BANNED ACCOUNT IS TREATED AS SIGNED OUT, EVERYWHERE, IMMEDIATELY.
+   *
+   * Returning null here is what makes a ban take effect on the current session
+   * rather than whenever the token happens to expire. Supabase's own ban stops
+   * NEW sign-ins; it cannot revoke a token it already signed, and that window is
+   * precisely what a ban exists to close.
+   *
+   * Every one of this function's ~70 callers already handles null (that is the
+   * anonymous case), so the ban needs no separate check anywhere else — which is
+   * the only way to be sure it cannot be forgotten at one of them.
+   */
+  if (user.bannedAt) {
+    return null;
+  }
+
   const self = { ...user, emailVerified: !!authUser.email_confirmed_at };
 
   /*
