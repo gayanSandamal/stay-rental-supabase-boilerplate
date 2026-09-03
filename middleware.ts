@@ -9,9 +9,49 @@ const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
+/**
+ * The one route that may still be called while impersonating: the way out.
+ * Without this exemption the Exit button would be blocked by the very rule it
+ * exists to lift, and the only escape would be deleting a cookie by hand.
+ */
+const IMPERSONATION_EXIT_PATH = '/api/impersonation/exit';
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtectedRoute = pathname.startsWith(protectedRoutes);
+
+  /*
+   * IMPERSONATION IS READ-ONLY, AND THIS IS WHERE THAT IS TRUE.
+   *
+   * Every request passes through here, so it is the one chokepoint that covers
+   * API routes AND server actions (which are POSTs) without depending on 70
+   * call sites each remembering to check. A safe method is allowed; everything
+   * else is refused before it can reach code that writes.
+   *
+   * The check is deliberately on cookie PRESENCE, not validity. Validating here
+   * would mean a database round trip on every request in the app, and it is not
+   * needed: refusing a write for someone holding a forged or expired cookie is
+   * the correct outcome anyway, and `getUser()` is what decides whether the
+   * session actually grants anything.
+   *
+   * This is what keeps the audit trail honest. If a write got through while
+   * impersonating, `logAudit` would record the SUBJECT as the actor — a false
+   * statement in the one table everything else is checked against.
+   */
+  const isSafeMethod = request.method === 'GET' || request.method === 'HEAD';
+  if (
+    !isSafeMethod &&
+    pathname !== IMPERSONATION_EXIT_PATH &&
+    request.cookies.has('er_impersonate')
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'This session is impersonating another user and is read-only. Exit impersonation to make changes.',
+      },
+      { status: 403 }
+    );
+  }
 
   let response = NextResponse.next({
     request: {

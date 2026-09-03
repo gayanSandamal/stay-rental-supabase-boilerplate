@@ -52,6 +52,7 @@ const MIGRATIONS = [
   '0047_market_rent_snapshots.sql',
   '0048_listing_impressions.sql',
   '0049_landlord_reports.sql',
+  '0051_impersonation_sessions.sql',
 ];
 
 function splitStatements(sql: string): string[] {
