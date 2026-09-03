@@ -1,14 +1,9 @@
-import { getActiveListings, getUser } from '@/lib/db/queries';
-import { isUserPremium, newListingHideHours } from '@/lib/subscription';
-import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
 import { SignedUpBanner } from '@/components/signed-up-banner';
-import { LandlordCrossSellBanner } from '@/components/landlord-cross-sell-banner';
 import { Suspense } from 'react';
+import { ListingsResults } from './listings-results';
+import { ListingsResultsSkeleton } from './listings-results-skeleton';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
-import { resolvePublishers } from '@/lib/listings/publisher-info';
-import { parseListingFilters } from '@/lib/listings/filter-params';
-import { trackImpressions } from '@/lib/analytics/impressions';
 import type { Metadata } from 'next';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
@@ -19,7 +14,6 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   room: 'Rooms',
 };
 
-export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({
   searchParams,
@@ -78,66 +72,31 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListingsPage(props: {
+export default function ListingsPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  // Next 15: searchParams is a Promise and must be awaited before property access.
-  const searchParams = await props.searchParams;
-  // Load initial batch of listings (first page)
-  const initialLimit = 20;
-  // Every renter-supplied filter comes through the one parser, which honours all
-  // 33 the form offers. The server-derived keys below are set AFTER it, from
-  // authenticated truth — the parser deliberately refuses to read them from the
-  // URL so a visitor cannot grant themselves early access or exclusive listings.
-  const filters: any = {
-    ...parseListingFilters(searchParams),
-    limit: initialLimit,
-  };
-
-  const user = await getUser();
-  const isPremium = isUserPremium(user);
-  filters.excludeExclusive = !isPremium;
-  filters.sortExclusiveFirst = isPremium;
-  filters.hideNewListingsHours = newListingHideHours(user);
-
-  const listings = await getActiveListings(filters);
-
   /*
-   * Impressions are counted at the surfaces that SERVE listings, not inside
-   * getActiveListings. The ranking function is the single search path, but
-   * "fetched" is not "seen": the homepage strip pulls a thousand rows to show
-   * six, and the saved-search cron pulls results nobody looks at. Counting what
-   * was actually rendered is the only figure the funnel can honestly use.
+   * NOT `async`, AND NOTHING IS AWAITED HERE — INCLUDING `searchParams`.
    *
-   * Synchronous map write — nothing is awaited on the search path.
+   * This is the part that is easy to get wrong. Moving the database work into
+   * <ListingsResults/> was necessary but not sufficient: in Next 15
+   * `searchParams` is a Promise, and awaiting it is itself a DYNAMIC ACCESS.
+   * Under PPR React postpones at the first one, so `await props.searchParams`
+   * sitting up here postponed at the page root and the prerendered shell was
+   * still 0 bytes — the same empty-shell symptom, from a different cause, with
+   * `force-dynamic` already removed.
+   *
+   * So the promise is passed DOWN unawaited and resolved inside the Suspense
+   * children. Everything in this function body is static and prerenderable,
+   * which is what lets a click paint instantly instead of waiting on a full
+   * server round trip.
    */
-  trackImpressions(listings.map((l) => l.id));
-
-  /*
-   * Publisher names for the whole result set in three queries, not two per row.
-   * This was a `Promise.all` over the results, each iteration running its own
-   * business-account and landlord lookups, on the busiest page in the product
-   * and a `max: 1` pool. Same defect as D2 on the analytics page.
-   */
-  const publishers = await resolvePublishers(listings);
-  const listingsWithPublisher = listings.map((listing) => ({
-    ...listing,
-    ...(publishers.get(listing.id) ?? {
-      publisherName: 'Unknown',
-      publisherType: 'individual' as const,
-      teamMemberName: null,
-    }),
-  }));
-
-  const showSignedUpBanner = searchParams.signed_up === '1';
-
   return (
     <main className="min-h-screen bg-[#F7F4ED]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <SignedUpBanner show={showSignedUpBanner} />
-        {/* Tenant→landlord cross-sell; suppressed while the signed-up banner
-            is visible to avoid stacking two banners. */}
-        {user?.role === 'tenant' && !showSignedUpBanner && <LandlordCrossSellBanner />}
+        <Suspense fallback={null}>
+          <SignedUpBannerSlot searchParams={props.searchParams} />
+        </Suspense>
         {/* Page header + search/filter row */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
@@ -145,9 +104,6 @@ export default async function ListingsPage(props: {
               <h1 className="text-3xl font-bold text-gray-900 mb-1">
                 Available Rentals
               </h1>
-              <p className="text-gray-600 text-sm">
-                {listings.length}+ {listings.length === 1 ? 'listing' : 'listings'} available across Sri Lanka
-              </p>
             </div>
           </div>
 
@@ -167,11 +123,21 @@ export default async function ListingsPage(props: {
           <ActiveFiltersChips />
         </Suspense>
 
-        {/* Listings Grid */}
-        <Suspense fallback={<div className="bg-white rounded-lg p-8 text-center">Loading listings...</div>}>
-          <EnhancedListingsGrid initialListings={listingsWithPublisher} showPublisher={true} />
+        {/* Everything that needs the DB or the signed-in user. */}
+        <Suspense fallback={<ListingsResultsSkeleton />}>
+          <ListingsResults searchParams={props.searchParams} />
         </Suspense>
       </div>
     </main>
   );
+}
+
+/** Awaits searchParams below a boundary so the page body never has to. */
+async function SignedUpBannerSlot({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  return <SignedUpBanner show={params.signed_up === '1'} />;
 }

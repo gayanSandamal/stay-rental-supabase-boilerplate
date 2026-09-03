@@ -81,6 +81,27 @@ const nextConfig: NextConfig = {
   experimental: {
     ppr: true,
     clientSegmentCache: true,
+    /*
+     * Next 15 defaults the client router cache for DYNAMIC segments to 0
+     * seconds, so going back to a page you left a moment ago re-renders it on
+     * the server from scratch — auth round trip and all. For a marketplace
+     * whose core loop is list -> detail -> back -> detail, that meant paying
+     * full price for the same page repeatedly.
+     *
+     * 30s matches the feature-flag TTL used elsewhere, so a returning view is
+     * never staler than a freshly rendered one would have been.
+     */
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+    /*
+     * `lucide-react` is already in Next's built-in optimize list; the unified
+     * `radix-ui` package is not, and it is namespace-imported across the ui/
+     * primitives, so without this every one of those files pulls the whole
+     * barrel.
+     */
+    optimizePackageImports: ['radix-ui'],
   },
   // sharp ships prebuilt native binaries — bundling them breaks the .node
   // loading; leave it to file tracing instead.
