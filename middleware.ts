@@ -91,9 +91,23 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // `l/` (with the slash, so /listings and /list-your-property are unaffected)
-  // is excluded: the access-link route writes session cookies itself, and
-  // middleware refreshing them in parallel would race it.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|l/).*)'],
-  runtime: 'nodejs'
+  /*
+   * `l/` (with the slash, so /listings and /list-your-property are unaffected)
+   * is excluded: the access-link route writes session cookies itself, and
+   * middleware refreshing them in parallel would race it.
+   *
+   * THE FILE-EXTENSION CLAUSE IS NOT COSMETIC. This middleware makes a real
+   * HTTPS round trip to Supabase auth on every request it matches, before it
+   * even looks at whether the route needs auth. Without that clause the matcher
+   * caught everything under /public — `/easy-rent-logo.png`, the five files in
+   * `/brand`, `/robots.txt`, `/sitemap.xml`, `/manifest.json` — so a single page
+   * view spent half a dozen extra auth round trips authenticating pictures of a
+   * logo. `_next/static` and `_next/image` were already excluded, which is why
+   * this went unnoticed: the bundled assets were fine and only the hand-placed
+   * ones in /public paid.
+   */
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|l/|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|txt|xml|json|webmanifest|woff|woff2|ttf|otf|map)$).*)',
+  ],
+  runtime: 'nodejs',
 };

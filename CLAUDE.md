@@ -50,7 +50,7 @@ Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Su
 - **Soft deletes**: users carry `deletedAt`; account deletion mutates the email and sets `deletedAt` rather than hard-deleting. Use `scripts/hard-delete-user.ts` only for real removal.
 - **Listings expire** 30 days after publish (`expiresAt`, `listingExpirationDays` flag). Expiration reminders + status transitions are handled by jobs/queries, not the UI.
 - **Audit logging**: `lib/db/audit-logger.ts` + `audit_logs` table. Visibility activations, approvals, exports, etc. are logged via `logListingAction(...)`. Add an audit entry when you add a consequential admin action (and a matching value to the `audit_action` enum).
-- **Feature flags**: defaults + metadata live in `lib/feature-flags.ts`; `isFeatureEnabled`/`getFeatureValue` stay synchronous and read a per-instance resolved snapshot. At runtime, rows in the `feature_flags` table override the defaults — admins toggle them in **Back Office → Settings**. `lib/feature-flags-store.ts` loads overrides (TTL-cached, per-instance like rate-limit) into the snapshot; the root layout and flag-checking API routes call `loadFeatureFlags()`, and `setFeatureFlag()` persists + audit-logs (`feature_flag_updated`). Client components read public flags via `useFeatureFlag` (`/api/feature-flags`). Pages that gate on a flag must be dynamic (`force-dynamic`) so toggles take effect without a rebuild. Gate new/experimental features behind a flag.
+- **Feature flags**: defaults + metadata live in `lib/feature-flags.ts`; `isFeatureEnabled`/`getFeatureValue` stay synchronous and read a per-instance resolved snapshot. At runtime, rows in the `feature_flags` table override the defaults — admins toggle them in **Back Office → Settings**. `lib/feature-flags-store.ts` loads overrides (TTL-cached, per-instance like rate-limit) into the snapshot; the root layout and flag-checking API routes call `loadFeatureFlags()`, and `setFeatureFlag()` persists + audit-logs (`feature_flag_updated`). Client components read public flags via `useFeatureFlag` (`/api/feature-flags`). Pages that gate on a flag use `export const revalidate = 30` — **not** `force-dynamic`. The two give identical freshness, because the flag snapshot is per-instance and already `CACHE_TTL_MS = 30_000` stale by design; `force-dynamic` never bought an instant toggle. What it did buy was opting the page out of PPR, which made its prerendered shell 0 bytes — so a click had nothing to paint and blocked on the whole server render. Measured 2026-09-02: 23 of 39 shells empty. Do not put `force-dynamic` back for flag freshness. Gate new/experimental features behind a flag.
 - **Rate limiting**: `lib/rate-limit.ts` — in-memory (per-instance, resets on deploy). Applied to listing creation, contact numbers, uploads, view tracking.
 - **Storage**: Supabase `property-images` bucket (5 MB, JPEG/PNG/WebP/GIF) via `lib/storage.ts` / `/api/upload`. Photos are stored on `listings.photos` as a JSON array string.
 - **Notifications**: in-app center (`notifications` table, `lib/notifications.ts`) + transactional email via Resend (`lib/email.ts`). Without `RESEND_API_KEY`, emails log to console.
@@ -302,6 +302,33 @@ default. Rollout steps and ops signals are in `docs/whatsapp-golive-runbook.md`.
   pool on Supabase's transaction pooler. Raw `sql` fragments must cast Dates
   (`ts()` in `lib/reports/data.ts`); drizzle's own operators bind them, hand-
   written fragments throw at bind time inside the driver.
+
+## Performance: where the time actually goes (2026-09-02)
+
+Navigation was slow for three reasons that multiplied, and none of them was slow
+application code. Measured: `/api/listings/paginated` took **8 ms locally and 830 ms in
+production** running the same queries.
+
+- **Functions must stay in `sin1`.** `vercel.json` had no `regions` key, so it defaulted to
+  `iad1` (Washington DC) while the database is `ap-southeast-1` (Singapore) — every query
+  crossed the planet, and since the pool is `max: 1` with strictly sequential queries, that
+  latency added up linearly with no concurrency to hide it. Verify after any deploy that
+  changes function config: `x-vercel-id` must read `…::sin1::…`.
+- **Dynamic work belongs BELOW a Suspense boundary.** `getUser()` reads cookies, and under
+  PPR React postpones at the first dynamic access — so an `await` in the page body
+  postpones at the root and the shell is empty *whether or not* `force-dynamic` is set.
+  `app/(dashboard)/listings/listings-results.tsx` is the pattern: static chrome in the
+  page, everything DB- or user-dependent in a Suspense child.
+- **`getUser` is request-memoized with React `cache()`** (`lib/db/queries.ts`), as are
+  `getListingById` and `getLandlordByProfileSlugOrPublicId`. Each unmemoized call is an
+  HTTPS round trip to Supabase auth *plus* a DB query, and a single render hit 2-3 of them.
+  `generateMetadata` and the page body both fetch the listing, and Next runs them
+  concurrently — which on a `max: 1` pool is also the wedge risk. Don't unwrap these.
+- **The middleware matcher excludes static file extensions.** It didn't, so every logo,
+  `robots.txt` and `manifest.json` request ran Node middleware *and* made a Supabase auth
+  call.
+- Every route segment should have a `loading.tsx`. Without one, and without a prerendered
+  shell, the router paints nothing on click.
 
 ## When making changes
 

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { desc, and, eq, isNull, sql, gte, gt, lte, or, like, inArray, lt, count as drizzleCount, getTableColumns } from 'drizzle-orm';
 import { db } from './drizzle';
 import {
@@ -27,7 +28,23 @@ import {
 
 const AUTH_DEADLINE_MS = 10_000;
 
-export async function getUser() {
+/**
+ * REQUEST-MEMOIZED. `cache()` from React dedupes by argument list for the
+ * lifetime of ONE server request, and this function is the most expensive thing
+ * in the app to call twice: an HTTPS round trip to Supabase auth (a fresh client
+ * per call, see lib/supabase/server.ts) PLUS a DB query on a pool that is
+ * `max: 1` in production.
+ *
+ * It has 64 call sites, and a single page render routinely hit 2-3 of them
+ * independently — the root layout, the page body, and a footer or trust-signal
+ * component. On a connection where every round trip costs real milliseconds
+ * that was the largest avoidable cost in a navigation.
+ *
+ * `cache()` is per-request, not a shared cache: two different visitors never see
+ * each other's user, and nothing is retained between requests. That is exactly
+ * the property this needs — the value is derived from the request's own cookies.
+ */
+export const getUser = cache(async function getUser() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -77,7 +94,7 @@ export async function getUser() {
   }
 
   return { ...user, emailVerified: !!authUser.email_confirmed_at };
-}
+});
 
 export async function getUserWithLandlord(userId: number) {
   const result = await db.query.users.findFirst({
@@ -391,7 +408,16 @@ export async function getActiveListings(filters?: {
   return await query;
 }
 
-export async function getListingById(id: number) {
+/**
+ * REQUEST-MEMOIZED, because Next.js calls this twice for one page view.
+ *
+ * `generateMetadata` and the page component both need the listing, and Next
+ * runs them CONCURRENTLY — so `/listings/[id]` fired two identical four-level
+ * relational queries at the same moment, on a pool that is `max: 1` in
+ * production. That is both a wasted query and precisely the concurrent-use
+ * pattern CLAUDE.md warns wedges the transaction pooler.
+ */
+export const getListingById = cache(async function getListingById(id: number) {
   const result = await db.query.listings.findFirst({
     where: eq(listings.id, id),
     with: {
@@ -414,9 +440,52 @@ export async function getListingById(id: number) {
   });
 
   return result;
-}
+});
 
 /** Count listings toward plan limit: active + pending (excludes rented, archived, rejected, expired). */
+/**
+ * Platform-wide "N listings, M verified" for the homepage trust strip.
+ *
+ * ONE aggregate, because the caller needs two integers. TrustSignals used to get
+ * them from `getActiveListings({ limit: 1000 })` — up to a thousand full listing
+ * rows, every column including `description`, `photos` and `photos_manifest`,
+ * pulled through the ranking sort and across the wire, so it could call
+ * `.filter(...).length` on them. On the homepage, on every render.
+ *
+ * The visibility rules are passed in rather than assumed: a free renter must not
+ * be counted into exclusive listings they cannot open, and early access has to
+ * hide the same rows here that it hides in the grid, or the count contradicts
+ * the page.
+ */
+export async function getPublicListingCounts(opts?: {
+  excludeExclusive?: boolean;
+  hideNewListingsHours?: number;
+}): Promise<{ total: number; verified: number }> {
+  const conditions = [
+    eq(listings.status, 'active'),
+    or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date())),
+    opts?.excludeExclusive ? eq(listings.exclusive, false) : undefined,
+    // publishedAt, matching getActiveListings — keyed on createdAt a listing
+    // held in moderation counts as old the instant it goes live.
+    opts?.hideNewListingsHours
+      ? lte(
+          listings.publishedAt,
+          new Date(Date.now() - opts.hideNewListingsHours * 60 * 60 * 1000)
+        )
+      : undefined,
+  ].filter(Boolean);
+
+  const [row] = await db
+    .select({
+      total: drizzleCount(),
+      verified: sql<number>`count(*) FILTER (WHERE ${listings.verified})`,
+    })
+    .from(listings)
+    .where(and(...(conditions as any)));
+
+  return { total: Number(row?.total ?? 0), verified: Number(row?.verified ?? 0) };
+}
+
 export async function getActiveListingCountForLandlord(landlordId: number): Promise<number> {
   const result = await db
     .select({ count: drizzleCount() })
@@ -1124,7 +1193,11 @@ export async function getLandlordPortfolioData(landlordId: number) {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Resolve landlord by profile slug (custom URL) or publicId (UUID). Returns landlord with user and active listings. */
-export async function getLandlordByProfileSlugOrPublicId(slug: string) {
+/** Request-memoized for the same reason as getListingById: the public profile
+ *  page resolves the same slug in `generateMetadata` and again in the body. */
+export const getLandlordByProfileSlugOrPublicId = cache(async function getLandlordByProfileSlugOrPublicId(
+  slug: string
+) {
   const isUuid = UUID_REGEX.test(slug);
   const landlord = await db.query.landlords.findFirst({
     where: isUuid ? eq(landlords.publicId, slug) : eq(landlords.profileSlug, slug),
@@ -1140,7 +1213,7 @@ export async function getLandlordByProfileSlugOrPublicId(slug: string) {
     },
   });
   return landlord;
-}
+});
 
 export async function getRecentAuditLogs(limit: number = 20) {
   try {

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { MessageCircle, LinkIcon } from 'lucide-react';
 import { getWhatsAppSupportNumber } from '@/lib/site-config';
 
-export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Link expired | Easy Rent',

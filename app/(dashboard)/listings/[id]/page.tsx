@@ -28,6 +28,7 @@ import { businessAccountMembers, businessAccounts, users, landlords } from '@/li
 import { eq, and } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { getFirstListingPhoto } from '@/lib/seo';
+import Link from 'next/link';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -86,10 +87,17 @@ export default async function ListingDetailPage({
     notFound();
   }
 
-  const [listing, user] = await Promise.all([
-    getListingById(listingId),
-    getUser(),
-  ]);
+  /*
+   * Sequential, not Promise.all. The pool is `max: 1` in production against
+   * Supabase's transaction pooler, where pipelining two queries onto one
+   * connection wedges the request (CLAUDE.md; commit a3ac4f9) — this was the
+   * last instance on a request path and the gate test did not cover this file.
+   *
+   * It costs nothing now: getListingById is request-memoized, so the copy
+   * generateMetadata already fetched is reused rather than queried again.
+   */
+  const listing = await getListingById(listingId);
+  const user = await getUser();
 
   if (!listing) {
     notFound();
@@ -234,11 +242,11 @@ export default async function ListingDetailPage({
       <nav aria-label="Breadcrumb" className="mb-5">
         <ol className="flex items-center gap-1 text-sm text-slate-500">
           <li>
-            <a href="/" className="hover:text-teal-700 transition-colors">Home</a>
+            <Link href="/" className="hover:text-teal-700 transition-colors">Home</Link>
           </li>
           <li><ChevronRight className="h-3.5 w-3.5 text-slate-300" /></li>
           <li>
-            <a href="/listings" className="hover:text-teal-700 transition-colors">Listings</a>
+            <Link href="/listings" className="hover:text-teal-700 transition-colors">Listings</Link>
           </li>
           <li><ChevronRight className="h-3.5 w-3.5 text-slate-300" /></li>
           <li className="text-slate-800 font-medium truncate max-w-[240px]">

@@ -1,5 +1,5 @@
 import { ShieldCheck, CheckCircle2, Phone, Building2 } from 'lucide-react';
-import { getActiveListings, getUser } from '@/lib/db/queries';
+import { getPublicListingCounts, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { AnimatedCounter } from './animated-counter';
 
@@ -75,15 +75,13 @@ const STATS: Stat[] = [
 export async function TrustSignals() {
   const user = await getUser();
   const isPremium = isUserPremium(user);
-  const listings = await getActiveListings({
-    limit: 1000,
+  // One aggregate. This was `getActiveListings({ limit: 1000 })` — a thousand
+  // full rows fetched, sorted and shipped so two integers could be counted off
+  // them, on the homepage.
+  const counts = await getPublicListingCounts({
     excludeExclusive: !isPremium,
     hideNewListingsHours: newListingHideHours(user),
   });
-  const counts = {
-    verified: listings.filter((l) => l.verified).length,
-    total: listings.length,
-  };
 
   return (
     <section className="bg-white py-14 border-b border-gray-100">
