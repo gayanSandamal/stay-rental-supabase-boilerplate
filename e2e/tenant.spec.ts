@@ -34,6 +34,16 @@ test.describe('Tenant', () => {
     await expect(page.getByRole('heading', { name: /business accounts|back office|team members/i })).toHaveCount(0);
   });
 
+  test('E2b tenant cannot reach /back-office/users', async ({ page }) => {
+    // The users list exposes every account's email, role and sign-in history —
+    // the most sensitive read in the back office, so it gets its own gate check
+    // rather than relying on the /back-office index test above.
+    await login(page, tenant!.email, tenant!.password);
+    await page.goto('/back-office/users');
+    await expect(page.getByRole('heading', { name: /^users$/i })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /last sign-in/i })).toHaveCount(0);
+  });
+
   test('landlord cross-sell banner shows for tenants and dismissal persists', async ({ page }) => {
     await login(page, tenant!.email, tenant!.password);
     await page.goto('/listings');

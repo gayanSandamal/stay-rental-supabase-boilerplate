@@ -8,6 +8,7 @@ import {
   Home,
   Building2,
   Users,
+  UserCog,
   List,
   Settings,
   Menu,
@@ -29,7 +30,8 @@ export default function BackOfficeLayout({
   const navItems = [
     { href: '/back-office', icon: Home, label: 'Overview' },
     { href: '/back-office/business-accounts', icon: Building2, label: 'Business Accounts' },
-    { href: '/back-office/team-members', icon: Users, label: 'Team Members' },
+    { href: '/back-office/users', icon: Users, label: 'Users' },
+    { href: '/back-office/team-members', icon: UserCog, label: 'Team Members' },
     { href: '/back-office/listings', icon: List, label: 'Listings' },
     { href: '/back-office/whatsapp-intakes', icon: MessageCircle, label: 'WhatsApp Intakes' },
     { href: '/back-office/moderation', icon: ShieldCheck, label: 'Moderation' },

@@ -16,8 +16,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    /*
+     * An EXPLICIT column list, not `select()`.
+     *
+     * This returned the whole row straight to the browser, which meant shipping
+     * `password_hash` and `auth_user_id` on every lookup. It is admin/ops-gated
+     * so it was never a public leak, and password_hash is legacy now that
+     * Supabase Auth owns sign-in — but a credential hash and the auth primary
+     * key have no reason to cross the wire, and `getUser()` is careful about
+     * exactly this.
+     */
     const user = await db
-      .select()
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        phone: users.phone,
+        waPhone: users.waPhone,
+        preferredLanguage: users.preferredLanguage,
+        subscriptionTier: users.subscriptionTier,
+        subscriptionExpiresAt: users.subscriptionExpiresAt,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
       .from(users)
       .where(and(eq(users.email, email), isNull(users.deletedAt)))
       .limit(1);
