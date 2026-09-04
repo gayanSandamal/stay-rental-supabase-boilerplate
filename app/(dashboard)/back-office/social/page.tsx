@@ -34,6 +34,7 @@ import { longAge } from '@/lib/back-office/format';
 import { parseListParams, type RawSearchParams } from '@/lib/back-office/list-params';
 import { ConfirmManualTakedown, RetryAllFailed } from './social-actions';
 import { TikTokConnectResult, TikTokConnectRow } from './tiktok-connect';
+import { ListingPicker, type PickerListing } from './listing-picker';
 import { SocialGroupList, type SocialGroupView } from './social-group-list';
 
 export const dynamic = 'force-dynamic';
@@ -121,6 +122,38 @@ export default async function SocialPage({
    * around the pager would be a lie the second time they saw it.
    */
   const tiktokResult = typeof raw.tiktok === 'string' ? raw.tiktok : '';
+
+  /*
+   * The picker's candidates: active listings, newest first.
+   *
+   * A separate query from everything else on this page because it asks a
+   * different question — "what COULD be posted" rather than "what WAS posted".
+   * Kept small and run sequentially: on Vercel the pool is max: 1 against the
+   * transaction pooler, and concurrent queries wedge the request.
+   */
+  const findQuery = (typeof raw.find === 'string' ? raw.find : '').trim().slice(0, 120);
+  const findId = Number.parseInt(findQuery.replace(/^#/, ''), 10);
+  const pickerWhere = findQuery
+    ? and(
+        eq(listings.status, 'active'),
+        Number.isFinite(findId) && findId > 0
+          ? or(ilike(listings.title, `%${findQuery}%`), eq(listings.id, findId))
+          : ilike(listings.title, `%${findQuery}%`)
+      )
+    : eq(listings.status, 'active');
+
+  const pickerListings: PickerListing[] = await db
+    .select({
+      id: listings.id,
+      title: listings.title,
+      city: listings.city,
+      photos: listings.photos,
+      photosManifest: listings.photosManifest,
+    })
+    .from(listings)
+    .where(pickerWhere)
+    .orderBy(desc(listings.createdAt))
+    .limit(8);
 
   /**
    * Posts that outlived their listing and are STILL on the platform.
@@ -442,6 +475,16 @@ export default async function SocialPage({
           </p>
         </div>
       </details>
+
+      <ListingPicker
+        listings={pickerListings}
+        query={findQuery}
+        hasQuery={Boolean(findQuery)}
+        keep={{
+          ...(params.tab !== 'all' ? { tab: params.tab } : {}),
+          ...(params.q ? { q: params.q } : {}),
+        }}
+      />
 
       <FilterBar
         basePath={BASE_PATH}
