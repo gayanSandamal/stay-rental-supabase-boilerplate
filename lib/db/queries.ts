@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { cookies } from 'next/headers';
+import { unstable_rethrow } from 'next/navigation';
 import {
   IMPERSONATION_COOKIE,
   resolveImpersonation,
@@ -68,6 +69,14 @@ export const getUser = cache(async function getUser() {
    * 300s and the operator sees a blank page. Failing closed (null -> sign-in)
    * is worse than succeeding but far better than hanging, and the log line
    * says which it was.
+   *
+   * `unstable_rethrow` FIRST, before anything else in the catch. Next signals
+   * redirect, notFound and — the one that bit us — the PPR "this route used
+   * cookies, bail out of prerendering" postpone by THROWING, so a catch this
+   * broad will swallow them unless it puts them back. Production logged one
+   * escaping as an Unhandled Rejection on /listings/[id]; see the long note in
+   * lib/supabase/server.ts, which is also why the cookie read itself now
+   * happens in `createClient()` above rather than in here.
    */
   let authUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'];
   try {
@@ -78,6 +87,7 @@ export const getUser = cache(async function getUser() {
     );
     authUser = result.data.user;
   } catch (err) {
+    unstable_rethrow(err);
     console.error('[getUser] auth lookup failed or timed out:', err);
     return null;
   }

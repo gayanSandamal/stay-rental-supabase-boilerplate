@@ -13,7 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { signOut } from '@/app/(login)/actions';
 import { User } from '@/lib/db/schema';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -21,6 +21,7 @@ export function UserMenu() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { data: user } = useSWR<User>('/api/user', fetcher);
+  const { mutate } = useSWRConfig();
 
   // Only render dropdown after mount to avoid hydration mismatch
   useEffect(() => {
@@ -79,7 +80,32 @@ export function UserMenu() {
             </Link>
           </DropdownMenuItem>
         )}
-        <form action={signOut} className="w-full">
+        {/*
+          THE CACHE IS CLEARED ON SUBMIT, NOT AFTER.
+
+          `signOut` ends in `redirect('/')`, so nothing written after awaiting it
+          ever runs — and the redirect is a CLIENT-SIDE navigation, so this menu
+          (it lives in app/(dashboard)/layout.tsx, above every page) is never
+          remounted and SWR never refetches. The root layout does hand down a
+          fresh `/api/user` fallback, but SWR only consults `fallback` when the
+          key has no cached value, and by then it has one: the signed-in user.
+
+          Result before this: the avatar stayed in the header, along with the
+          notification bell and the Save Search button — every `/api/user`
+          reader — until something unrelated happened to trigger a revalidation.
+
+          `onSubmit` runs before the action is dispatched, so writing null here
+          flips all of them the instant the click lands. `revalidate: false`
+          because a refetch would race the sign-out and could re-cache the user
+          that is in the middle of being signed out.
+        */}
+        <form
+          action={signOut}
+          onSubmit={() => {
+            mutate('/api/user', null, { revalidate: false });
+          }}
+          className="w-full"
+        >
           <button type="submit" className="flex w-full">
             <DropdownMenuItem className="w-full flex-1 cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />

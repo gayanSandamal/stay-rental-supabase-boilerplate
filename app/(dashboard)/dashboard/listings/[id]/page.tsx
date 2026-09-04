@@ -2,6 +2,7 @@ import { publisherDisplayName } from '@/lib/publisher-name';
 import { notFound } from 'next/navigation';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { getIncludedBoostsRemaining } from '@/lib/landlord-plans';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 import { ListingApprovalForm } from './listing-approval-form';
 import { RequestReReviewButton } from './request-rereview-button';
 import { ArchiveListingButton } from './archive-listing-button';
@@ -80,6 +81,19 @@ export default async function ListingEditPage({
   if (!canEdit) {
     notFound();
   }
+
+  // Every rupee figure in the sidebar below hangs off this one flag; see the
+  // comment on the Visibility card.
+  const pricingEnabled = isFeatureEnabled('enablePricingSection');
+  const isLive = (until: Date | string | null | undefined) =>
+    !!until && new Date(until).getTime() > Date.now();
+  const hasLiveVisibility =
+    isLive(listing.boostedUntil) ||
+    isLive(listing.featuredUntil) ||
+    isLive(listing.urgentUntil);
+  const hasPaidPlan =
+    !!listing.landlord?.landlordPlanTier &&
+    listing.landlord.landlordPlanTier !== 'free';
 
   // Fetch publisher information
   let publisherName = 'Unknown';
@@ -326,38 +340,70 @@ export default async function ListingEditPage({
         </div>
 
         <div className="lg:col-span-1 space-y-4">
-          {/* Paid visibility: Boost, Featured, Urgent */}
-          {(listing.status === 'active' || isAdminOrOps) && (
+          {/*
+            Visibility: Boost, Featured, Urgent.
+
+            EVERY PRICE ON THIS PAGE IS BEHIND `enablePricingSection`, the same
+            master switch the public site reads through `isPlatformFullyFree()`.
+            While it is off nothing on the platform is for sale, so an "LKR 250 ·
+            7d" button — or the mailto that tells a landlord to pay and then
+            contact support — offers something no one can buy, on the one screen
+            a landlord opens after publishing. See lib/free-copy.ts.
+
+            What survives the gate is STATE, never price: a listing that is
+            already Boosted/Featured/Urgent keeps saying so, because that is why
+            it outranks its neighbours (getActiveListings orders Featured →
+            Boost → Urgent → plan tier) and ops would otherwise have no way to
+            see it. Those branches of the buttons carry no rupee figure.
+          */}
+          {(listing.status === 'active' || isAdminOrOps) &&
+            (pricingEnabled || hasLiveVisibility) && (
             <Card>
               <CardHeader>
-                <CardTitle>Paid Visibility</CardTitle>
-                <p className="text-sm text-gray-500">Activate after payment confirmation</p>
+                <CardTitle>{pricingEnabled ? 'Paid Visibility' : 'Visibility'}</CardTitle>
+                {pricingEnabled && (
+                  <p className="text-sm text-gray-500">Activate after payment confirmation</p>
+                )}
               </CardHeader>
               <CardContent className="space-y-2">
                 {/* No per-product labels: each button names its own product. */}
-                <BoostListingButton
-                  listingId={listing.id}
-                  boostedUntil={listing.boostedUntil}
-                  isAdminOrOps={isAdminOrOps}
-                  includedBoostsRemaining={listing.landlord ? getIncludedBoostsRemaining(listing.landlord) : 0}
-                />
-                <FeatureListingButton
-                  listingId={listing.id}
-                  featuredUntil={listing.featuredUntil}
-                  isAdminOrOps={isAdminOrOps}
-                />
-                <UrgentListingButton
-                  listingId={listing.id}
-                  urgentUntil={listing.urgentUntil}
-                  isAdminOrOps={isAdminOrOps}
-                />
-                <div className="border-t pt-4 !mt-4">
-                  <BundleActivationButtons listingId={listing.id} isAdminOrOps={isAdminOrOps} />
-                </div>
+                {(pricingEnabled || isLive(listing.boostedUntil)) && (
+                  <BoostListingButton
+                    listingId={listing.id}
+                    boostedUntil={listing.boostedUntil}
+                    isAdminOrOps={isAdminOrOps}
+                    includedBoostsRemaining={listing.landlord ? getIncludedBoostsRemaining(listing.landlord) : 0}
+                  />
+                )}
+                {(pricingEnabled || isLive(listing.featuredUntil)) && (
+                  <FeatureListingButton
+                    listingId={listing.id}
+                    featuredUntil={listing.featuredUntil}
+                    isAdminOrOps={isAdminOrOps}
+                  />
+                )}
+                {(pricingEnabled || isLive(listing.urgentUntil)) && (
+                  <UrgentListingButton
+                    listingId={listing.id}
+                    urgentUntil={listing.urgentUntil}
+                    isAdminOrOps={isAdminOrOps}
+                  />
+                )}
+                {pricingEnabled && (
+                  <div className="border-t pt-4 !mt-4">
+                    <BundleActivationButtons listingId={listing.id} isAdminOrOps={isAdminOrOps} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
-          {isAdminOrOps && listing.landlord && (
+          {/*
+            Same rule for the plan form: a tier is a paid product. It stays
+            reachable for a landlord who already HOLDS a paid tier, so ops can
+            still see and wind down a grant made while the switch was on —
+            hiding it would strand the tier with no UI to clear it.
+          */}
+          {isAdminOrOps && listing.landlord && (pricingEnabled || hasPaidPlan) && (
             <LandlordPlanForm
               landlordId={listing.landlord.id}
               landlordName={listing.landlord.user ? publisherDisplayName(listing.landlord.user) : 'Landlord'}
