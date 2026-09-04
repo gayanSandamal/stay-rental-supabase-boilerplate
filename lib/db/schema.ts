@@ -722,6 +722,12 @@ export const listingSocialPosts = pgTable('listing_social_posts', {
   /** Exactly what we sent — audit trail, and the paste source for facebook_group. */
   caption: text('caption'),
   attempts: integer('attempts').notNull().default(0),
+  /**
+   * The privacy level a HUMAN chose (TikTok). NULL means nobody did — the cron
+   * path — where the adapter's most-public fallback is intended. Stored so a
+   * RETRY re-sends what was chosen instead of inventing a more public one.
+   */
+  privacyLevel: text('privacy_level'),
   leaseUntil: timestamp('lease_until'),
   error: text('error'),
   postedAt: timestamp('posted_at'),

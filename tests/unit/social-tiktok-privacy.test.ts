@@ -237,3 +237,78 @@ describe('a rejection keeps the diagnosis', () => {
     expect(result.retriable).toBe(true);
   });
 });
+
+/**
+ * A retry must not quietly become a more public post.
+ *
+ * `unaudited_client_can_only_post_to_private_accounts` left a row `queued`
+ * rather than `failed`, and the cron sweeper runs every five minutes with no
+ * operator in it — so an operator's deliberate SELF_ONLY was minutes away from
+ * being re-sent as PUBLIC_TO_EVERYONE against a live brand account.
+ */
+describe('errors that no retry can fix are terminal', () => {
+  it('does not requeue an unaudited-client rejection', async () => {
+    calls = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith('/creator_info/query/')) {
+          return new Response(
+            JSON.stringify({
+              data: { privacy_level_options: ['SELF_ONLY', 'PUBLIC_TO_EVERYONE'] },
+              error: { code: 'ok' },
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'unaudited_client_can_only_post_to_private_accounts',
+              message: 'Please review our integration guidelines',
+            },
+          }),
+          { status: 200 }
+        );
+      })
+    );
+
+    const result = await publish({ privacyLevel: 'SELF_ONLY' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    // Not retriable: only a human flipping the account to private fixes it.
+    expect(result.retriable).toBe(false);
+    expect(result.rateLimited).toBeFalsy();
+  });
+
+  it('treats a full posting window as rate-limited, not as a failure', async () => {
+    calls = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith('/creator_info/query/')) {
+          return new Response(
+            JSON.stringify({
+              data: { privacy_level_options: ['SELF_ONLY'] },
+              error: { code: 'ok' },
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(
+          JSON.stringify({ error: { code: 'spam_risk_too_many_posts', message: 'slow down' } }),
+          { status: 200 }
+        );
+      })
+    );
+
+    const result = await publish({ privacyLevel: 'SELF_ONLY' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    // The job is fine, the window is full — hand it back without spending a try.
+    expect(result.rateLimited).toBe(true);
+  });
+});
