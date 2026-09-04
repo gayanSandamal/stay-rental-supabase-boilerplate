@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { users, type NewUser, type User } from '@/lib/db/schema';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/db/queries';
 import {
@@ -38,6 +38,7 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
   try {
     supabase = await createClient();
   } catch (err) {
+    unstable_rethrow(err);
     console.error('[signIn] createClient failed:', err);
     return {
       error: 'Authentication service is not configured. Please contact support.',
@@ -150,6 +151,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   try {
     supabase = await createClient();
   } catch (err) {
+    unstable_rethrow(err);
     console.error('[signUp] createClient failed:', err);
     return {
       error: 'Authentication service is not configured. Please contact support.',

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getUser } from '@/lib/db/queries';
+import { getConciergeWhatsAppLink } from '@/lib/site-config';
 import {
   Home,
   Building2,
@@ -15,6 +16,7 @@ import {
   Eye,
   BookOpen,
   ChevronRight,
+  Share2,
   LogIn,
   UserPlus,
   LayoutDashboard,
@@ -42,6 +44,8 @@ import {
   ManageListingIllustration,
   TenantsContactIllustration,
   BoostVisibilityIllustration,
+  WhatsAppIntakeIllustration,
+  SocialReachIllustration,
 } from './step-illustrations';
 import type { ComponentType, ReactNode } from 'react';
 
@@ -56,100 +60,135 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * THE STEP NUMBER IS NOT STORED, IT IS COUNTED.
+ *
+ * Steps describe facilities, and several of those facilities are switched off
+ * by default — a guide that walks someone through something the platform will
+ * not do for them is worse than a shorter guide. So a step names the facility
+ * it depends on in `requires` and is dropped when that facility is off, and the
+ * numbers are assigned from what actually survives. Hard-coded numbers were
+ * fine only while the one gated step was last in the list; the WhatsApp
+ * concierge sits in the middle of the landlord journey and would leave a hole.
+ */
+type StepFacility = 'pricing' | 'quickList' | 'whatsappConcierge' | 'social';
+
 type Step = {
-  num: string;
   title: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
   optional: boolean;
   illustration: () => ReactNode;
-  // Hidden when paid visibility (enablePricingSection) is off.
-  premiumOnly?: boolean;
+  requires?: StepFacility;
+  /**
+   * For a step that must happen either way but READS differently when its
+   * facility is off — "add your property" still happens without the 60-second
+   * form, it just takes longer. A step with this is never dropped, only
+   * reworded; a step without it is dropped outright.
+   */
+  whenOff?: { title: string; description: string };
 };
 
 const RENTER_STEPS: Step[] = [
   {
-    num: '1',
-    title: 'Find a rental',
+    title: 'Search with the filters that matter here',
     description:
-      'Go to the homepage or click Browse Listings. Filter by city, property type, bedrooms, price range, power backup, water source, and fiber internet.',
+      'Start from the homepage or Browse Listings. Narrow by city or district, property type, bedrooms and monthly rent — then by the things that actually decide a Sri Lankan rental: power backup, water source and fiber internet.',
     icon: Search,
     optional: false,
     illustration: SearchHousesIllustration,
   },
   {
-    num: '2',
-    title: 'View listing details',
+    title: 'Read the whole listing before you call',
     description:
-      'Click any listing card to see full details: photos, description, location, amenities, monthly rent, deposit, and Sri Lanka-specific features.',
+      'Open any card for the full set: photos, monthly rent in LKR, the deposit in months, the notice period, and the power, water and fiber details. Every listing is checked before it appears here.',
     icon: Eye,
     optional: false,
     illustration: ViewDetailsIllustration,
   },
   {
-    num: '3',
-    title: 'Contact the landlord directly',
+    title: 'Call or WhatsApp the owner yourself',
     description:
-      'Call or WhatsApp the landlord using the numbers shown on the listing. No account required. You coordinate directly with them.',
+      'The numbers on a listing belong to the owner and are verified over WhatsApp before they are shown. Tap Call or WhatsApp and arrange the viewing directly — no account, no agent in the middle, nothing to pay.',
     icon: Phone,
     optional: false,
     illustration: ContactLandlordIllustration,
   },
   {
-    num: '4',
-    title: 'Save searches & get alerts',
+    title: 'Save the search and let us watch it',
     description:
-      'Sign up for a free account to save up to 3 searches and get email alerts when new listings match your criteria.',
+      'A free account saves up to 3 searches. We email you when a new listing matches one of them, so you are not refreshing the page every evening.',
     icon: Bell,
     optional: true,
     illustration: SaveAlertsIllustration,
   },
   {
-    num: '5',
     title: 'Go Premium for early access',
     description:
       'Upgrade for a 24-hour head start on new listings, exclusive listings, and unlimited saved alerts.',
     icon: Zap,
     optional: true,
     illustration: PremiumIllustration,
-    premiumOnly: true,
+    requires: 'pricing',
   },
 ];
 
 const LANDLORD_STEPS: Step[] = [
   {
-    num: '1',
-    title: 'Create an account',
+    title: 'Create your free account',
     description:
-      'Sign up at List Your Property or Create Account. Enter your email and password to get started.',
+      'Sign up from List Your Property with an email and password. Listing is free and unlimited — no listing fee, no subscription, and no commission when you find a tenant.',
     icon: FileText,
     optional: false,
     illustration: CreateAccountIllustration,
   },
   {
-    num: '2',
-    title: 'Add your property',
+    title: 'Add your property in 60 seconds',
     description:
-      'Go to Dashboard → Listings → New Listing. Fill in property details, location, rent, deposit, photos, and your contact numbers.',
+      'The short form asks six things: title, city, address, bedrooms, monthly rent and your phone number. The full form adds photos, deposit, notice period, power backup, water source and fiber — and you can come back and fill it in later.',
+    whenOff: {
+      title: 'Add your property',
+      description:
+        'Go to Dashboard → Listings → New Listing and fill in the property details: location, rent, deposit, notice period, power backup, water source, fiber, photos and your contact numbers.',
+    },
     icon: Building2,
     optional: false,
     illustration: AddPropertyIllustration,
+    requires: 'quickList',
   },
   {
-    num: '3',
-    title: 'Verification',
+    title: 'Or send it to us on WhatsApp',
+    // Not a hypothetical: this is the intake pipeline, and it creates a real
+    // landlord account for the sender rather than parking the listing under
+    // an ops account. See docs/deep-dive-whatsapp-intake-pipeline.md.
+    description:
+      'No forms at all. WhatsApp us six photos and the address — our team prepares, verifies and publishes the listing for you, and you get your own account and edit links back over the same chat.',
+    icon: MessageCircle,
+    optional: true,
+    illustration: WhatsAppIntakeIllustration,
+    requires: 'whatsappConcierge',
+  },
+  {
+    title: 'We verify it, then publish it',
     // "and may visit the property" removed — no property visit has ever
     // happened. What actually runs: WhatsApp OTP on the contact number,
     // automated text and image checks, then an ops review.
     description:
-      'We verify your contact number and run automated checks on your listing, then our team reviews it. Once approved, it goes live in search results.',
+      'We confirm your contact number over WhatsApp, run automated text and image checks on what you sent, and review it before it goes live. Only verified numbers are ever shown to tenants.',
     icon: Shield,
     optional: false,
     illustration: VerificationIllustration,
   },
   {
-    num: '4',
-    title: 'Manage your listing',
+    title: 'Tenants contact you directly',
+    description:
+      'Your phone and WhatsApp sit on the listing itself. Renters call or message you to arrange viewings — we never sit between you, and we take no cut of the rent.',
+    icon: Phone,
+    optional: false,
+    illustration: TenantsContactIllustration,
+  },
+  {
+    title: 'Watch how it is doing',
     // This step used to instruct landlords to "renew when your listing expires
     // (30 days)" and "mark as rented when you find a tenant". Neither is
     // possible for a landlord today: the only renewal path is `bulk-renew`,
@@ -159,31 +198,35 @@ const LANDLORD_STEPS: Step[] = [
     //
     // Restore both sentences when the lifecycle work ships (free renewal for
     // every tier, a Mark as Rented button, and the WhatsApp RENTED command).
+    //
+    // The numbers named here are the free-tier ones (showViewCountsToAllTiers),
+    // and they are a floor rather than an exact figure — do not promise more
+    // precision than lib/analytics says it has.
     description:
-      'View status, edit details, and see how your listing is performing. Listings run for 30 days — contact us if you need yours extended or taken down.',
+      'Your dashboard carries a 30-day view graph, a 7-day total and how many people tapped Call or WhatsApp — on every plan, including free. Listings run for 30 days; contact us if you need yours extended or taken down.',
     icon: Eye,
     optional: false,
     illustration: ManageListingIllustration,
   },
   {
-    num: '5',
-    title: 'Tenants contact you',
+    title: 'We share it on our own channels',
+    // Consent is asked per listing over WhatsApp and is genuinely optional, so
+    // the copy has to read as an offer, not as something already happening.
     description:
-      'Renters see your phone and WhatsApp on your listing and contact you directly to arrange viewings.',
-    icon: Phone,
-    optional: false,
-    illustration: TenantsContactIllustration,
+      'If you say yes — we ask over WhatsApp, once per listing — your property also goes out on Easy Rent\u2019s own social accounts, in front of renters who never opened the site.',
+    icon: Share2,
+    optional: true,
+    illustration: SocialReachIllustration,
+    requires: 'social',
   },
   {
-    num: '6',
     title: 'Boost visibility',
     description:
       'Boost (LKR 250/7 days), Featured (LKR 500/7 days), or Urgent (LKR 150/7 days) add-ons help your listing stand out. Contact support after payment to activate.',
     icon: Zap,
     optional: true,
     illustration: BoostVisibilityIllustration,
-    // Paid-visibility copy — hidden while enablePricingSection is off.
-    premiumOnly: true,
+    requires: 'pricing',
   },
 ];
 
@@ -191,16 +234,40 @@ const LANDLORD_STEPS: Step[] = [
 // Premium steps at request time rather than being baked in at build.
 export const dynamic = 'force-dynamic';
 
+/**
+ * Resolve each step's facility the same way the surface that actually performs
+ * it does — the concierge check is the pair used on /list-your-property, not
+ * the flag alone, because the button hides itself when the number is unset and
+ * a step describing an invisible button is just a broken promise.
+ */
+function resolveSteps(
+  steps: Step[]
+): { step: Step; title: string; description: string }[] {
+  const available: Record<StepFacility, boolean> = {
+    pricing: isFeatureEnabled('enablePricingSection'),
+    quickList: isFeatureEnabled('enableQuickList'),
+    social: isFeatureEnabled('enableSocialAutoPublish'),
+    whatsappConcierge:
+      isFeatureEnabled('enableWhatsAppConcierge') && !!getConciergeWhatsAppLink(),
+  };
+
+  return steps
+    .filter((s) => !s.requires || available[s.requires] || !!s.whenOff)
+    .map((s) => {
+      const off = !!s.requires && !available[s.requires] ? s.whenOff : undefined;
+      return {
+        step: s,
+        title: off?.title ?? s.title,
+        description: off?.description ?? s.description,
+      };
+    });
+}
+
 export default async function HowToUsePage() {
   const user = await getUser();
-  const pricingEnabled = isFeatureEnabled('enablePricingSection');
   const fullyFree = isPlatformFullyFree();
-  const renterSteps = pricingEnabled
-    ? RENTER_STEPS
-    : RENTER_STEPS.filter((s) => !s.premiumOnly);
-  const landlordSteps = pricingEnabled
-    ? LANDLORD_STEPS
-    : LANDLORD_STEPS.filter((s) => !s.premiumOnly);
+  const renterSteps = resolveSteps(RENTER_STEPS);
+  const landlordSteps = resolveSteps(LANDLORD_STEPS);
   return (
     <>
       {/* ── Keyframe animations ── */}
@@ -488,12 +555,12 @@ export default async function HowToUsePage() {
                   {/* Timeline with illustrations */}
                   <div className="px-7 py-7">
                     <ol className="space-y-0">
-                      {renterSteps.map((step, idx) => {
+                      {renterSteps.map(({ step, title, description }, idx) => {
                         const Illus = step.illustration;
                         const isLast = idx === renterSteps.length - 1;
                         const delay = `${0.1 + idx * 0.15}s`;
                         return (
-                          <li key={step.num} className="relative flex gap-4">
+                          <li key={step.title} className="relative flex gap-4">
                             {/* Connector */}
                             {!isLast && (
                               <div
@@ -511,7 +578,7 @@ export default async function HowToUsePage() {
                                 }`}
                                 style={{ '--d': delay } as React.CSSProperties}
                               >
-                                <span className="font-mono text-sm font-bold">{step.num}</span>
+                                <span className="font-mono text-sm font-bold">{idx + 1}</span>
                               </div>
                             </div>
                             {/* Content + illustration */}
@@ -520,7 +587,7 @@ export default async function HowToUsePage() {
                               style={{ '--d': `${parseFloat(delay) + 0.05}s` } as React.CSSProperties}
                             >
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3 className="font-semibold text-slate-900 text-[15px]">{step.title}</h3>
+                                <h3 className="font-semibold text-slate-900 text-[15px]">{title}</h3>
                                 {step.optional && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-50 text-teal-600 border border-teal-200">
                                     Optional
@@ -529,7 +596,7 @@ export default async function HowToUsePage() {
                               </div>
                               <div className="flex items-start gap-3">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-slate-600 leading-relaxed">{step.description}</p>
+                                  <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
                                 </div>
                                 {/* Animated illustration */}
                                 <div
@@ -572,7 +639,7 @@ export default async function HowToUsePage() {
                       </div>
                       <div>
                         <h2 className="text-xl font-bold text-white">For Landlords</h2>
-                        <p className="text-sm text-amber-100/80">List 100% free, verify once, tenants find you</p>
+                        <p className="text-sm text-amber-100/80">List free in 60 seconds, we verify, tenants call you</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -581,6 +648,7 @@ export default async function HowToUsePage() {
                         { Icon: Building2, label: 'Add' },
                         { Icon: Shield, label: 'Verify' },
                         { Icon: Phone, label: 'Get calls' },
+                        { Icon: Eye, label: 'Track' },
                       ].map((item, i) => (
                         <div key={item.label} className="flex items-center gap-1.5">
                           {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-amber-200/60 shrink-0" />}
@@ -596,12 +664,12 @@ export default async function HowToUsePage() {
                   {/* Timeline with illustrations */}
                   <div className="px-7 py-7">
                     <ol className="space-y-0">
-                      {landlordSteps.map((step, idx) => {
+                      {landlordSteps.map(({ step, title, description }, idx) => {
                         const Illus = step.illustration;
                         const isLast = idx === landlordSteps.length - 1;
                         const delay = `${0.1 + idx * 0.15}s`;
                         return (
-                          <li key={step.num} className="relative flex gap-4">
+                          <li key={step.title} className="relative flex gap-4">
                             {/* Connector */}
                             {!isLast && (
                               <div
@@ -619,7 +687,7 @@ export default async function HowToUsePage() {
                                 }`}
                                 style={{ '--d': delay } as React.CSSProperties}
                               >
-                                <span className="font-mono text-sm font-bold">{step.num}</span>
+                                <span className="font-mono text-sm font-bold">{idx + 1}</span>
                               </div>
                             </div>
                             {/* Content + illustration */}
@@ -628,7 +696,7 @@ export default async function HowToUsePage() {
                               style={{ '--d': `${parseFloat(delay) + 0.05}s` } as React.CSSProperties}
                             >
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h3 className="font-semibold text-slate-900 text-[15px]">{step.title}</h3>
+                                <h3 className="font-semibold text-slate-900 text-[15px]">{title}</h3>
                                 {step.optional && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
                                     Optional
@@ -637,7 +705,7 @@ export default async function HowToUsePage() {
                               </div>
                               <div className="flex items-start gap-3">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-slate-600 leading-relaxed">{step.description}</p>
+                                  <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
                                 </div>
                                 {/* Animated illustration */}
                                 <div

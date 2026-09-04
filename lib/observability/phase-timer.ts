@@ -25,10 +25,18 @@ export async function phase<T>(label: string, fn: () => Promise<T>): Promise<T> 
  * five minutes — and it costs a full function invocation.
  */
 export function withDeadline<T>(label: string, promise: Promise<T>, ms: number): Promise<T> {
+  // The timer is CLEARED once the race settles. Left pending it holds the Node
+  // event loop open for the full `ms` after the work is already done, which on
+  // a serverless function is billed wall-clock on every single request that
+  // calls this — and this one is called on every authenticated render.
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
     promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`[deadline] ${label} exceeded ${ms}ms`)), ms)
-    ),
-  ]);
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`[deadline] ${label} exceeded ${ms}ms`)),
+        ms
+      );
+    }),
+  ]).finally(() => clearTimeout(timer));
 }

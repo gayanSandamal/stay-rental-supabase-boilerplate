@@ -608,3 +608,100 @@ export function BoostVisibilityIllustration() {
     </svg>
   );
 }
+
+/** WhatsApp concierge — a chat thread where photos become a live listing */
+export function WhatsAppIntakeIllustration() {
+  return (
+    <svg viewBox="0 0 80 72" fill="none" aria-hidden="true" className="w-full h-full">
+      {/* Chat panel */}
+      <rect x="8" y="6" width="64" height="60" rx="7" fill="white" stroke="#86EFAC" strokeWidth="1" />
+      <rect x="8" y="6" width="64" height="11" rx="7" fill="#22C55E" opacity=".18" />
+      <circle cx="16" cy="11.5" r="3" fill="#22C55E" opacity=".5" />
+      <rect x="22" y="10" width="22" height="3" rx="1.5" fill="#22C55E" opacity=".35" />
+
+      {/* Outgoing photo bubble — always present: the landlord's six photos are
+          the whole premise of the step, so they must not blink out of it. */}
+      <rect x="30" y="21" width="38" height="16" rx="4" fill="#DCFCE7" stroke="#86EFAC" strokeWidth=".5" />
+      <rect x="33" y="24" width="10" height="10" rx="2" fill="#22C55E" opacity=".35" />
+      <rect x="45" y="24" width="10" height="10" rx="2" fill="#22C55E" opacity=".25" />
+      <rect x="57" y="24" width="8" height="10" rx="2" fill="#22C55E" opacity=".18" />
+
+      {/* Incoming reply — the "got it" tick */}
+      <rect x="12" y="41" width="30" height="9" rx="4" fill="#F1F5F9" stroke="#E2E8F0" strokeWidth=".5" />
+      <rect x="25" y="44.5" width="13" height="2" rx="1" fill="#CBD5E1" />
+      <path
+        d="M16 45.5 L18 47.5 L22 43.5"
+        stroke="#22C55E" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"
+        strokeDasharray="12" strokeDashoffset="12"
+      >
+        <animate attributeName="stroke-dashoffset" values="12;0;0;12" dur="4s" repeatCount="indefinite" />
+      </path>
+
+      {/* …and the listing that comes out of it */}
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0" dur="4s" repeatCount="indefinite" />
+        <rect x="14" y="53" width="52" height="10" rx="4" fill="#FEF3C7" stroke="#FCD34D" strokeWidth=".6" />
+        <rect x="17" y="56" width="6" height="4.5" rx="1" fill="#F59E0B" opacity=".5" />
+        <text x="27" y="60" fill="#92400E" fontSize="4.5" fontWeight="700" fontFamily="system-ui,sans-serif">
+          Listing ready
+        </text>
+      </g>
+    </svg>
+  );
+}
+
+/** Social reach — one listing fanning out to the brand's own channels */
+export function SocialReachIllustration() {
+  return (
+    <svg viewBox="0 0 80 72" fill="none" aria-hidden="true" className="w-full h-full">
+      {/* Source listing card */}
+      <rect x="8" y="24" width="24" height="24" rx="5" fill="white" stroke="#FCD34D" strokeWidth="1" />
+      <rect x="11" y="27" width="18" height="9" rx="2" fill="#FEF3C7" />
+      <rect x="11" y="38" width="12" height="2" rx="1" fill="#FCD34D" />
+      <rect x="11" y="42" width="9" height="2" rx="1" fill="#FEF3C7" />
+
+      {/* Fan-out paths */}
+      <path id="soc-a" d="M34 30 Q46 23 56 18" stroke="#F59E0B" strokeWidth="1.2" fill="none" opacity=".45" />
+      <path id="soc-b" d="M34 36 Q46 36 56 36" stroke="#F59E0B" strokeWidth="1.2" fill="none" opacity=".45" />
+      <path id="soc-c" d="M34 42 Q46 49 56 54" stroke="#F59E0B" strokeWidth="1.2" fill="none" opacity=".45" />
+
+      {/* Travelling dots */}
+      <circle r="2.4" fill="#F59E0B" opacity="0">
+        <animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#soc-a" /></animateMotion>
+        <animate attributeName="opacity" values="0;1;1;0" dur="2.4s" repeatCount="indefinite" />
+      </circle>
+      <circle r="2.4" fill="#F59E0B" opacity="0">
+        <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.5s"><mpath href="#soc-b" /></animateMotion>
+        <animate attributeName="opacity" values="0;1;1;0" dur="2.4s" repeatCount="indefinite" begin="0.5s" />
+      </circle>
+      <circle r="2.4" fill="#F59E0B" opacity="0">
+        <animateMotion dur="2.4s" repeatCount="indefinite" begin="1s"><mpath href="#soc-c" /></animateMotion>
+        <animate attributeName="opacity" values="0;1;1;0" dur="2.4s" repeatCount="indefinite" begin="1s" />
+      </circle>
+
+      {/* Channel bubbles. Deliberately generic beyond the two that are actually
+          switched on — which platforms publish is per-flag and changes. */}
+      <circle cx="64" cy="16" r="8" fill="#FEF3C7" stroke="#FCD34D" strokeWidth=".8" />
+      <rect x="60" y="12" width="8" height="8" rx="2.5" fill="none" stroke="#B45309" strokeWidth="1.1" />
+      <circle cx="64" cy="16" r="1.9" fill="none" stroke="#B45309" strokeWidth="1.1" />
+
+      <circle cx="64" cy="36" r="8" fill="#FEF3C7" stroke="#FCD34D" strokeWidth=".8" />
+      <path d="M65.6 31.6 v7.1 a2.4 2.4 0 1 1 -2.2 -2.4" fill="none" stroke="#B45309" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M65.6 31.6 a3.2 3.2 0 0 0 3 2.6" fill="none" stroke="#B45309" strokeWidth="1.1" strokeLinecap="round" />
+
+      <circle cx="64" cy="56" r="8" fill="#FEF3C7" stroke="#FCD34D" strokeWidth=".8" />
+      <circle cx="64" cy="56" r="4.4" fill="none" stroke="#B45309" strokeWidth="1.1" />
+      <path d="M59.6 56 h8.8 M64 51.6 a7 7 0 0 1 0 8.8 a7 7 0 0 1 0 -8.8" fill="none" stroke="#B45309" strokeWidth="1.1" />
+
+      {/* Consent tick, pinned to the listing itself — nothing goes out unasked */}
+      <circle cx="31" cy="24" r="5.2" fill="white" stroke="#16A34A" strokeWidth="1" />
+      <path
+        d="M28.7 24 L30.4 25.7 L33.4 22.4"
+        stroke="#16A34A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"
+        strokeDasharray="10" strokeDashoffset="10"
+      >
+        <animate attributeName="stroke-dashoffset" values="10;0;0;10" dur="4s" repeatCount="indefinite" />
+      </path>
+    </svg>
+  );
+}
