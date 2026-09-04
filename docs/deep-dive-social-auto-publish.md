@@ -199,13 +199,73 @@ code and should be started first — expect weeks:
   `instagram_business_content_publish`; Instagram converted to a Professional
   account and linked to the Page.
 - **TikTok**: developer app, Content Posting API access, **URL-prefix
-  verification** for `https://<domain>/api/social/img/`, and the audit
-  submission (needs a demo video). Keep `socialPublishTikTok` OFF until it
-  clears — before then every post is private.
+  verification** for `https://<domain>/api/social/img/`, the **redirect URI**
+  registered for `/api/social/tiktok/callback`, and the audit submission (needs
+  a demo video). Then link the account with **Connect TikTok** in Back Office →
+  Social. Keep `socialPublishTikTok` OFF until the audit clears — before then
+  every post is private.
 
-TikTok tokens rotate (access ~24h, refresh replaced on use) so they live in
-`social_accounts`, written by the admin-only OAuth flow at
-`/api/social/tiktok/connect`. Meta Page tokens are long-lived and stay in env.
+### TikTok is the only platform a deploy cannot finish
+
+Meta's credentials **are** env vars: paste `FACEBOOK_PAGE_ACCESS_TOKEN` and the
+platform is live. TikTok's tokens rotate (access ~24h, refresh replaced on every
+use), so they cannot live in the environment — the app has to be able to rewrite
+them. They are obtained once through OAuth, stored in `social_accounts`, and
+refreshed in place by the adapter from then on.
+
+That makes linking the account a **human click**, not a deploy step:
+
+> **Back Office → Social → Platform configuration → Connect TikTok**
+
+which starts the admin-only flow at `/api/social/tiktok/connect`. Before it can
+succeed, the redirect URI shown next to that button must be registered verbatim
+in the TikTok developer portal — the panel prints it precisely because a
+mismatch here is the classic setup failure, and TikTok reports it only as a
+rejected authorization code.
+
+**PKCE is mandatory, and TikTok's flavour of it is non-standard.** Omitting
+`code_challenge` fails the authorize call outright — `errCode=10007`,
+`error_type=code_challenge` — before a consent screen is ever shown (observed
+against the live endpoint 2026-09-04). And the challenge is the SHA-256 of the
+verifier **hex-encoded**, not base64url as RFC 7636 and every other provider
+use. `pkce()` in the connect route does this deliberately; do not "correct" it.
+
+**Two expiries, and only one of them is an ops concern.** The access token
+(~24h) is refreshed by `currentToken()` on every publish; surfacing it would
+alarm ops daily about something that heals itself. The refresh token (~365d) is
+the one with no way back — once it lapses there is nothing left to refresh from,
+publishing stops, and only re-authorising restores it. That is the expiry
+`checkTikTok()` reports, and a lapsed grant renders as **broken, never "live"**,
+for the same reason the Facebook Page token check exists at all.
+
+## Posting by hand: Back Office → Social → Post to TikTok
+
+The cron sweeper remains the product — landlord consents over WhatsApp, the
+queue posts on its own. Alongside it, `/back-office/social/post/[listingId]`
+(reached from the share icon on any active row in Back Office → Listings) lets
+ops review and post one listing themselves.
+
+It exists because TikTok's **Direct Post** rules ask for something a cron
+structurally cannot give: the creator seeing exactly what goes out, choosing the
+privacy level, and pressing the button. Easy Rent owns the account, so ops is
+the creator. Concretely:
+
+- **Nothing is pre-selected.** A sensible-looking default IS the app choosing,
+  which is the thing the rule forbids. Post stays disabled until ops picks.
+- **The options come from a live `creator_info` query**, never a hardcoded list,
+  so every choice offered is one TikTok has just said this account can use.
+  While the app is unaudited that list is `['SELF_ONLY']` and the screen says so.
+- **An unavailable choice fails the publish** rather than being substituted —
+  substituting up is a privacy breach, substituting down lies to the operator.
+  Pinned in `tests/unit/social-tiktok-privacy.test.ts`.
+- **What is previewed is the real payload**: the same `buildCaption` and
+  `socialImageUrls` the worker calls, not a mock-up of them.
+
+It routes through `publishNow` → the same `publishOne` as the sweeper, so the
+recording rules (dry-run note, `skipped` when a listing went inactive, the audit
+entry) cannot drift between the two paths. It claims the row under the same
+lease, so a concurrent cron tick cannot double-post, and it refuses a listing
+already `posted`.
 
 ## Testing without live accounts
 
@@ -213,6 +273,12 @@ Every adapter **dry-runs** when its credentials are absent — it logs the exact
 payload and returns `dryrun-<platform>-<listingId>`, mirroring the intake
 pipeline's `isIntakeConfigured()` dormancy. That exercises consent → enqueue →
 claim → caption → proxy → record end to end with no social accounts at all.
+
+To exercise the TikTok adapter end to end without sandbox credentials, point
+`TIKTOK_API_BASE` at a local stub: the adapter reads its base URL from env, so
+`creator_info`, `content/init` and the status poll all run for real against it.
+(The authorize URL is hardcoded to tiktok.com on purpose — that leg is TikTok's
+own consent screen and must not be stubbable in production code.)
 
 ```bash
 pnpm db:migrate-all:local        # then run it TWICE — the runner replays forever

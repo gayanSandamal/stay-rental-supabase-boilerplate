@@ -17,15 +17,20 @@
  * `social_accounts` table rather than the environment.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { socialAccounts } from '@/lib/db/schema';
-import { SOCIAL_HTTP_TIMEOUT_MS, TIKTOK_API_BASE, isTikTokConfigured, socialConfig } from '../config';
+import {
+  SOCIAL_HTTP_TIMEOUT_MS,
+  TIKTOK_API_BASE,
+  TIKTOK_POLL_ATTEMPTS,
+  TIKTOK_POLL_INTERVAL_MS,
+  isTikTokConfigured,
+  socialConfig,
+} from '../config';
 import { DRY_RUN_ID_PREFIX } from '../types';
 import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
 
-const POLL_ATTEMPTS = 10;
-const POLL_INTERVAL_MS = 3_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Refresh when the token has under this long to live. */
@@ -173,11 +178,28 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
   }
 
   const options = creator.data.data?.privacy_level_options ?? [];
-  // An unaudited client only ever gets SELF_ONLY. Take the most public option
-  // the account actually offers rather than assuming.
-  const privacy = options.includes('PUBLIC_TO_EVERYONE')
-    ? 'PUBLIC_TO_EVERYONE'
-    : (options[0] ?? 'SELF_ONLY');
+
+  let privacy: string;
+  if (input.privacyLevel) {
+    // A human chose. If the account cannot actually offer it, FAIL rather than
+    // substitute: posting more publicly than was chosen is a privacy breach,
+    // and posting more privately is a lie to the operator who picked.
+    if (!options.includes(input.privacyLevel)) {
+      return {
+        ok: false,
+        error: `TikTok will not accept privacy level ${input.privacyLevel} for this account (allowed: ${options.join(', ') || 'none'})`,
+        retriable: false,
+      };
+    }
+    privacy = input.privacyLevel;
+  } else {
+    // No human in the loop (the cron path). An unaudited client only ever gets
+    // SELF_ONLY; take the most public option the account actually offers rather
+    // than assuming one.
+    privacy = options.includes('PUBLIC_TO_EVERYONE')
+      ? 'PUBLIC_TO_EVERYONE'
+      : (options[0] ?? 'SELF_ONLY');
+  }
 
   const title = input.caption.split('\n')[0]?.slice(0, 90) ?? '';
 
@@ -217,8 +239,8 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
 
   // Poll to a terminal state so a failure surfaces here rather than as a post
   // that silently never appeared.
-  for (let i = 0; i < POLL_ATTEMPTS; i++) {
-    await sleep(POLL_INTERVAL_MS);
+  for (let i = 0; i < TIKTOK_POLL_ATTEMPTS; i++) {
+    await sleep(TIKTOK_POLL_INTERVAL_MS);
     const status = await tiktokPost<{
       data?: { status?: string; fail_reason?: string; publicaly_available_post_id?: string[] };
     }>('/post/publish/status/fetch/', tokens.accessToken, { publish_id: publishId });
@@ -268,6 +290,39 @@ export const tiktokAdapter: SocialAdapter = {
   remove,
 };
 
+/**
+ * The account's own name, for the ops health panel.
+ *
+ * Best-effort by design. `user.info.basic` is in the requested scope, but a
+ * connection that can publish must never be rejected because a cosmetic lookup
+ * failed — the name is how ops confirms we are pointed at the right account,
+ * not something publishing depends on.
+ */
+export interface TikTokProfile {
+  displayName: string | null;
+  /** Signed and short-lived — a cache, never something to depend on. */
+  avatarUrl: string | null;
+}
+
+export async function fetchTikTokProfile(accessToken: string): Promise<TikTokProfile> {
+  try {
+    const res = await fetch(`${TIKTOK_API_BASE}/user/info/?fields=display_name,avatar_url`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(SOCIAL_HTTP_TIMEOUT_MS),
+    });
+    const json = (await res.json().catch(() => null)) as {
+      data?: { user?: { display_name?: string; avatar_url?: string } };
+    } | null;
+    return {
+      displayName: json?.data?.user?.display_name || null,
+      avatarUrl: json?.data?.user?.avatar_url || null,
+    };
+  } catch (err) {
+    console.error('[social] tiktok profile lookup failed', err);
+    return { displayName: null, avatarUrl: null };
+  }
+}
+
 /** Used by the OAuth callback to store a freshly connected account. */
 export async function saveTikTokAccount(args: {
   accessToken: string;
@@ -275,6 +330,8 @@ export async function saveTikTokAccount(args: {
   expiresIn?: number;
   refreshExpiresIn?: number;
   openId?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   scope?: string;
   connectedBy?: number;
 }): Promise<void> {
@@ -289,6 +346,10 @@ export async function saveTikTokAccount(args: {
     scope: args.scope ?? null,
     connectedBy: args.connectedBy ?? null,
     updatedAt: new Date(),
+    // Only written when we actually got one. Spreading a null here would let a
+    // failed cosmetic lookup during a RE-connect erase what we already had.
+    ...(args.displayName ? { displayName: args.displayName } : {}),
+    ...(args.avatarUrl ? { avatarUrl: args.avatarUrl } : {}),
   };
   await db
     .insert(socialAccounts)
@@ -296,11 +357,126 @@ export async function saveTikTokAccount(args: {
     .onConflictDoUpdate({ target: socialAccounts.platform, set: values });
 }
 
-/** Whether a TikTok account has actually been linked (vs. just having app keys). */
-export async function isTikTokConnected(): Promise<boolean> {
+/**
+ * The non-secret facts about the linked account, for the ops health panel.
+ *
+ * Deliberately returns NO token material: `health.ts` renders straight into a
+ * page and onto the publish cron's JSON, and neither may ever carry a token.
+ */
+export interface TikTokConnection {
+  displayName: string | null;
+  /** Cached and expiring — render with an initials fallback, never bare. */
+  avatarUrl: string | null;
+  externalAccountId: string | null;
+  /**
+   * Access token expiry (~24h). Not an ops concern: `currentToken()` refreshes
+   * it in place on every publish.
+   */
+  expiresAt: Date | null;
+  /**
+   * Refresh token expiry (~365d). THIS is the one a human has to act on — once
+   * it lapses there is nothing left to refresh from, and only re-authorising
+   * restores publishing.
+   */
+  refreshExpiresAt: Date | null;
+  connectedAt: Date;
+}
+
+/**
+ * Who we would be posting as, and what this account is allowed to choose.
+ *
+ * TikTok requires `creator_info/query` before composing a Direct Post, and its
+ * UX rules require showing the creator WHO the post goes out as and letting
+ * them pick the privacy level — the app may not assume one. This is what feeds
+ * the review screen, so every option offered there is one TikTok has just said
+ * this account can actually use.
+ *
+ * `privacyLevelOptions` narrows to `['SELF_ONLY']` while the app is unaudited.
+ * That is not a bug to work around: it is TikTok telling us the truth about
+ * what an unaudited client may do, and the screen must show it plainly.
+ */
+export interface TikTokCreatorInfo {
+  nickname: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  privacyLevelOptions: string[];
+  commentDisabled: boolean;
+}
+
+export type CreatorInfoResult =
+  | { ok: true; info: TikTokCreatorInfo }
+  | { ok: false; error: string };
+
+export async function getTikTokCreatorInfo(): Promise<CreatorInfoResult> {
+  if (!isTikTokConfigured()) {
+    return { ok: false, error: 'TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET are not configured' };
+  }
+  const tokens = await currentToken();
+  if (!tokens) {
+    return { ok: false, error: 'No TikTok account is linked — connect one in Back Office → Social' };
+  }
+
+  const res = await tiktokPost<{
+    data?: {
+      creator_nickname?: string;
+      creator_username?: string;
+      creator_avatar_url?: string;
+      privacy_level_options?: string[];
+      comment_disabled?: boolean;
+    };
+  }>('/post/publish/creator_info/query/', tokens.accessToken, {});
+
+  if (!res.ok) return { ok: false, error: res.error };
+
+  const data = res.data.data ?? {};
+  const info: TikTokCreatorInfo = {
+    nickname: data.creator_nickname ?? null,
+    username: data.creator_username ?? null,
+    avatarUrl: data.creator_avatar_url ?? null,
+    privacyLevelOptions: data.privacy_level_options ?? [],
+    commentDisabled: Boolean(data.comment_disabled),
+  };
+
+  // Opportunistic refresh. TikTok's avatar URLs expire, and this call already
+  // returns a fresh one — so the stored copy stays usable without a dedicated
+  // request on every page render. Never allowed to fail the query.
+  if (info.avatarUrl || info.nickname) {
+    await db
+      .update(socialAccounts)
+      .set({
+        ...(info.avatarUrl ? { avatarUrl: info.avatarUrl } : {}),
+        ...(info.nickname ? { displayName: info.nickname } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(socialAccounts.platform, 'tiktok'))
+      .catch((err) => {
+        console.error('[social] tiktok creator info cache refresh failed', err);
+      });
+  }
+
+  return { ok: true, info };
+}
+
+/** The linked TikTok account, or null when nobody has connected one yet. */
+export async function getTikTokConnection(): Promise<TikTokConnection | null> {
   const row = await db.query.socialAccounts.findFirst({
-    where: and(eq(socialAccounts.platform, 'tiktok')),
-    columns: { id: true },
+    where: eq(socialAccounts.platform, 'tiktok'),
+    columns: {
+      displayName: true,
+      avatarUrl: true,
+      externalAccountId: true,
+      expiresAt: true,
+      refreshExpiresAt: true,
+      createdAt: true,
+    },
   });
-  return Boolean(row);
+  if (!row) return null;
+  return {
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
+    externalAccountId: row.externalAccountId,
+    expiresAt: row.expiresAt,
+    refreshExpiresAt: row.refreshExpiresAt,
+    connectedAt: row.createdAt,
+  };
 }

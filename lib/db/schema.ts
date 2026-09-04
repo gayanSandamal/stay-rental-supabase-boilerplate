@@ -583,6 +583,8 @@ export const auditActionEnum = pgEnum('audit_action', [
   'listing_moderation_held',
   'listing_moderation_overridden',
   'listing_photos_dropped',
+  // 0053 — Easy Rent's own social account linked via OAuth (TikTok)
+  'social_account_connected',
   // 0040 — social auto-publish
   'listing_social_consent_granted',
   'listing_social_published',
@@ -761,6 +763,8 @@ export const socialAccounts = pgTable('social_accounts', {
   /** The platform's own account identifier (TikTok calls it open_id). */
   externalAccountId: text('external_account_id'),
   displayName: text('display_name'),
+  /** Cached, and expires: TikTok signs these. Refreshed on connect + creator_info. */
+  avatarUrl: text('avatar_url'),
   accessToken: text('access_token').notNull(),
   refreshToken: text('refresh_token'),
   expiresAt: timestamp('expires_at'),

@@ -33,6 +33,7 @@ import { EmptyState } from '@/components/back-office/empty-state';
 import { longAge } from '@/lib/back-office/format';
 import { parseListParams, type RawSearchParams } from '@/lib/back-office/list-params';
 import { ConfirmManualTakedown, RetryAllFailed } from './social-actions';
+import { TikTokConnectResult, TikTokConnectRow } from './tiktok-connect';
 import { SocialGroupList, type SocialGroupView } from './social-group-list';
 
 export const dynamic = 'force-dynamic';
@@ -106,10 +107,20 @@ export default async function SocialPage({
   await requireBackOfficeAccess();
   await loadFeatureFlags(true);
 
-  const params = parseListParams(await searchParams, {
+  const raw = await searchParams;
+  const params = parseListParams(raw, {
     tabs: TABS,
     defaultTab: 'all',
   });
+
+  /*
+   * The result of a just-finished TikTok OAuth round trip.
+   *
+   * Deliberately NOT a `parseListParams` extra: those survive every tab, search
+   * and page link, and a one-shot "connected" notice that followed the operator
+   * around the pager would be a lie the second time they saw it.
+   */
+  const tiktokResult = typeof raw.tiktok === 'string' ? raw.tiktok : '';
 
   /**
    * Posts that outlived their listing and are STILL on the platform.
@@ -241,6 +252,27 @@ export default async function SocialPage({
     })),
   }));
 
+  /*
+   * One status line per platform, computed here rather than inside the map so
+   * the collapsed panel can advertise a fault without being opened.
+   */
+  const platformStatuses = socialAdapters.map((adapter) => ({
+    platform: adapter.platform,
+    enabled: isPlatformEnabled(adapter.platform),
+    status: platformStatusLine(health[adapter.platform], isPlatformEnabled(adapter.platform)),
+  }));
+
+  /*
+   * Only `bad` counts as attention: it means broken RIGHT NOW.
+   *
+   * `warn` deliberately does not. Unconfigured credentials render as a warning
+   * ("posts are DRY RUNS"), which is the normal state of every preview and dev
+   * environment — badging that as a fault would train ops to ignore the badge,
+   * which is the same way a panel that says "live" for a dead token stops being
+   * read.
+   */
+  const needsAttention = platformStatuses.filter((p) => p.status.tone === 'bad').length;
+
   const tabs = TABS.map((key) => ({
     key,
     label: TAB_LABELS[key],
@@ -338,19 +370,31 @@ export default async function SocialPage({
         </AlarmBanner>
       )}
 
+      <TikTokConnectResult status={tiktokResult} />
+
       {/* Collapsed by default: reference material, not a worklist. The takedown
-          banner above is the thing that must always be open. */}
-      <details className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm">
+          banner above is the thing that must always be open.
+
+          Two exceptions force it open, both cases where the panel IS the
+          worklist: a platform is broken now, or the operator has just come back
+          from the TikTok OAuth round trip and the control they used is in here. */}
+      <details
+        open={needsAttention > 0 || Boolean(tiktokResult)}
+        className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm"
+      >
         <summary className="cursor-pointer list-none font-medium text-slate-700">
           Platform configuration &amp; what can be automated
+          {needsAttention > 0 && (
+            /* A collapsed section that hides a broken credential is the same
+               class of bug as a panel reporting a dead token as "live". */
+            <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-xs font-semibold text-rose-800">
+              {needsAttention} needs attention
+            </span>
+          )}
         </summary>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {socialAdapters.map((adapter) => {
-            const status = platformStatusLine(
-              health[adapter.platform],
-              isPlatformEnabled(adapter.platform)
-            );
+          {platformStatuses.map(({ platform, enabled: platformEnabled, status }) => {
             const dot =
               status.tone === 'ok'
                 ? 'bg-emerald-500'
@@ -360,12 +404,19 @@ export default async function SocialPage({
                     ? 'bg-rose-500'
                     : 'bg-slate-300';
             return (
-              <div key={adapter.platform} className="flex items-start gap-2">
+              <div key={platform} className="flex items-start gap-2">
                 <span className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${dot}`} />
-                <span className="shrink-0 font-medium text-slate-800">
-                  {PLATFORM_LABELS[adapter.platform] ?? adapter.platform}
-                </span>
-                <span className="text-slate-500">{status.text}</span>
+                <div className="min-w-0">
+                  <span className="mr-1 font-medium text-slate-800">
+                    {PLATFORM_LABELS[platform] ?? platform}
+                  </span>
+                  <span className="text-slate-500">{status.text}</span>
+                  {/* Meta's credentials are env vars and need no action here.
+                      TikTok's rotate, so linking the account is a click. */}
+                  {platform === 'tiktok' && (
+                    <TikTokConnectRow health={health.tiktok} publishEnabled={platformEnabled} />
+                  )}
+                </div>
               </div>
             );
           })}

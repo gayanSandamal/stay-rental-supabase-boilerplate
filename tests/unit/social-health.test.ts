@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const graphGet = vi.hoisted(() => vi.fn());
+const getTikTokConnection = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/social/adapters/graph', async (importOriginal) => {
   // Keep the real isTokenError/isPermissionError classifiers; only the network
@@ -20,8 +21,11 @@ vi.mock('@/lib/social/adapters/graph', async (importOriginal) => {
   return { ...actual, graphGet };
 });
 
-// The TikTok branch reaches the DB; these cases never configure TikTok, so it
-// short-circuits before the lazy import.
+// The TikTok adapter opens a DB connection at module scope. Health imports it
+// lazily for exactly that reason; the mock keeps this suite DB-free even for
+// the cases that DO configure TikTok.
+vi.mock('@/lib/social/adapters/tiktok', () => ({ getTikTokConnection }));
+
 const ENV_KEYS = [
   'FACEBOOK_PAGE_ID',
   'FACEBOOK_PAGE_ACCESS_TOKEN',
@@ -47,6 +51,8 @@ beforeEach(() => {
     delete process.env[key];
   }
   graphGet.mockReset();
+  getTikTokConnection.mockReset();
+  getTikTokConnection.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -276,5 +282,111 @@ describe('platformStatusLine — what ops actually reads', () => {
     const status = await line({ ...base, valid: false, error: 'token expired' }, false);
     expect(status.tone).toBe('off');
     expect(status.text).toBe('— switched off');
+  });
+});
+
+/**
+ * TikTok is the one platform whose credentials cannot live in the environment:
+ * its tokens rotate, so an operator has to authorise the account once and the
+ * grant is kept in `social_accounts`.
+ *
+ * That gives it a failure mode Meta does not have — app keys deployed, no
+ * account ever linked — and a second one that looks exactly like health: a
+ * linked account whose REFRESH grant has quietly lapsed. Both must read as
+ * broken, for the same reason the Facebook regression above must.
+ */
+describe('TikTok', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  beforeEach(() => {
+    process.env.TIKTOK_CLIENT_KEY = 'client-key';
+    process.env.TIKTOK_CLIENT_SECRET = 'client-secret';
+  });
+
+  function connection(over: Record<string, unknown> = {}) {
+    return {
+      displayName: 'Easy Rent LK',
+      externalAccountId: 'open-id-1',
+      expiresAt: new Date(Date.now() + DAY),
+      refreshExpiresAt: new Date(Date.now() + 300 * DAY),
+      connectedAt: new Date(),
+      ...over,
+    };
+  }
+
+  it('app keys without a linked account are NOT valid — nothing can publish', async () => {
+    getTikTokConnection.mockResolvedValue(null);
+    const health = await runCheck();
+
+    expect(health.tiktok.configured).toBe(true);
+    expect(health.tiktok.valid).toBe(false);
+    expect(health.tiktok.error).toMatch(/no account linked/i);
+  });
+
+  it('reports the linked account by name, so ops can see WHICH one', async () => {
+    getTikTokConnection.mockResolvedValue(connection());
+    const health = await runCheck();
+
+    expect(health.tiktok.valid).toBe(true);
+    expect(health.tiktok.accountName).toBe('Easy Rent LK');
+  });
+
+  it('THE REGRESSION, TikTok-shaped: a lapsed grant is never "live"', async () => {
+    getTikTokConnection.mockResolvedValue(
+      connection({ refreshExpiresAt: new Date(Date.now() - DAY) })
+    );
+    const health = await runCheck();
+
+    expect(health.tiktok.valid).toBe(false);
+    expect(health.tiktok.error).toMatch(/reconnect/i);
+
+    const { platformStatusLine } = await import('@/lib/social/health');
+    const status = platformStatusLine(health.tiktok, true);
+    expect(status.tone).toBe('bad');
+    expect(status.text).not.toMatch(/live/);
+  });
+
+  it('surfaces the REFRESH expiry, never the access token that self-heals', async () => {
+    // Access token dead in a minute, refresh grant good for months. The adapter
+    // refreshes the former on every publish; alarming ops about it daily is how
+    // a status panel stops being read.
+    getTikTokConnection.mockResolvedValue(
+      connection({ expiresAt: new Date(Date.now() + 60_000) })
+    );
+    const health = await runCheck();
+
+    expect(health.tiktok.valid).toBe(true);
+    expect(health.tiktok.expiresAt?.getTime()).toBeGreaterThan(Date.now() + 200 * DAY);
+
+    const { platformStatusLine } = await import('@/lib/social/health');
+    expect(platformStatusLine(health.tiktok, true).tone).toBe('ok');
+  });
+
+  it('an unknown grant expiry is undeterminable, NOT "never expires"', async () => {
+    // Rows written before the grant expiry was stored. Rendering that as
+    // eternal is the same lie as the Page token that looked permanent.
+    getTikTokConnection.mockResolvedValue(connection({ refreshExpiresAt: null }));
+    const health = await runCheck();
+
+    expect(health.tiktok.expiresAt).toBeUndefined();
+
+    const { platformStatusLine } = await import('@/lib/social/health');
+    expect(platformStatusLine(health.tiktok, true).text).not.toMatch(/never expires/);
+  });
+
+  it('tells the operator to reconnect, not to regenerate a Page token', async () => {
+    // Meta's remedy is meaningless here: there is no token to mint, only a
+    // grant to re-give.
+    getTikTokConnection.mockResolvedValue(
+      connection({ refreshExpiresAt: new Date(Date.now() + 2 * DAY) })
+    );
+    const health = await runCheck();
+
+    const { platformStatusLine } = await import('@/lib/social/health');
+    const status = platformStatusLine(health.tiktok, true);
+    expect(status.tone).toBe('warn');
+    expect(status.text).toMatch(/authorisation expires in 2d/);
+    expect(status.text).toMatch(/reconnect TikTok/);
+    expect(status.text).not.toMatch(/Page token/);
   });
 });

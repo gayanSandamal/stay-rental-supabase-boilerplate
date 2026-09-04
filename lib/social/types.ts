@@ -27,6 +27,18 @@ export interface SocialPostInput {
    */
   imageUrls: string[];
   listingUrl: string;
+  /**
+   * The privacy level a HUMAN chose for this post. TikTok only.
+   *
+   * TikTok's Direct Post rules put this decision with the creator, not the app:
+   * it may not silently default to public. When ops posts from the review
+   * screen they pick one, and it is passed through here.
+   *
+   * Absent on the cron path, where there is no human in the loop — the adapter
+   * then falls back to the most public level the account actually offers, which
+   * for an unaudited client is SELF_ONLY.
+   */
+  privacyLevel?: string;
 }
 
 export type PublishResult =

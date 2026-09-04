@@ -7,7 +7,7 @@
  * double-post and a killed run self-heals with no separate reaper.
  */
 
-import { and, eq, inArray, isNull, isNotNull, gt, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, isNotNull, gt, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingSocialPosts } from '@/lib/db/schema';
 import { logAudit } from '@/lib/db/audit-logger';
@@ -145,7 +145,15 @@ async function recordFailure(
  * Returns the bucket it landed in so the sweeper can report counts without
  * re-reading the row.
  */
-async function publishOne(row: SocialPostRow): Promise<keyof Omit<SocialSweepCounts, 'claimed'>> {
+interface PublishOptions {
+  /** Creator-selected privacy (TikTok). Absent on the cron path. */
+  privacyLevel?: string;
+}
+
+async function publishOne(
+  row: SocialPostRow,
+  options: PublishOptions = {}
+): Promise<keyof Omit<SocialSweepCounts, 'claimed'>> {
   const platform = row.platform as SocialPlatform;
   const adapter = adapterFor(platform);
 
@@ -186,6 +194,7 @@ async function publishOne(row: SocialPostRow): Promise<keyof Omit<SocialSweepCou
     caption,
     imageUrls,
     listingUrl: `${baseUrl()}/listings/${listing.id}`,
+    privacyLevel: options.privacyLevel,
   });
 
   if (result.ok) {
@@ -263,6 +272,87 @@ async function publishOne(row: SocialPostRow): Promise<keyof Omit<SocialSweepCou
     .where(eq(listingSocialPosts.id, row.id));
   const outcome = await recordFailure(row, result.error, result.retriable);
   return outcome === 'failed' ? 'failed' : 'rateLimited';
+}
+
+export interface PublishNowResult {
+  ok: boolean;
+  outcome: keyof Omit<SocialSweepCounts, 'claimed'>;
+  /** The row, re-read after publishing, so the caller can show what happened. */
+  post: SocialPostRow | null;
+}
+
+/**
+ * Post ONE listing to ONE platform right now, on an operator's explicit click.
+ *
+ * Deliberately routed through the same `publishOne` as the cron sweeper. The
+ * recording rules are subtle and safety-relevant — the dry-run note, the
+ * `skipped` transition when a listing is no longer active, the audit entry, the
+ * Facebook-Group manual park — and a second copy of them would drift. The only
+ * difference is that a human chose the privacy level and is waiting for the
+ * answer.
+ *
+ * Claims the row the same way too, so a cron tick running concurrently cannot
+ * pick up the same row and double-post.
+ */
+export async function publishNow(
+  listingId: number,
+  platform: SocialPlatform,
+  options: PublishOptions = {}
+): Promise<PublishNowResult> {
+  // Reuse the existing row when there is one — the unique (listing_id,
+  // platform) index means this is an upsert, not a duplicate.
+  await db
+    .insert(listingSocialPosts)
+    .values({ listingId, platform })
+    .onConflictDoNothing();
+
+  const existing = await db.query.listingSocialPosts.findFirst({
+    where: and(
+      eq(listingSocialPosts.listingId, listingId),
+      eq(listingSocialPosts.platform, platform)
+    ),
+  });
+  if (!existing) return { ok: false, outcome: 'failed', post: null };
+
+  /*
+   * Take the row under a lease, exactly as claimPosts does, and only if it is
+   * not already being worked. A concurrent cron tick holding a live lease means
+   * this post is already going out; racing it would publish twice.
+   */
+  const claimed = await db
+    .update(listingSocialPosts)
+    .set({
+      status: 'running',
+      leaseUntil: new Date(Date.now() + SOCIAL_LEASE_MINUTES * 60_000),
+      attempts: existing.attempts + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(listingSocialPosts.id, existing.id),
+        // `posted` is excluded on purpose: re-posting from this screen would
+        // put a second copy on the account with no way to tell them apart.
+        inArray(listingSocialPosts.status, ['queued', 'failed', 'skipped']),
+        or(isNull(listingSocialPosts.leaseUntil), sql`lease_until < now()`)
+      )
+    )
+    .returning({ id: listingSocialPosts.id });
+
+  if (!claimed.length) {
+    return { ok: false, outcome: 'manual', post: existing };
+  }
+
+  const row = await db.query.listingSocialPosts.findFirst({
+    where: eq(listingSocialPosts.id, existing.id),
+  });
+  if (!row) return { ok: false, outcome: 'failed', post: null };
+
+  const outcome = await publishOne(row, options);
+  const after = await db.query.listingSocialPosts.findFirst({
+    where: eq(listingSocialPosts.id, existing.id),
+  });
+
+  return { ok: outcome === 'posted', outcome, post: after ?? null };
 }
 
 /** One sweeper pass. Called by /api/cron/publish-social. */
