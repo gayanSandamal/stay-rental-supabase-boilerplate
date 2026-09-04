@@ -84,6 +84,14 @@ export const SOCIAL_LEASE_MINUTES = 5;
 export const SOCIAL_HTTP_TIMEOUT_MS = 20_000;
 
 /**
+ * How long the TikTok adapter waits for a publish to reach a terminal state.
+ * Env-overridable like the rest of this block, chiefly so tests do not pay a
+ * real 3s sleep per publish just to exercise the polling branch.
+ */
+export const TIKTOK_POLL_ATTEMPTS = Number(process.env.TIKTOK_POLL_ATTEMPTS ?? 10);
+export const TIKTOK_POLL_INTERVAL_MS = Number(process.env.TIKTOK_POLL_INTERVAL_MS ?? 3_000);
+
+/**
  * The canvas every social image is normalised to: 1080×1350 (4:5).
  *
  * Instagram rejects anything outside 4:5–1.91:1, AND applies the FIRST image's

@@ -1,0 +1,12 @@
+-- 0054 — the connected account's avatar, so ops can SEE which account is linked.
+--
+-- Paired with display_name, this is what makes `user.info.basic` do something
+-- visible rather than being a scope we merely hold. TikTok's own Direct Post UX
+-- rules expect the creator to be identifiable at post time.
+--
+-- The stored URL is a CACHE, never a source of truth: TikTok's avatar URLs are
+-- signed and expire. It is rewritten on every connect and on every creator_info
+-- query, and any UI showing it must degrade to initials when the image 404s.
+--
+-- No DO block: plain replay-safe DDL (see splitStatements in run-all-migrations).
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS avatar_url text;

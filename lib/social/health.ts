@@ -46,10 +46,25 @@ export interface CredentialHealth {
   expiresAt?: Date | null;
   /** The account's own name, so ops can see we are pointed at the right one. */
   accountName?: string;
+  /**
+   * The account's avatar. Cached and EXPIRING (TikTok signs these), so any UI
+   * showing it must fall back to initials rather than a broken image. Kept out
+   * of `summariseCredentialHealth` — a cron's JSON has no use for a picture.
+   */
+  accountAvatarUrl?: string;
   /** Why it is not valid, phrased as the thing to go and fix. */
   error?: string;
   /** No API exists for this platform, so there is no credential to check. */
   manual?: boolean;
+  /**
+   * What `expiresAt` is measuring. Meta hands out a token; TikTok's OAuth grant
+   * is an authorisation the operator re-gives. Defaults to Meta's wording
+   * because Facebook Page and Instagram are the platforms this module was
+   * written for.
+   */
+  expiryNoun?: string;
+  /** The operator action once `expiresAt` is close or past. */
+  expiryFix?: string;
 }
 
 export type SocialCredentialHealth = Record<SocialPlatform, CredentialHealth>;
@@ -178,16 +193,55 @@ async function checkTikTok(): Promise<CredentialHealth> {
 
   // Imported lazily: the TikTok adapter reads `social_accounts` at module scope,
   // and this module must stay importable — and unit-testable — without a DB.
-  const { isTikTokConnected } = await import('./adapters/tiktok');
-  const connected = await isTikTokConnected();
+  const { getTikTokConnection } = await import('./adapters/tiktok');
+  const connection = await getTikTokConnection();
 
-  // No live call: TikTok's access token rotates and the adapter refreshes it on
-  // use, so "is it connected" is the only question ops can act on.
+  // App keys alone publish nothing. Unlike Meta, where the env var IS the
+  // credential, TikTok needs a human to authorise the account once.
+  if (!connection) {
+    return {
+      platform: 'tiktok',
+      configured: true,
+      valid: false,
+      error: 'app keys set but no account linked — connect TikTok below',
+    };
+  }
+
+  // No live call is made: the ACCESS token (~24h) is refreshed in place by the
+  // adapter on every publish, so surfacing its expiry would alarm ops daily
+  // about something that heals itself — and a panel that cries wolf is the
+  // failure mode this whole module exists to prevent.
+  //
+  // The REFRESH token (~365d) is the opposite: when it lapses there is nothing
+  // left to refresh from, publishing stops, and only re-authorising fixes it.
+  // That is the expiry worth showing, so it is the one reported as `expiresAt`.
+  const grantExpiresAt = connection.refreshExpiresAt;
+  const accountName = connection.displayName ?? undefined;
+  const accountAvatarUrl = connection.avatarUrl ?? undefined;
+
+  if (grantExpiresAt && grantExpiresAt.getTime() <= Date.now()) {
+    return {
+      platform: 'tiktok',
+      configured: true,
+      valid: false,
+      accountName,
+      accountAvatarUrl,
+      error: 'authorisation lapsed — reconnect TikTok below',
+    };
+  }
+
   return {
     platform: 'tiktok',
     configured: true,
-    valid: connected,
-    error: connected ? undefined : 'app keys set but no account linked — connect TikTok',
+    valid: true,
+    accountName,
+    accountAvatarUrl,
+    // `undefined`, not `null`: a row written before we stored this has an
+    // UNKNOWN grant expiry, and rendering that as "never expires" would be the
+    // same lie as the Page token that looked permanent and died in 19 hours.
+    expiresAt: grantExpiresAt ?? undefined,
+    expiryNoun: 'authorisation',
+    expiryFix: 'reconnect TikTok',
   };
 }
 
@@ -234,6 +288,19 @@ export async function checkSocialCredentials(force = false): Promise<SocialCrede
   };
   cachedAt = Date.now();
   return cached;
+}
+
+/**
+ * Drop the cached readout, because a credential just CHANGED.
+ *
+ * The 60s cache exists so a page refresh does not re-hit Graph. It is wrong at
+ * exactly one moment: the instant after an operator connects an account, when
+ * the stale snapshot still says "no account linked" and flatly contradicts the
+ * "TikTok connected" banner next to it. Whoever writes a credential calls this.
+ */
+export function resetCredentialHealthCache(): void {
+  cached = null;
+  cachedAt = 0;
 }
 
 /** Warn this far ahead of a token expiry — enough notice to act on a weekday. */
@@ -287,12 +354,18 @@ export function platformStatusLine(
   const detail: string[] = [];
   if (health.accountName) detail.push(health.accountName);
 
+  // Meta's wording is the default: Facebook Page and Instagram are what this
+  // module was built for, and their fix is to mint a better token. TikTok
+  // overrides both — there is no token to regenerate, only a grant to re-give.
+  const noun = health.expiryNoun ?? 'token';
+  const fix = health.expiryFix ?? 'regenerate a non-expiring Page token';
+
   if (health.expiresAt) {
     const remaining = health.expiresAt.getTime() - now;
     if (remaining <= 0) {
       return {
         tone: 'bad',
-        text: `— ✗ token expired ${formatDuration(-remaining)} ago — regenerate a non-expiring Page token`,
+        text: `— ✗ ${noun} expired ${formatDuration(-remaining)} ago — ${fix}`,
       };
     }
     if (remaining < EXPIRY_WARN_MS) {
@@ -300,12 +373,12 @@ export function platformStatusLine(
       // token is indistinguishable from a permanent one until it dies.
       return {
         tone: 'warn',
-        text: `— ⚠ token expires in ${formatDuration(remaining)} — regenerate a non-expiring Page token`,
+        text: `— ⚠ ${noun} expires in ${formatDuration(remaining)} — ${fix}`,
       };
     }
-    detail.push(`token expires in ${formatDuration(remaining)}`);
+    detail.push(`${noun} expires in ${formatDuration(remaining)}`);
   } else if (health.expiresAt === null) {
-    detail.push('token never expires');
+    detail.push(`${noun} never expires`);
   }
 
   return { tone: 'ok', text: `— live${detail.length ? ` · ${detail.join(' · ')}` : ''}` };

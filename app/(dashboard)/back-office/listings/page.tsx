@@ -3,7 +3,7 @@ import { businessAccounts, listings } from '@/lib/db/schema';
 import { and, count, desc, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import Link from 'next/link';
-import { Eye, List } from 'lucide-react';
+import { Eye, List, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/badge';
 import {
@@ -189,7 +189,7 @@ export default async function BackOfficeListingsPage({
                 <TableHead>Title</TableHead>
                 <TableHead className="w-48">Location</TableHead>
                 <TableHead className="w-16 text-right">Age</TableHead>
-                <TableHead className="w-20 text-right">View</TableHead>
+                <TableHead className="w-28 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,7 +218,20 @@ export default async function BackOfficeListingsPage({
                   >
                     {shortAge(listing.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right whitespace-nowrap">
+                    {/* Only an ACTIVE listing can be posted — TikTok would be
+                        sent a URL that 404s otherwise, and publishNow refuses
+                        it anyway. Hiding the link beats offering a dead end. */}
+                    {listing.status === 'active' && (
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/back-office/social/post/${listing.id}`}>
+                          <Share2 className="h-4 w-4" />
+                          <span className="sr-only">
+                            Review and post listing {listing.id} to TikTok
+                          </span>
+                        </Link>
+                      </Button>
+                    )}
                     <Button asChild variant="ghost" size="sm">
                       <Link href={`/listings/${listing.id}`} target="_blank">
                         <Eye className="h-4 w-4" />

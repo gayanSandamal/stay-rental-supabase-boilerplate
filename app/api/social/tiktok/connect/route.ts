@@ -15,7 +15,25 @@ import { baseUrl, socialConfig } from '@/lib/social/config';
  */
 export const dynamic = 'force-dynamic';
 
-const STATE_COOKIE = 'tiktok_oauth_state';
+export const STATE_COOKIE = 'tiktok_oauth_state';
+export const VERIFIER_COOKIE = 'tiktok_oauth_verifier';
+
+/**
+ * PKCE, which TikTok REQUIRES — omitting it fails the authorize call outright
+ * with `error_type=code_challenge&errCode=10007`, before the user ever sees a
+ * consent screen. (Observed 2026-09-04 against the live endpoint.)
+ *
+ * ⚠️ TikTok deviates from RFC 7636 here: the challenge is the SHA-256 of the
+ * verifier **hex-encoded**, not base64url as every other provider uses. Sending
+ * base64url is rejected the same way as sending nothing. Do not "fix" this to
+ * match the RFC.
+ */
+function pkce(): { verifier: string; challenge: string } {
+  // 64 hex chars — inside RFC 7636's 43-128 range and all-unreserved.
+  const verifier = crypto.randomBytes(32).toString('hex');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('hex');
+  return { verifier, challenge };
+}
 
 export async function GET(_request: NextRequest) {
   await requireBackOfficeAccess();
@@ -27,6 +45,7 @@ export async function GET(_request: NextRequest) {
   // CSRF: the value goes out in the URL and comes back in the callback, and is
   // compared against an httpOnly cookie only this browser holds.
   const state = crypto.randomBytes(16).toString('hex');
+  const { verifier, challenge } = pkce();
 
   const authorize = new URL('https://www.tiktok.com/v2/auth/authorize/');
   authorize.searchParams.set('client_key', socialConfig.tiktokClientKey);
@@ -34,14 +53,21 @@ export async function GET(_request: NextRequest) {
   authorize.searchParams.set('response_type', 'code');
   authorize.searchParams.set('redirect_uri', `${baseUrl()}/api/social/tiktok/callback`);
   authorize.searchParams.set('state', state);
+  authorize.searchParams.set('code_challenge', challenge);
+  authorize.searchParams.set('code_challenge_method', 'S256');
 
-  const response = NextResponse.redirect(authorize.toString());
-  response.cookies.set(STATE_COOKIE, state, {
+  const cookie = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'lax' as const,
     path: '/',
     maxAge: 10 * 60,
-  });
+  };
+
+  const response = NextResponse.redirect(authorize.toString());
+  response.cookies.set(STATE_COOKIE, state, cookie);
+  // The verifier NEVER goes in the URL — that is the entire point of PKCE. It
+  // stays in this browser and is presented only at the token exchange.
+  response.cookies.set(VERIFIER_COOKIE, verifier, cookie);
   return response;
 }

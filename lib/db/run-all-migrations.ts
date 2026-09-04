@@ -55,6 +55,8 @@ const MIGRATIONS = [
   '0050_clear_whatsapp_pilot_records.sql',
   '0051_impersonation_sessions.sql',
   '0052_user_ban.sql',
+  '0053_social_account_audit.sql',
+  '0054_social_account_avatar.sql',
 ];
 
 function splitStatements(sql: string): string[] {

@@ -227,6 +227,23 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
   must not stay live on our social accounts.
 - Captions must never contain a phone number (`stripContactDigits`, asserted in
   tests).
+- **TikTok's OAuth needs PKCE, hex-encoded.** No `code_challenge` = `errCode=10007`
+  before any consent screen; and the challenge is SHA-256 of the verifier
+  **hex-encoded**, not base64url as RFC 7636 says. Verified against the live
+  endpoint 2026-09-04. Don't "fix" it to match the RFC.
+- **The privacy level of a TikTok post is never chosen silently.** Ops picks it on
+  `/back-office/social/post/[id]` from a live `creator_info` list, with nothing
+  pre-selected — TikTok's Direct Post rules put that call with the creator. An
+  unavailable choice FAILS the publish rather than being substituted: up is a
+  privacy breach, down lies to the operator. The cron path (no human) still takes
+  the most public level offered. That screen routes through `publishNow` → the
+  same `publishOne` as the sweeper so the recording rules cannot drift.
+- **TikTok is the only platform a deploy cannot finish.** Meta's credentials ARE
+  env vars; TikTok's rotate, so they live in `social_accounts` and an admin has
+  to click **Connect TikTok** in Back Office → Social once. Two expiries, only
+  one of which is an ops concern: the access token (~24h) is refreshed by the
+  adapter on every publish, the refresh grant (~365d) has no way back. Health
+  reports the grant, and a lapsed one must render as broken — never `live`.
 - With no credentials an adapter **dry-runs**: it logs `[social:dry-run] …` and
   returns a `dryrun-<platform>-<id>` post id. The back office must keep showing
   that as a `dry run` badge with no takedown button — a row reading `posted` for
