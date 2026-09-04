@@ -49,7 +49,19 @@ export async function GET(_request: NextRequest) {
 
   const authorize = new URL('https://www.tiktok.com/v2/auth/authorize/');
   authorize.searchParams.set('client_key', socialConfig.tiktokClientKey);
-  authorize.searchParams.set('scope', 'user.info.basic,video.publish,video.upload');
+  /*
+   * Exactly the scopes this app exercises, and no more.
+   *
+   * `video.upload` is deliberately absent. It grants the inbox/draft flow, where
+   * the user finishes posting inside TikTok — and `publish()` only ever sends
+   * `post_mode: 'DIRECT_POST'`, which is what `video.publish` covers (photo
+   * posts included; TikTok names the whole Content Posting API `video.*`).
+   *
+   * Requesting it anyway is not free: app review requires every requested scope
+   * to be demonstrated in the submitted demo video, and one that the code never
+   * calls cannot be. TikTok's own guidance is that unneeded scopes delay review.
+   */
+  authorize.searchParams.set('scope', 'user.info.basic,video.publish');
   authorize.searchParams.set('response_type', 'code');
   authorize.searchParams.set('redirect_uri', `${baseUrl()}/api/social/tiktok/callback`);
   authorize.searchParams.set('state', state);
