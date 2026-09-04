@@ -161,3 +161,79 @@ describe('the cron path, where nobody chose', () => {
     expect(result.note).toMatch(/PRIVATELY/i);
   });
 });
+
+/**
+ * TikTok's `message` is generic by design: a rejected Direct Post returns
+ * "Please review our integration guidelines at …" whatever the cause. The
+ * `code` beside it is the diagnosis, and it used to be read for the pass/fail
+ * check and then thrown away — which is how a rejected post on a live sandbox
+ * became a guessing game (2026-09-04).
+ */
+describe('a rejection keeps the diagnosis', () => {
+  function mockRejection(error: Record<string, string>) {
+    calls = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith('/creator_info/query/')) {
+          return new Response(
+            JSON.stringify({
+              data: { privacy_level_options: ['SELF_ONLY'] },
+              error: { code: 'ok' },
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(JSON.stringify({ error }), { status: 200 });
+      })
+    );
+  }
+
+  it('surfaces the error CODE, not only the generic message', async () => {
+    mockRejection({
+      code: 'unaudited_client_can_only_post_to_private_accounts',
+      message: 'Please review our integration guidelines at https://developers.tiktok.com/',
+      log_id: '20260904160448DCCA',
+    });
+
+    const result = await publish({ privacyLevel: 'SELF_ONLY' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    // The code is what actually tells an operator what to fix.
+    expect(result.error).toMatch(/unaudited_client_can_only_post_to_private_accounts/);
+    // The message is kept too — together they read as a sentence.
+    expect(result.error).toMatch(/integration guidelines/);
+    // And the log_id, because TikTok support asks for it and it is
+    // unrecoverable once the response is gone.
+    expect(result.error).toMatch(/log_id 20260904160448DCCA/);
+  });
+
+  it('falls back to the status code when TikTok sends no error body', async () => {
+    calls = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith('/creator_info/query/')) {
+          return new Response(
+            JSON.stringify({
+              data: { privacy_level_options: ['SELF_ONLY'] },
+              error: { code: 'ok' },
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response('nonsense', { status: 503 });
+      })
+    );
+
+    const result = await publish({ privacyLevel: 'SELF_ONLY' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.error).toMatch(/HTTP 503/);
+    // A 5xx is the platform, not the payload — worth another attempt.
+    expect(result.retriable).toBe(true);
+  });
+});

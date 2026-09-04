@@ -123,13 +123,32 @@ async function tiktokPost<T>(
       signal: AbortSignal.timeout(SOCIAL_HTTP_TIMEOUT_MS),
     });
     const json = (await res.json().catch(() => null)) as
-      | (T & { error?: { code?: string; message?: string } })
+      | (T & { error?: { code?: string; message?: string; log_id?: string } })
       | null;
     const code = json?.error?.code;
     if (!res.ok || (code && code !== 'ok')) {
+      /*
+       * Keep the CODE, not just the message.
+       *
+       * TikTok's `message` is deliberately generic — a rejected Direct Post
+       * returns "Please review our integration guidelines at …" whatever the
+       * actual cause was. The `code` beside it is the diagnosis
+       * (`url_ownership_unverified`, `spam_risk_too_many_posts`,
+       * `unaudited_client_can_only_post_to_private_accounts`, …), and we were
+       * reading it for the pass/fail check and then discarding it. That turned
+       * a ten-second diagnosis into guesswork against a live integration
+       * (2026-09-04).
+       *
+       * `log_id` rides along because it is the first thing TikTok support asks
+       * for, and it is unrecoverable once the response is gone.
+       */
+      const parts = [code, json?.error?.message].filter(Boolean);
+      const logId = json?.error?.log_id;
       return {
         ok: false,
-        error: json?.error?.message ?? `HTTP ${res.status}`,
+        error:
+          (parts.length ? parts.join(' — ') : `HTTP ${res.status}`) +
+          (logId ? ` [log_id ${logId}]` : ''),
         status: res.status,
       };
     }
@@ -260,9 +279,13 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
       };
     }
     if (state === 'FAILED') {
+      const reason = status.data.data?.fail_reason;
       return {
         ok: false,
-        error: status.data.data?.fail_reason ?? 'TikTok publish failed',
+        // `fail_reason` is already a code rather than prose, so it is labelled
+        // here — an ops list showing a bare `picture_size_check_failed` reads
+        // as a truncated message rather than TikTok's own verdict.
+        error: reason ? `TikTok rejected it: ${reason}` : 'TikTok publish failed',
         retriable: false,
       };
     }
