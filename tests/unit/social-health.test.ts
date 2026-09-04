@@ -390,3 +390,48 @@ describe('TikTok', () => {
     expect(status.text).not.toMatch(/Page token/);
   });
 });
+
+/**
+ * The cache is PER INSTANCE. On Vercel the instance that handles the OAuth
+ * callback is rarely the one that renders the page a second later, so a cached
+ * "no account linked" outlived the connection that disproved it — production
+ * showed "TikTok connected" and "no account linked" on the same screen
+ * (2026-09-04). TikTok's check makes no external call, so it is re-read on
+ * every hit rather than cached.
+ */
+describe('TikTok is never served stale', () => {
+  beforeEach(() => {
+    process.env.TIKTOK_CLIENT_KEY = 'client-key';
+    process.env.TIKTOK_CLIENT_SECRET = 'client-secret';
+  });
+
+  it('re-reads the connection on a cache hit, while Graph stays cached', async () => {
+    graphGet.mockResolvedValue({ ok: true, data: { id: '1', name: 'Easy Rent' } });
+    getTikTokConnection.mockResolvedValue(null);
+
+    vi.resetModules();
+    const { checkSocialCredentials } = await import('@/lib/social/health');
+
+    const first = await checkSocialCredentials(true);
+    expect(first.tiktok.valid).toBe(false);
+
+    // An account is linked by ANOTHER instance — nothing clears this one's cache.
+    getTikTokConnection.mockResolvedValue({
+      displayName: 'Easy Rent LK',
+      avatarUrl: null,
+      externalAccountId: 'open-id',
+      expiresAt: new Date(Date.now() + 86_400_000),
+      refreshExpiresAt: new Date(Date.now() + 300 * 86_400_000),
+      connectedAt: new Date(),
+    });
+
+    const graphCallsBefore = graphGet.mock.calls.length;
+    const second = await checkSocialCredentials(); // cache hit, NOT forced
+
+    // The panel must tell the truth immediately...
+    expect(second.tiktok.valid).toBe(true);
+    expect(second.tiktok.accountName).toBe('Easy Rent LK');
+    // ...without giving up the reason the cache exists: no new Graph traffic.
+    expect(graphGet.mock.calls.length).toBe(graphCallsBefore);
+  });
+});

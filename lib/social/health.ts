@@ -271,7 +271,21 @@ async function safely(
  * readout that can take either of those down is worse than no readout.
  */
 export async function checkSocialCredentials(force = false): Promise<SocialCredentialHealth> {
-  if (!force && cached && Date.now() - cachedAt < CACHE_TTL_MS) return cached;
+  if (!force && cached && Date.now() - cachedAt < CACHE_TTL_MS) {
+    /*
+     * TikTok is re-read even on a cache hit, because its check makes NO
+     * external call — it is one indexed read of `social_accounts`. Caching it
+     * bought nothing and cost the truth.
+     *
+     * The cache is PER INSTANCE (same contract as rate-limit and the feature
+     * flag snapshot). On Vercel the instance that handles the OAuth callback is
+     * rarely the one that renders the page a second later, so clearing the
+     * cache there — which `resetCredentialHealthCache` does — cannot help the
+     * instance the operator actually lands on. Observed in production
+     * 2026-09-04: "TikTok connected" and "no account linked" on the same screen.
+     */
+    return { ...cached, tiktok: await safely('tiktok', checkTikTok) };
+  }
 
   const [facebookPage, instagram, tiktok] = await Promise.all([
     safely('facebook_page', checkFacebookPage),
