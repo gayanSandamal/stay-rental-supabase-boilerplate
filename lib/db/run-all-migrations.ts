@@ -57,6 +57,7 @@ const MIGRATIONS = [
   '0052_user_ban.sql',
   '0053_social_account_audit.sql',
   '0054_social_account_avatar.sql',
+  '0055_social_post_privacy.sql',
 ];
 
 function splitStatements(sql: string): string[] {

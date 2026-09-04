@@ -258,8 +258,15 @@ export default async function PostToTikTokPage({
                 </p>
               )}
 
-            {existing?.error && existing.status === 'failed' && (
-              <p className="mt-3 rounded bg-rose-50 px-2 py-1.5 text-xs text-rose-800">
+            {/*
+              Shown for ANY status, not just `failed`. A retriable rejection
+              leaves the row `queued`, which is precisely when an operator needs
+              the reason — and gating this on `failed` is what hid
+              `unaudited_client_can_only_post_to_private_accounts` behind a row
+              that merely looked pending.
+            */}
+            {existing?.error && existing.status !== 'posted' && (
+              <p className="mt-3 rounded bg-rose-50 px-2 py-1.5 text-xs break-words text-rose-800">
                 Last attempt: {existing.error}
               </p>
             )}

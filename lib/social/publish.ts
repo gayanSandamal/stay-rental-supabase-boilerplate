@@ -189,12 +189,23 @@ async function publishOne(
   const caption = buildCaption(platform, listing as CaptionListing, { baseUrl: baseUrl() });
   const imageUrls = socialImageUrls(listing);
 
+  /*
+   * The ROW is the source of truth for privacy, not the caller.
+   *
+   * A retry — from the cron sweeper or the ops Retry button — arrives with no
+   * options, and falling back to the adapter's "most public level available"
+   * would re-send an operator's deliberate SELF_ONLY as PUBLIC_TO_EVERYONE.
+   * That is the exact substitution the adapter refuses to make on the first
+   * attempt; it must not become possible on the second.
+   */
+  const privacyLevel = row.privacyLevel ?? options.privacyLevel;
+
   const result = await adapter.publish({
     listingId: listing.id,
     caption,
     imageUrls,
     listingUrl: `${baseUrl()}/listings/${listing.id}`,
-    privacyLevel: options.privacyLevel,
+    privacyLevel: privacyLevel ?? undefined,
   });
 
   if (result.ok) {
@@ -325,6 +336,8 @@ export async function publishNow(
       status: 'running',
       leaseUntil: new Date(Date.now() + SOCIAL_LEASE_MINUTES * 60_000),
       attempts: existing.attempts + 1,
+      // Persisted with the claim so a later retry re-sends the same choice.
+      ...(options.privacyLevel ? { privacyLevel: options.privacyLevel } : {}),
       updatedAt: new Date(),
     })
     .where(

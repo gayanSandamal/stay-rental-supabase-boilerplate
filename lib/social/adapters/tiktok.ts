@@ -244,10 +244,25 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
   );
 
   if (!init.ok) {
+    /*
+     * Retrying only helps a transient fault. These are not transient: every one
+     * of them needs a human to change something in the TikTok portal or on the
+     * account, so a retry burns the attempt budget and — worse — leaves the row
+     * `queued`, where the next cron tick picks it up.
+     *
+     * `unaudited_client_can_only_post_to_private_accounts` is the one that
+     * taught us this (2026-09-04): the TARGET ACCOUNT must be private while the
+     * app is unaudited, which no number of retries can bring about.
+     */
     const terminal =
       init.status === 401 ||
       init.status === 403 ||
-      /url_ownership_unverified|privacy_level/i.test(init.error);
+      /unaudited_client|url_ownership_unverified|privacy_level|user_banned|invalid_params|access_token/i.test(
+        init.error
+      );
+    // A full window is not a fault: hand the row back WITHOUT spending a try.
+    const rateLimited = /spam_risk_too_many_posts|reached_active_user_cap/i.test(init.error);
+    if (rateLimited) return { ok: false, error: init.error, retriable: true, rateLimited: true };
     return { ok: false, error: init.error, retriable: !terminal };
   }
 

@@ -1,0 +1,13 @@
+-- 0055 — remember the privacy level a HUMAN chose for a post.
+--
+-- Without it a retry cannot know, so `publishOne` fell back to "take the most
+-- public level the account offers". A post an operator deliberately marked
+-- SELF_ONLY would therefore be re-sent as PUBLIC_TO_EVERYONE by the next cron
+-- tick — the exact substitution the adapter refuses to make on the first
+-- attempt, reintroduced on the second.
+--
+-- NULL means nobody chose (the cron path), where the most-public fallback is
+-- the intended behaviour.
+--
+-- No DO block: plain replay-safe DDL (see splitStatements in run-all-migrations).
+ALTER TABLE listing_social_posts ADD COLUMN IF NOT EXISTS privacy_level text;
