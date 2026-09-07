@@ -59,6 +59,7 @@ const MIGRATIONS = [
   '0054_social_account_avatar.sql',
   '0055_social_post_privacy.sql',
   '0056_listing_location_indexes.sql',
+  '0057_facebook_imports.sql',
 ];
 
 function splitStatements(sql: string): string[] {

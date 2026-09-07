@@ -1,12 +1,20 @@
 /**
  * Delivering scheduled performance reports.
  *
- * WHO CAN RECEIVE ONE. `users.wa_phone` and nothing else. It is the only
- * WhatsApp identity Meta has proven possession of; `users.phone` is typed by
- * the user and unverified, and messaging an unverified number is how a report
- * about someone's property reaches a stranger. That restriction is also why
- * this feature reaches WhatsApp-origin landlords first — dashboard-only
- * landlords have no verified number until they verify one.
+ * WHO CAN RECEIVE ONE. A number with `users.wa_phone_verified_at` set, and
+ * nothing else. `users.phone` is typed by the user and unverified, and
+ * messaging an unverified number is how a report about someone's property
+ * reaches a stranger. That restriction is also why this feature reaches
+ * WhatsApp-origin landlords first — dashboard-only landlords have no verified
+ * number until they verify one.
+ *
+ * WHY THE TIMESTAMP AND NOT `wa_phone IS NOT NULL` (0057). It used to be the
+ * same test, because the intake pipeline was the only writer of `wa_phone` and
+ * it only ever wrote numbers Meta had proven. The Facebook importer is a second
+ * writer and stores the number printed in someone's public ad — genuinely
+ * useful for matching their reply, and no proof of anything. Left on the old
+ * test, this job would mail a landlord's traffic figures to whoever actually
+ * holds a number a stranger typed into an advert.
  *
  * WHY A FAILED SEND STILL ADVANCES THE CLOCK. The obvious design leaves
  * `reportLastPeriodEnd` untouched on failure so the next run covers the gap.
@@ -118,7 +126,11 @@ async function findCandidates(now: Date): Promise<Candidate[]> {
     .where(
       and(
         ne(landlords.reportFrequency, 'off'),
+        // NOT `isNotNull(users.waPhone)` — see the header. An imported
+        // landlord's number is known, not proven, and stays unmessaged until
+        // they write to us themselves.
         isNotNull(users.waPhone),
+        isNotNull(users.waPhoneVerifiedAt),
         isNull(users.deletedAt),
         or(
           isNull(landlords.reportLastPeriodEnd),

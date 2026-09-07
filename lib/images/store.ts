@@ -14,6 +14,12 @@ import type { ProcessedImage } from './types';
  */
 const DERIVED_PREFIX = 'public';
 
+/** Originals pulled in from an imported post (lib/imports/**). */
+const IMPORT_PREFIX = 'imports';
+
+/** What we are willing to re-host. Matches the WhatsApp media allowlist. */
+const IMPORTABLE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 export const MAX_ORIGINAL_BYTES = 8 * 1024 * 1024;
 
 export function hashBytes(buffer: Buffer): string {
@@ -41,6 +47,48 @@ export async function fetchOriginal(
     console.error('[images] original fetch error', err);
     return null;
   }
+}
+
+/**
+ * Re-host an image found on an imported post, returning its public URL.
+ *
+ * Pairs with `fetchOriginal`, which already does the download and the 8 MB cap:
+ * this is the upload half, under its own prefix so an imported original is
+ * never confused with a landlord's own upload or with a published derivative.
+ * It stores the ORIGINAL bytes — moderation must read an unwatermarked image,
+ * and the derivative is written later by the sweeper.
+ *
+ * Returns null rather than throwing on any failure: photos are optional at
+ * import time, exactly as they are at intake time, and one dead image URL must
+ * not cost the operator the whole post.
+ */
+export async function storeImportedImage(
+  buffer: Buffer,
+  contentType: string
+): Promise<string | null> {
+  const type = contentType.split(';')[0].trim().toLowerCase();
+  if (!IMPORTABLE_TYPES.has(type)) {
+    console.log('[images] import skipped, unsupported type', type);
+    return null;
+  }
+
+  const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+  // Content-hashed, so importing the same post twice does not duplicate bytes.
+  const filePath = `${IMPORT_PREFIX}/${hashBytes(buffer).slice(0, 16)}.${extension}`;
+
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, buffer, {
+      contentType: type,
+      cacheControl: '31536000',
+      upsert: true,
+    });
+  if (error) {
+    console.error('[images] import upload failed', error.message);
+    return null;
+  }
+
+  return supabaseAdmin.storage.from(STORAGE_BUCKET).getPublicUrl(filePath).data.publicUrl;
 }
 
 /** Upload a derivative and return its public URL. Idempotent (upsert). */

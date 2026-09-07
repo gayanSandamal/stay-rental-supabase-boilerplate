@@ -39,6 +39,7 @@ describe('hard delete clears every blocking foreign key', () => {
     ['listings', 'visitedBy'],
     ['listings', 'rejectedBy'],
     ['listings', 'createdBy'],
+    ['postImports', 'importedBy'],
     ['savedSearches', 'userId'],
     ['socialAccounts', 'connectedBy'],
     ['userContactNumbers', 'verifiedBy'],

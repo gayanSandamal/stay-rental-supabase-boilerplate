@@ -9,8 +9,20 @@
  *
  * Why not `users.phone`: that column is user-typed and unverified. Matching on
  * it would let anyone claim another person's listings by typing their number.
- * `wa_phone` is written only here, after Meta has proven possession — the same
- * reasoning that already marks the intake contact number `verified: true`.
+ *
+ * VERIFIED vs MERELY KNOWN (0057). `wa_phone` used to imply Meta had proven
+ * possession, because the intake pipeline was the only writer. The Facebook
+ * importer is a second writer: it stores the number an owner typed into their
+ * own public ad, so a reply can be matched back to the account we made for
+ * them. That is a useful number and it is not a proven one. `phoneVerified`
+ * below decides which of the two is being written, and `wa_phone_verified_at`
+ * records the answer — anything that MESSAGES a landlord must gate on the
+ * timestamp, never on `wa_phone` alone (see lib/reports/send.ts).
+ *
+ * An unverified number becomes verified at the only moment it honestly can:
+ * when that number sends us a WhatsApp message. That arrives here through the
+ * existing-user branch, which stamps it — so an imported landlord who replies
+ * claims the account already waiting for them rather than getting a second one.
  *
  * Why not Supabase phone auth: the Phone provider needs an SMS provider, none
  * is configured, and a phone-only auth user has a NULL email which the
@@ -58,10 +70,17 @@ export function isReservedWaEmail(email: string | null | undefined): boolean {
 export async function getOrCreateWhatsAppLandlord(args: {
   senderId: string;
   profileName: string | null;
+  /**
+   * Has possession of this number been PROVEN? Defaults to true because every
+   * caller but the importer reaches here from a message Meta delivered from
+   * that number, which is the proof. The importer passes false.
+   */
+  phoneVerified?: boolean;
 }): Promise<WhatsAppLandlord | null> {
   const e164 = args.senderId.startsWith('+') ? args.senderId : `+${args.senderId}`;
   const email = syntheticEmailFor(e164);
   const displayName = args.profileName?.trim() || 'Property owner';
+  const verified = args.phoneVerified !== false;
 
   try {
     // 1. Already known? The common path for a repeat sender.
@@ -69,6 +88,15 @@ export async function getOrCreateWhatsAppLandlord(args: {
       where: and(eq(users.waPhone, e164), isNull(users.deletedAt)),
     });
     if (existing) {
+      // THE CLAIM MOMENT. An account the importer created holds an unproven
+      // number; the first message from that number is the proof, and this is
+      // where it lands. Stamped once and never cleared.
+      if (verified && !existing.waPhoneVerifiedAt) {
+        await db
+          .update(users)
+          .set({ waPhoneVerifiedAt: new Date(), updatedAt: new Date() })
+          .where(eq(users.id, existing.id));
+      }
       const landlordId = await ensureLandlordRow(existing.id);
       return { userId: existing.id, landlordId, authUserId: existing.authUserId, isNew: false };
     }
@@ -80,7 +108,7 @@ export async function getOrCreateWhatsAppLandlord(args: {
       email,
       email_confirm: true,
       user_metadata: {
-        source: 'whatsapp_intake',
+        source: verified ? 'whatsapp_intake' : 'post_import',
         wa_phone: e164,
         wa_profile_name: args.profileName ?? null,
       },
@@ -119,6 +147,11 @@ export async function getOrCreateWhatsAppLandlord(args: {
         .set({
           role: 'landlord',
           waPhone: e164,
+          // coalesce, not a plain set: a row that is already verified must not
+          // be demoted by a later unverified touch on the same number.
+          waPhoneVerifiedAt: verified
+            ? sql`coalesce(${users.waPhoneVerifiedAt}, now())`
+            : sql`${users.waPhoneVerifiedAt}`,
           name: sql`coalesce(${users.name}, ${displayName})`,
           phone: sql`coalesce(${users.phone}, ${e164})`,
           updatedAt: new Date(),
@@ -137,6 +170,7 @@ export async function getOrCreateWhatsAppLandlord(args: {
           name: displayName,
           role: 'landlord',
           waPhone: e164,
+          waPhoneVerifiedAt: verified ? new Date() : null,
           phone: e164,
         })
         .onConflictDoNothing({ target: users.authUserId })
@@ -170,12 +204,14 @@ export async function getOrCreateWhatsAppLandlord(args: {
         entityType: 'user',
         entityId: result.userId,
         userId: result.userId,
-        metadata: { waPhone: e164, profileName: args.profileName },
+        metadata: { waPhone: e164, profileName: args.profileName, verified },
       }).catch(() => {});
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
-        title: `New landlord account from WhatsApp: ${displayName} (${e164})`,
-        link: '/back-office/whatsapp-intakes',
+        title: verified
+          ? `New landlord account from WhatsApp: ${displayName} (${e164})`
+          : `New landlord account from an imported post: ${displayName} (${e164}, unverified)`,
+        link: verified ? '/back-office/whatsapp-intakes' : '/back-office/imports',
       }).catch(() => {});
     }
 

@@ -38,8 +38,11 @@ async function describe(userId: number) {
     storedFrequency: landlord.reportFrequency ?? 'weekly',
     canChooseDaily: canChooseDaily(landlord),
     // Only a verified WhatsApp identity can receive one. `users.phone` is
-    // user-typed and unverified and must never be messaged.
-    hasWhatsApp: Boolean(userWithLandlord?.waPhone),
+    // user-typed and unverified and must never be messaged — and since 0057
+    // neither may a `wa_phone` that nobody has proven, which is what an
+    // imported listing's owner has until they message us. Same test as
+    // findCandidates in lib/reports/send.ts; they must not drift.
+    hasWhatsApp: Boolean(userWithLandlord?.waPhoneVerifiedAt),
     enabled: isFeatureEnabled('enableLandlordReports'),
     deliverable: isIntakeConfigured() && Boolean(whatsappTemplateName('report')),
     lastSentAt: landlord.reportLastSentAt,
