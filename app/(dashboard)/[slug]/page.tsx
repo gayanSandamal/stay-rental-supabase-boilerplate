@@ -5,6 +5,8 @@ import { Building2, Home, MapPin } from 'lucide-react';
 import { ListingCard } from '@/components/listing-card';
 import type { Metadata } from 'next';
 import { isReservedSlug } from '@/lib/reserved-slugs';
+import { publisherDisplayName } from '@/lib/publisher-name';
+import { jsonLdHtml, realEstateAgent, breadcrumbList } from '@/lib/seo/jsonld';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -16,16 +18,29 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const resolvedParams = params instanceof Promise ? await params : params;
   const slug = resolvedParams.slug;
-  if (!slug || isReservedSlug(slug)) return {};
+  if (!slug || isReservedSlug(slug)) return { robots: { index: false, follow: false } };
 
   const landlord = await getLandlordByProfileSlugOrPublicId(slug);
-  if (!landlord) return {};
+  if (!landlord) return { robots: { index: false, follow: false } };
 
-  const name = landlord.user?.name || landlord.user?.email || 'Landlord';
+  const name = publisherDisplayName({
+    name: landlord.user?.name,
+    email: landlord.user?.email,
+  });
   const listingCount = landlord.listings?.length ?? 0;
   const description = `${name}'s portfolio on Easy Rent. ${listingCount} active rental${listingCount !== 1 ? 's' : ''} in Sri Lanka.`;
 
-  const profileUrl = `${baseUrl}/${slug}`;
+  /*
+   * This page answers to TWO URLs — the UUID publicId and, once claimed, the
+   * vanity slug — and each used to declare itself canonical, so every landlord
+   * with a slug was a duplicate-content pair competing with itself.
+   *
+   * The vanity slug wins when one exists: it is the URL we print, share and
+   * link, and it survives even though `profileSlug` is write-once. The UUID
+   * form then points at it instead of claiming its own indexation.
+   */
+  const canonicalSlug = landlord.profileSlug ?? slug;
+  const profileUrl = `${baseUrl}/${canonicalSlug}`;
 
   return {
     title: `${name} | Landlord Portfolio`,
@@ -39,6 +54,8 @@ export async function generateMetadata({
       type: 'profile',
       url: profileUrl,
       siteName: 'Easy Rent',
+      locale: 'en_LK',
+      images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Easy Rent' }],
     },
     twitter: {
       card: 'summary',
@@ -65,11 +82,39 @@ export default async function LandlordProfilePage({
     notFound();
   }
 
-  const name = landlord.user?.name || landlord.user?.email || 'Landlord';
+  /*
+   * `name || email` printed a nameless landlord's real address on a public
+   * page, and for a WhatsApp-intake landlord it would have printed the
+   * synthetic wa-<hash>@wa.easyrent.lk identifier. publisherDisplayName is the
+   * one sanctioned way to render a publisher — see lib/publisher-name.ts.
+   */
+  const name = publisherDisplayName({
+    name: landlord.user?.name,
+    email: landlord.user?.email,
+  });
   const listings = landlord.listings ?? [];
+  const canonicalSlug = landlord.profileSlug ?? slug;
+
+  const agentJsonLd = realEstateAgent({
+    name,
+    path: `/${canonicalSlug}`,
+    listingCount: listings.length,
+  });
+  const breadcrumbJsonLd = breadcrumbList([
+    { name: 'Home', path: '/' },
+    { name, path: `/${canonicalSlug}` },
+  ]);
 
   return (
     <div className="min-h-screen bg-[#F7F4ED]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml(agentJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml(breadcrumbJsonLd) }}
+      />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="mb-10">

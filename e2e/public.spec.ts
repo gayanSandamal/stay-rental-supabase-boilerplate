@@ -41,9 +41,15 @@ test.describe('Public marketplace', () => {
   test('A10/C13 unknown route shows a not-found page', async ({ page }) => {
     const resp = await page.goto('/this-route-does-not-exist-xyz');
     await expect(page.getByText(/not found|404|does ?n.?t exist/i).first()).toBeVisible();
-    // NOTE: prod currently returns HTTP 200 here (soft-404, PPR cache artifact).
-    // Record the status as evidence rather than hard-failing the render check.
-    console.log('not-found HTTP status:', resp?.status());
+    /*
+     * The status is now asserted, not merely logged.
+     *
+     * This used to return HTTP 200 — the root `[slug]` catch-all matches every
+     * path, and under PPR the shell is flushed (committing 200) before
+     * `notFound()` runs in the Suspense child. middleware.ts answers unknown
+     * URLs before the render; see also e2e/seo.spec.ts B7.
+     */
+    expect(resp?.status()).toBe(404);
   });
 
   test('C6 listing detail shows rent, location and resilience fields', async ({ page }) => {

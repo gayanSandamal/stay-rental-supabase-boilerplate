@@ -5,8 +5,8 @@ import { ListingsResultsSkeleton } from './listings-results-skeleton';
 import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
 import type { Metadata } from 'next';
-
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
+import { listingsIndexability } from '@/lib/seo/indexability';
+import { liveAreaCitySlugs } from '@/lib/seo/area-eligibility';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   apartment: 'Apartments',
@@ -37,9 +37,14 @@ export async function generateMetadata({
   if (bedrooms) parts.push(`${bedrooms} bedroom${bedrooms > 1 ? 's' : ''}`);
   if (search) parts.push(`"${search}"`);
 
+  /*
+   * No `| Easy Rent` here. The root layout applies `template: '%s | Easy Rent'`
+   * to every non-absolute title, so appending it produced
+   * "3 bedrooms | Easy Rent | Easy Rent" on every filtered view.
+   */
   const title = parts.length > 0
-    ? `${parts.join(' ')} | Easy Rent`
-    : 'Browse Rentals in Sri Lanka';
+    ? `Rentals ${parts.join(' ')} in Sri Lanka`
+    : 'Houses & Apartments for Rent in Sri Lanka';
   // Same correction as the site-wide description in app/layout.tsx: there is no
   // landlord KYC and no property has ever been visited. What is true is the
   // verified contact number and the pre-publish checks.
@@ -47,20 +52,22 @@ export async function generateMetadata({
     ? `Find mid-to-long-term rentals ${parts.join(' ')} in Sri Lanka — 100% free of charge. Verified contact numbers and direct contact with the owner, no middlemen and no fees.`
     : 'Find mid-to-long-term rentals in Sri Lanka, 100% free of charge. Browse apartments, houses, and rooms with verified contact numbers, direct from the owner — free to browse and free to contact.';
 
-  const canonicalParams = new URLSearchParams();
-  if (city) canonicalParams.set('city', city);
-  if (propertyType) canonicalParams.set('propertyType', propertyType);
-  if (minPrice) canonicalParams.set('minPrice', String(minPrice));
-  if (maxPrice) canonicalParams.set('maxPrice', String(maxPrice));
-  if (bedrooms) canonicalParams.set('bedrooms', String(bedrooms));
-  if (search) canonicalParams.set('search', search);
-  const canonical = canonicalParams.toString()
-    ? `${baseUrl}/listings?${canonicalParams.toString()}`
-    : `${baseUrl}/listings`;
+  /*
+   * The canonical used to be built FROM the query string, which made every
+   * filter permutation self-canonical and indexable. `search` is free text, so
+   * that was an unbounded set of near-identical thin pages all competing with
+   * each other. lib/seo/indexability.ts now owns which shapes may be indexed
+   * and where the rest point — see the policy table there.
+   */
+  const { canonical, robots } = listingsIndexability({
+    params,
+    liveAreaCities: await liveAreaCitySlugs(),
+  });
 
   return {
     title,
     description,
+    robots,
     alternates: {
       canonical,
     },
@@ -68,6 +75,11 @@ export async function generateMetadata({
       title,
       description,
       url: canonical,
+      siteName: 'Easy Rent',
+      locale: 'en_LK',
+      // Explicit: declaring openGraph replaces the parent's, which drops the
+      // file-convention app/opengraph-image.tsx. See app/(dashboard)/page.tsx.
+      images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Easy Rent' }],
     },
   };
 }
@@ -101,9 +113,21 @@ export default function ListingsPage(props: {
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
             <div>
+              {/*
+                Keyword-bearing but STATIC. A filter-aware heading would need
+                `searchParams`, and awaiting that in the page body postpones PPR
+                at the root and empties the prerendered shell — the exact
+                regression documented in CLAUDE.md. The <title> is already
+                filter-aware because generateMetadata may await; the visible
+                heading trades that for a shell that paints instantly.
+              */}
               <h1 className="text-3xl font-bold text-gray-900 mb-1">
-                Available Rentals
+                Houses &amp; Apartments for Rent in Sri Lanka
               </h1>
+              <p className="text-sm text-gray-600">
+                Verified contact numbers, direct from the owner. Filter by power
+                backup, water source, fibre and deposit months.
+              </p>
             </div>
           </div>
 
