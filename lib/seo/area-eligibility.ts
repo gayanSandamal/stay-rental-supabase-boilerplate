@@ -140,6 +140,22 @@ export async function findEligibleArea(slug: string): Promise<EligibleArea | nul
 }
 
 /**
+ * Like `eligibleAreas()`, but distinguishes "loaded, and genuinely empty" from
+ * "never loaded successfully".
+ *
+ * `eligibleAreas()` returns `[]` for both, which is fine for rendering — an
+ * empty index page is the right answer either way. It is NOT fine for deciding
+ * a 404 in middleware: a database blip would turn every valid area page into a
+ * 404, which is the one direction that actually costs us indexed pages.
+ *
+ * `null` means "cannot tell", and the caller must let the request through.
+ */
+export async function eligibleAreasOrNull(): Promise<EligibleArea[] | null> {
+  const areas = await eligibleAreas();
+  return loadedAt > 0 ? areas : null;
+}
+
+/**
  * Lowercased area names that have a live `/rentals/<area>` page — WITHOUT
  * touching the database.
  *

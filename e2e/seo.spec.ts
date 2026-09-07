@@ -73,6 +73,13 @@ test.describe('SEO & crawlability', () => {
       '/listings/99999999',
       '/listings/not-a-number',
       '/listings/0',
+      /*
+       * Area pages exist only above an inventory threshold. This one was
+       * missed in the first pass and shipped as a soft 200 to production —
+       * middleware knew about /listings/<id> and root slugs but not
+       * /rentals/<area>.
+       */
+      '/rentals/definitely-not-a-sri-lankan-town',
     ]) {
       const resp = await request.get(path, { maxRedirects: 0 });
       expect(resp.status(), `${path} must 404`).toBe(404);
