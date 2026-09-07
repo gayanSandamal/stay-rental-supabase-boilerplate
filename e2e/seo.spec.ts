@@ -155,6 +155,34 @@ test.describe('SEO & crawlability', () => {
    * pages appear and disappear with inventory, so this is the pairing most
    * likely to drift.
    */
+  /*
+   * B13 — lastmod must be a real modification date.
+   *
+   * Every entry used to carry `new Date()`, so two fetches seconds apart
+   * reported different modification times for /privacy-policy. Google USES
+   * lastmod (unlike priority and changefreq, which it ignores), and its
+   * documented response to a site reporting it unreliably is to stop trusting
+   * the field site-wide — so an always-now timestamp spends credibility to
+   * convey nothing.
+   */
+  test('B13 sitemap lastmod is stable across requests', async ({ request }) => {
+    const read = async () =>
+      [...(await (await request.get('/sitemap.xml')).text()).matchAll(
+        /<lastmod>([^<]+)<\/lastmod>/g
+      )].map((m) => m[1]);
+
+    const first = await read();
+    await new Promise((r) => setTimeout(r, 2000));
+    const second = await read();
+
+    expect(second).toEqual(first);
+    // And none of them may be "just now".
+    for (const stamp of first) {
+      const age = Date.now() - new Date(stamp).getTime();
+      expect(age, `${stamp} looks like a request timestamp`).toBeGreaterThan(10_000);
+    }
+  });
+
   test('B12 every sitemap URL resolves', async ({ request }) => {
     const body = await (await request.get('/sitemap.xml')).text();
     const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);

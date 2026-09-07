@@ -1,6 +1,6 @@
 import { db } from '@/lib/db/drizzle';
 import { listings, landlords, users } from '@/lib/db/schema';
-import { eq, and, or, isNull, isNotNull, gte, desc } from 'drizzle-orm';
+import { eq, and, or, isNull, isNotNull, gte, desc, max } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 import { SITE_URL, listingUrl, areaUrl, landlordUrl } from '@/lib/seo/urls';
 import { eligibleAreas } from '@/lib/seo/area-eligibility';
@@ -28,36 +28,81 @@ export const dynamic = 'force-dynamic';
  */
 const LISTING_LIMIT = 45_000;
 
-/** Fixed pages that always exist, independent of inventory. */
+/*
+ * ── lastmod must be a real modification date, or absent ────────────────────
+ * Every entry here used to carry `new Date()`, so each fetch of the sitemap
+ * declared that all seven pages had changed at the instant it was requested —
+ * two fetches three seconds apart returned two different timestamps for
+ * /privacy-policy, which has not changed since March.
+ *
+ * That is not a harmless white lie. Google USES lastmod (unlike `priority` and
+ * `changefreq`, which it ignores outright), and its documented response to a
+ * site reporting lastmod unreliably is to stop trusting the field for that site
+ * altogether. An always-now timestamp therefore spends credibility to convey
+ * nothing.
+ *
+ * So: pages whose content is driven by listings get the newest listing
+ * timestamp, which is genuinely when they last changed. Pages that only change
+ * when we deploy get NO lastmod at all — "unknown" is honest, and Google treats
+ * an absent lastmod as exactly that.
+ */
+
+/** `collection: true` — content changes when listings change. */
 const STATIC_ROUTES: Array<{
   path: string;
   changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'];
   priority: number;
+  collection?: boolean;
 }> = [
-  { path: '/', changeFrequency: 'daily', priority: 1 },
-  { path: '/listings', changeFrequency: 'daily', priority: 0.9 },
-  { path: '/rentals', changeFrequency: 'daily', priority: 0.8 },
+  { path: '/', changeFrequency: 'daily', priority: 1, collection: true },
+  { path: '/listings', changeFrequency: 'daily', priority: 0.9, collection: true },
+  { path: '/rentals', changeFrequency: 'daily', priority: 0.8, collection: true },
   { path: '/list-your-property', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/how-to-use', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/privacy-policy', changeFrequency: 'yearly', priority: 0.2 },
   { path: '/terms-of-service', changeFrequency: 'yearly', priority: 0.2 },
 ];
 
+/**
+ * "Live right now" — active AND not expired.
+ *
+ * One definition, used by both the newest-timestamp aggregate and the URL list,
+ * so the freshness date can never describe a different set of listings than the
+ * one actually being submitted.
+ */
+function activeListingWhere() {
+  return and(
+    eq(listings.status, 'active'),
+    or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date()))
+  );
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
-
-  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
-    url: route.path === '/' ? SITE_URL : `${SITE_URL}${route.path}`,
-    lastModified: now,
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }));
-
   /*
    * Queries stay STRICTLY SEQUENTIAL — the pool is `max: 1` in production and
    * concurrent queries wedge Supabase's transaction pooler (CLAUDE.md, a3ac4f9).
    * Never Promise.all these.
    */
+
+  /*
+   * One aggregate, reused by every collection page. `undefined` while there is
+   * no inventory, which is correct: nothing has ever been published, so there
+   * is no modification date to report.
+   */
+  const [newest] = await db
+    .select({ at: max(listings.updatedAt) })
+    .from(listings)
+    .where(activeListingWhere());
+  const collectionLastModified = newest?.at ?? undefined;
+
+  const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
+    url: route.path === '/' ? SITE_URL : `${SITE_URL}${route.path}`,
+    ...(route.collection && collectionLastModified
+      ? { lastModified: collectionLastModified }
+      : {}),
+    changeFrequency: route.changeFrequency,
+    priority: route.priority,
+  }));
 
   /*
    * ONLY areas that currently clear the inventory threshold. An area below it
@@ -68,7 +113,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const areas = await eligibleAreas();
   const areaEntries: MetadataRoute.Sitemap = areas.map((area) => ({
     url: areaUrl(area.name),
-    lastModified: now,
+    // Site-wide newest rather than newest-in-this-area: a per-area MAX would be
+    // one query per area, and this route already fans out over every eligible
+    // one. Slightly conservative (an area page may look fresher than it is) but
+    // never a fabricated timestamp, and it costs no extra round trips.
+    ...(collectionLastModified ? { lastModified: collectionLastModified } : {}),
     changeFrequency: 'daily',
     // A district aggregates more inventory than a single town within it.
     priority: area.kind === 'district' ? 0.8 : 0.7,
@@ -93,7 +142,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .filter((r): r is { slug: string; updatedAt: Date } => Boolean(r.slug))
     .map((r) => ({
       url: landlordUrl(r.slug),
-      lastModified: r.updatedAt ?? now,
+      // A real modification date, or none — never a fabricated one.
+      ...(r.updatedAt ? { lastModified: r.updatedAt } : {}),
       changeFrequency: 'weekly',
       priority: 0.5,
     }));
@@ -101,12 +151,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const activeListings = await db
     .select({ id: listings.id, updatedAt: listings.updatedAt })
     .from(listings)
-    .where(
-      and(
-        eq(listings.status, 'active'),
-        or(isNull(listings.expiresAt), gte(listings.expiresAt, new Date()))
-      )
-    )
+    .where(activeListingWhere())
     .orderBy(desc(listings.id))
     .limit(LISTING_LIMIT);
 
