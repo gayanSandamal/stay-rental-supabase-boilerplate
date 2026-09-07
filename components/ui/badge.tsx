@@ -52,6 +52,9 @@ const STATUS_TONE: Record<string, VariantProps<typeof badgeVariants>["variant"]>
   // social
   posted: "ok",
   pulled: "inert",
+  // imports
+  draft: "queued",
+  discarded: "inert",
   // intake
   received: "queued",
   needs_info: "warn",

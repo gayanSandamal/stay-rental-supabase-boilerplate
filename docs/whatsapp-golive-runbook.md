@@ -407,3 +407,142 @@ view counts and whether it was delivered.
 - **Reports are English only** for now. The intake pipeline answers in Sinhala
   and Tamil (`lib/intake/i18n`), but a template is approved per language and
   each one needs its own registration and its own name.
+
+---
+
+# Facebook post import (added 2026-09-07)
+
+Ops and admin paste a Facebook group/page post URL, the system pulls what it can,
+an operator reviews and publishes, and the post's owner gets a WhatsApp telling
+them their property is live with a one-tap link to edit or remove it. Two flags,
+both OFF by default: `enableFacebookImport` (the screens and actions) and
+`notifyImportedOwners` (the message).
+
+## ⚠️ Set expectations before you switch this on
+
+**Facebook will usually not give us the post.** Meta removed the Groups API on
+2024-04-22, and reading a third-party Page's posts needs App Review plus
+Business Verification we have not been through. Verified against the live site
+on 2026-09-07:
+
+| Source | What comes back |
+|---|---|
+| Our own Page (`FACEBOOK_PAGE_ID`) | Full text + every attached photo (`resolved_via = graph`) |
+| Some public page posts | OpenGraph preview only — truncated text, one image (`og`) |
+| **Group posts** | **Nothing. Login wall.** (`manual`) |
+| Most third-party page posts | Nothing. Login wall. (`manual`) |
+
+`manual` is therefore the NORMAL outcome, not a failure. The review screen is
+built around it: it always offers a "post text" box and the photo uploader, and
+explains what happened. An operator's real workflow for a group post is paste
+URL → copy the post text → **Re-read text** → check the fields → upload photos →
+Publish. Roughly a minute, versus retyping everything.
+
+Do not "fix" this by adding a logged-in Facebook session cookie. It breaks every
+time the cookie rotates and it is against Meta's terms — with our own publishing
+Page as the thing at risk.
+
+## ⚠️ The owner message is business-initiated
+
+Same rule as the performance reports above, for the same reason, and it applies
+even harder here: the recipient has **never** messaged us — that is the premise
+of importing their ad. There is no 24-hour window, so it is an approved template
+or nothing, and there is deliberately no free-form fallback.
+
+### Step 1 — Register the template
+
+WhatsApp Manager → Account tools → Message templates → Create template.
+
+- **Name**: `listing_imported_notice` (must match `WHATSAPP_IMPORT_TEMPLATE`)
+- **Category**: **Utility**. It concerns the recipient's own property and its
+  main purpose is to offer control over it. Meta may still reclassify a message
+  about a service the recipient never signed up for as Marketing; if it does,
+  cut everything that reads as promotion rather than arguing the category.
+- **Language**: must match `WHATSAPP_TEMPLATE_LANGUAGE` (default `en`).
+- **Body**: copy `IMPORT_TEMPLATE_TEXT` from `lib/imports/message.ts`
+  **verbatim**. It declares exactly 4 variables and
+  `tests/unit/import-template.test.ts` holds the code to the same count.
+- **Buttons**: ONE "Visit website" button, type **Dynamic**, base URL
+  `https://easyrent.lk/l/` — the access token is passed as the suffix. Without
+  the button the owner has no way to edit or remove their listing, which is the
+  one thing that makes importing their ad defensible.
+
+Sample values for the approval form:
+
+| # | Meaning | Example |
+|---|---------|---------|
+| 1 | Owner first name | `Nimal` |
+| 2 | Listing title | `3BR House in Nugegoda` |
+| 3 | Town | `Nugegoda` |
+| 4 | Their own number | `+94771234567` |
+| Button suffix | Access token | `k3nR8vQ2…` |
+
+### Step 2 — Env var (Vercel), then redeploy
+
+```
+WHATSAPP_IMPORT_TEMPLATE=listing_imported_notice
+```
+
+Without it the import still works end to end: the message is composed, the
+in-app notification is written, `[imports:dryrun] …` is logged, and the row is
+recorded as `notify_outcome = 'dry_run'` — never `failed`. The back-office list
+shows a **not sent** badge, so nothing claims a message that was never sent.
+
+### Step 3 — Migration, then the flags
+
+`pnpm db:migrate-all` (adds `post_imports` and `users.wa_phone_verified_at`),
+then **`pnpm db:check-drift`**, then Back Office → Settings.
+
+Turn on `enableFacebookImport` first and import a few listings with
+`notifyImportedOwners` OFF. That seeds the marketplace with nothing irreversible:
+a listing can be unpublished, a cold WhatsApp to a stranger cannot be unsent.
+Turn the notifications on once the copy has been read by a person who would be
+comfortable receiving it.
+
+## `wa_phone` no longer means "verified"
+
+Migration 0057 adds `users.wa_phone_verified_at`, and this is the part to
+understand before touching anything that messages landlords.
+
+Until now the intake pipeline was the only writer of `wa_phone`, and it only
+ever wrote numbers Meta had proven possession of — so `wa_phone IS NOT NULL`
+could stand in for "verified". The importer is a second writer: it stores the
+number an owner printed in their own advert. Useful for matching their reply,
+and no proof of anything.
+
+- Imported owners get `wa_phone` set and `wa_phone_verified_at` **NULL**, and
+  their contact number row is `verified: false`.
+- `lib/reports/send.ts` and `/api/reports/preferences` both gate on the
+  **timestamp**. Left on the old test, the reports job would mail a landlord's
+  traffic figures to whoever actually holds a number a stranger typed into an ad.
+- The number becomes verified at the only moment it honestly can: when that
+  number sends us a WhatsApp message. That lands in
+  `getOrCreateWhatsAppLandlord`'s existing-user branch, which stamps it — so an
+  imported owner who replies **claims the account already waiting for them**
+  rather than getting a second one.
+- The 0057 backfill stamps every pre-existing `wa_phone` row so nobody loses
+  their reports. It is bounded by a literal `created_at < '2026-09-07'` cutoff
+  because `db:migrate-all` replays every file forever — without the bound, the
+  next replay would promote the unverified rows this feature creates. **Never
+  widen that date.**
+
+**Anything new that messages a landlord must gate on `wa_phone_verified_at`, not
+on `wa_phone`.**
+
+## Ops signals
+
+- Back Office → **Imports**, tabs: Awaiting review / Published / Discarded.
+- A row badged **not sent** means the message was never delivered (no template,
+  or notifications off). **send failed** means WhatsApp rejected it — the
+  listing is live and the owner does not know, so contact them another way.
+- Audit actions: `post_import_created`, `post_import_published`,
+  `post_import_discarded`, plus the usual `listing_created` carrying
+  `source: 'facebook_import'` and the source URL.
+- A new account from an import raises the ops notification "New landlord account
+  from an imported post … (unverified)".
+
+## Rollback
+
+Switch `enableFacebookImport` off. The screens disappear (the pages `notFound()`
+and every action refuses), already-imported listings keep working, and imported
+owners keep their accounts and their edit links.

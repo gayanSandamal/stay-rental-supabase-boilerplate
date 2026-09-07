@@ -87,6 +87,18 @@ export const featureFlagDefaults = {
   // OFF keeps today's behaviour: listings owned by Easy Rent Operations.
   enableWhatsAppLandlordAccounts: false,
 
+  // 0057 — ops/admin can import a rental ad from a Facebook post URL. OFF by
+  // default because this republishes someone's advert and photos before they
+  // have agreed to anything; switching it on is a deliberate decision, not a
+  // default. Gates the back-office screens and every import action.
+  enableFacebookImport: false,
+
+  // Message the owner after an imported listing publishes. Separate from the
+  // flag above so the marketplace can be seeded WITHOUT cold-messaging a few
+  // hundred people — the import is reversible, a WhatsApp to a stranger is not.
+  // Needs an approved Meta template; dry-runs and logs without one.
+  notifyImportedOwners: false,
+
   // Richer WhatsApp conversation UX: read receipts + typing indicator, an
   // instant "got it" ack (the parse reply still takes ~5 min on the cron),
   // tappable delete menu/confirm buttons, and a share-location button when the
@@ -328,6 +340,22 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'LLM parser fallback (intake)',
     description:
       'When the rule-based intake parser leaves required listing fields missing, ask a model for just those fields before replying to the sender — the rules always win where they found a value. Runs on the same SiliconFlow key as the moderation engine, and is a no-op without it. Off = deterministic rules only.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableFacebookImport: {
+    label: 'Facebook post import',
+    description:
+      'Let ops and admin create a listing by pasting a Facebook group or page post URL. The system pulls what Facebook will give it (usually just the public preview — group posts cannot be read automatically at all), an operator reviews and completes it, and publishing creates a landlord account for the post\u2019s owner. OFF hides the Imports screen entirely.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  notifyImportedOwners: {
+    label: 'Message owners of imported listings',
+    description:
+      'After an imported listing publishes, send its owner an approved WhatsApp template telling them it is live, with a one-tap link to edit or remove it. Needs WHATSAPP_IMPORT_TEMPLATE; without it the message is composed and logged but never sent. OFF imports silently \u2014 useful for bulk seeding, since the listing is reversible and a cold WhatsApp is not.',
     group: 'Platform',
     appWide: true,
     public: false,

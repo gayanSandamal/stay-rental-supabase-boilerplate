@@ -13,6 +13,7 @@ import {
   socialAccounts,
   userContactNumbers,
   users,
+  postImports,
 } from '@/lib/db/schema';
 import { logAudit } from '@/lib/db/audit-logger';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -367,6 +368,10 @@ export async function hardDeleteUser(args: {
     .update(listingSocialPosts)
     .set({ manualTakedownBy: null })
     .where(eq(listingSocialPosts.manualTakedownBy, target.id));
+  await db
+    .update(postImports)
+    .set({ importedBy: null })
+    .where(eq(postImports.importedBy, target.id));
   await db
     .update(users)
     .set({ bannedBy: null })

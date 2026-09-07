@@ -12,7 +12,9 @@ import {
   List,
   Settings,
   Menu,
-  MessageCircle, ShieldCheck, Share2 } from 'lucide-react';
+  MessageCircle, ShieldCheck, Share2,
+  Download,
+} from 'lucide-react';
 
 export default function BackOfficeLayout({
   children
@@ -34,6 +36,7 @@ export default function BackOfficeLayout({
     { href: '/back-office/team-members', icon: UserCog, label: 'Team Members' },
     { href: '/back-office/listings', icon: List, label: 'Listings' },
     { href: '/back-office/whatsapp-intakes', icon: MessageCircle, label: 'WhatsApp Intakes' },
+  { href: '/back-office/imports', icon: Download, label: 'Imports' },
     { href: '/back-office/moderation', icon: ShieldCheck, label: 'Moderation' },
     { href: '/back-office/social', icon: Share2, label: 'Social' },
     { href: '/back-office/settings', icon: Settings, label: 'Settings' },

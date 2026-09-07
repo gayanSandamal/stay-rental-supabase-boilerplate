@@ -137,7 +137,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 
 ## Key env vars
 
-`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
+`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `WHATSAPP_IMPORT_TEMPLATE` (owner notice for imported listings; unset = dry-run) · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
 
 ## Where to look
 
@@ -337,6 +337,57 @@ default. Rollout steps and ops signals are in `docs/whatsapp-golive-runbook.md`.
   pool on Supabase's transaction pooler. Raw `sql` fragments must cast Dates
   (`ts()` in `lib/reports/data.ts`); drizzle's own operators bind them, hand-
   written fragments throw at bind time inside the driver.
+
+## Facebook post import (2026-09-07)
+
+Ops/admin paste a Facebook post URL, the system extracts what it can, an
+operator reviews and publishes, and the post's owner gets a WhatsApp template
+with a one-tap edit/remove link. Two flags, both OFF: `enableFacebookImport`
+(screens + actions) and `notifyImportedOwners` (the message). Rollout in
+`docs/whatsapp-golive-runbook.md`.
+
+- **`users.wa_phone` alone NO LONGER means verified.** Migration 0057 adds
+  `wa_phone_verified_at`, and anything that MESSAGES a landlord must gate on the
+  timestamp. Until now the intake pipeline was the only writer of `wa_phone` and
+  only ever wrote numbers Meta had proven, so `wa_phone IS NOT NULL` was a fair
+  stand-in. The importer is a second writer and stores the number an owner
+  printed in their own advert — useful for matching their reply, no proof of
+  anything. On the old test, `lib/reports/send.ts` would mail a landlord's
+  traffic figures to whoever really holds a number a stranger typed into an ad.
+  The number becomes verified at the only moment it honestly can: when it sends
+  us a WhatsApp message, which lands in `getOrCreateWhatsAppLandlord`'s
+  existing-user branch and stamps it — so an imported owner who replies claims
+  the account already waiting for them instead of getting a second one.
+- **`resolved_via = 'manual'` is the NORMAL outcome, never an error.** Meta
+  removed the Groups API on 2024-04-22 and gates third-party Page reads behind
+  App Review, so a group post returns a login wall — verified live 2026-09-07.
+  Graph works only for our own `FACEBOOK_PAGE_ID`; OpenGraph gives a truncated
+  preview for some public posts; everything else gives nothing. The review
+  screen is therefore a listing editor that happens to come pre-filled, not a
+  confirm-what-we-found form. Don't "fix" this with a logged-in session cookie:
+  it rotates, and it puts our own publishing Page at risk.
+- **`parseFacebookUrl` is an SSRF guard before it is a parser.** An operator
+  pastes a string and the SERVER dereferences it. Hosts are an exact-match
+  allowlist (never `endsWith`, which accepts `facebook.com.evil.com`),
+  credentials in the authority are refused as ambiguous, and `fetchAllowlisted`
+  re-vets **every redirect hop** — `redirect: 'follow'` would let a facebook.com
+  URL bounce us to an internal address.
+- **The owner message is business-initiated, so it is a template or nothing.**
+  The recipient has never messaged us — that is the premise — so there is no
+  24-hour window and free-form is rejected with 131047. `IMPORT_TEMPLATE_TEXT`
+  in `lib/imports/message.ts` is the contract registered with Meta; a drifting
+  variable count fails for every recipient at once with nothing failing locally.
+  No free-form fallback, and `dry_run` (no template configured) is counted apart
+  from `failed` (WhatsApp rejected it).
+- **An imported listing's contact number is `verified: false`** and, when
+  moderation is armed, the listing lands `pending` for the sweeper. These are
+  third-party photos and third-party text; `autoPublishWhatsAppIntakes` is about
+  a landlord submitting their own property and does not apply.
+- The importer reuses `parseIntake`, `getOrCreateWhatsAppLandlord`,
+  `mintAccessLink`, `photoCap`/`capPhotos` and the manifest helpers. Note the
+  parser is not reliable on real ads — an ad saying "hot water" above its rent
+  loses the rent to `UTILITY_BEFORE_RE` — which is *why* a human reviews before
+  anything publishes.
 
 ## Performance: where the time actually goes (2026-09-02)
 

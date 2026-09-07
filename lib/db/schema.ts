@@ -81,6 +81,15 @@ export const users = pgTable('users', {
   // Meta has proven possession of the number. Unique among live accounts
   // (partial index in migration 0030).
   waPhone: varchar('wa_phone', { length: 20 }),
+  /*
+   * 0057 — when possession of `waPhone` was actually PROVEN, i.e. that number
+   * sent us a WhatsApp message. NULL means we hold a number nobody has proven:
+   * the Facebook importer stores the phone an owner typed into their own ad, so
+   * a reply can be matched back to the account we made for them, and that is
+   * not the same thing as a verified identity. Anything that MESSAGES a
+   * landlord must gate on this, not on `waPhone` alone — see lib/reports/send.ts.
+   */
+  waPhoneVerifiedAt: timestamp('wa_phone_verified_at'),
   // 0042 — the language this landlord writes in, so a returning one is answered
   // correctly from their first message rather than after it. NULL = not known.
   preferredLanguage: varchar('preferred_language', { length: 8 }),
@@ -601,6 +610,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   'user_banned',
   'user_unbanned',
   'user_hard_deleted',
+  // 0057 — listings imported from a Facebook post URL
+  'post_import_created',
+  'post_import_published',
+  'post_import_discarded',
 ]);
 
 // WhatsApp concierge intake statuses
@@ -646,6 +659,56 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
   listingId: integer('listing_id').references(() => listings.id),
   lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
   processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * A rental ad pulled from a Facebook group/page post URL by ops.
+ *
+ * Deliberately NOT a `whatsapp_intakes` row: `from_number` is NOT NULL and is
+ * the identity there, the processing cron would claim it, and an import is
+ * reviewed by a human BEFORE it publishes — the opposite of the intake
+ * contract. The two share `lib/imports/publish.ts` → the same listing shape.
+ */
+export const postImportStatusEnum = pgEnum('post_import_status', [
+  'draft', // extracted, awaiting operator review
+  'published', // a listing was created from it
+  'discarded', // operator rejected it; kept so the URL is not re-imported blind
+]);
+
+export const postImports = pgTable('post_imports', {
+  id: serial('id').primaryKey(),
+  /**
+   * The pasted URL, normalised. Operator input that the SERVER dereferences —
+   * never fetched without passing the host allowlist in
+   * lib/imports/facebook/url.ts first.
+   */
+  sourceUrl: text('source_url').notNull(),
+  /** facebook_group | facebook_page. Text, so a new source needs no migration. */
+  sourcePlatform: varchar('source_platform', { length: 32 })
+    .notNull()
+    .default('facebook_page'),
+  /**
+   * graph | og | manual — how the content actually arrived. 'manual' is the
+   * EXPECTED path for group posts (Facebook refuses automated reads), and the
+   * review screen reads this to explain itself rather than showing empty fields.
+   */
+  resolvedVia: varchar('resolved_via', { length: 16 }).notNull().default('manual'),
+  rawText: text('raw_text'),
+  parsedPayload: text('parsed_payload'), // JSON ParsedIntake
+  photoUrls: text('photo_urls'), // JSON string[] — already in our bucket
+  /** E.164 as the operator confirmed it. UNVERIFIED: see users.waPhoneVerifiedAt. */
+  ownerPhone: varchar('owner_phone', { length: 20 }),
+  ownerName: text('owner_name'),
+  status: postImportStatusEnum('status').notNull().default('draft'),
+  listingId: integer('listing_id').references(() => listings.id, {
+    onDelete: 'set null',
+  }),
+  importedBy: integer('imported_by').references(() => users.id),
+  notifiedAt: timestamp('notified_at'),
+  /** sent | dry_run | failed. dry_run is unfinished setup, never an outage. */
+  notifyOutcome: varchar('notify_outcome', { length: 16 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -1011,6 +1074,8 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type LandlordAccessToken = typeof landlordAccessTokens.$inferSelect;
 export type NewLandlordAccessToken = typeof landlordAccessTokens.$inferInsert;
+export type PostImport = typeof postImports.$inferSelect;
+export type NewPostImport = typeof postImports.$inferInsert;
 export type PhoneVerification = typeof phoneVerifications.$inferSelect;
 export type NewPhoneVerification = typeof phoneVerifications.$inferInsert;
 export type IntakeConversation = typeof intakeConversations.$inferSelect;

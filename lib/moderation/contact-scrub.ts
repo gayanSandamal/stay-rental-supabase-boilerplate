@@ -32,6 +32,38 @@ const PHONE_PATTERNS = [
   /\+\d{10,13}/g, // generic international
 ];
 
+/**
+ * Every phone number in `text`, normalised to E.164 and deduped.
+ *
+ * The mirror image of `scrubContactNumbers`, over the same patterns: that one
+ * asks "which of these may stay published", this one asks "who wrote this ad".
+ * Used by the Facebook importer to offer an operator the numbers a landlord put
+ * in their own post — candidates to CONFIRM, never a number to message on the
+ * strength of a regex.
+ *
+ * Order is preserved (first written first), because Sri Lankan ads lead with
+ * the number to call and follow it with an agent's or a landline.
+ */
+export function extractPhoneNumbers(text: string | null | undefined): string[] {
+  if (!text) return [];
+
+  const hits: Array<{ index: number; e164: string }> = [];
+  const seen = new Set<string>();
+
+  for (const pattern of PHONE_PATTERNS) {
+    // Fresh regex per call: PHONE_PATTERNS carry /g, and a shared lastIndex
+    // between calls makes the second read of the same text skip matches.
+    for (const match of text.matchAll(new RegExp(pattern.source, pattern.flags))) {
+      const e164 = normalizePhone(match[0]);
+      if (!e164 || seen.has(e164)) continue;
+      seen.add(e164);
+      hits.push({ index: match.index ?? 0, e164 });
+    }
+  }
+
+  return hits.sort((a, b) => a.index - b.index).map((hit) => hit.e164);
+}
+
 export interface ScrubResult {
   cleaned: string;
   /** Normalized numbers removed, deduped. Digits stay server-side. */
