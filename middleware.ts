@@ -7,6 +7,7 @@ import {
   listingIsMissing,
   landlordIsMissing,
 } from '@/lib/seo/known-routes';
+import { eligibleAreasOrNull } from '@/lib/seo/area-eligibility';
 
 const protectedRoutes = '/dashboard';
 
@@ -201,8 +202,26 @@ async function isMissingRoute(pathname: string): Promise<boolean> {
   const segments = pathname.split('/').filter(Boolean);
 
   const isListingDetail = segments.length === 2 && segments[0] === 'listings';
+  const isAreaPage = segments.length === 2 && segments[0] === 'rentals';
   const isRootSlug = segments.length === 1;
-  if (!isListingDetail && !isRootSlug) return false;
+  if (!isListingDetail && !isAreaPage && !isRootSlug) return false;
+
+  /*
+   * Area pages exist only above an inventory threshold, and the page itself
+   * calls notFound() below a Suspense boundary — which under PPR lands after
+   * the shell has already committed a 200. Measured on production 2026-09-07:
+   * /rentals/nowhere returned 200 (noindex, so nothing was indexed, but every
+   * probe still burned crawl budget and logged a soft 404).
+   *
+   * Same oracle the page uses, so the two can never disagree.
+   */
+  if (isAreaPage) {
+    const areas = await eligibleAreasOrNull();
+    // Never loaded — cannot tell, so do not guess. A database blip must not
+    // 404 every valid area page.
+    if (!areas) return false;
+    return !areas.some((a) => a.slug === segments[1]);
+  }
 
   // Real routes and everything reserved against them resolve normally.
   if (isRootSlug && isReservedSlug(segments[0])) return false;
