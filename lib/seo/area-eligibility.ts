@@ -140,13 +140,31 @@ export async function findEligibleArea(slug: string): Promise<EligibleArea | nul
 }
 
 /**
- * Lowercased city names that have a live `/rentals/<city>` page.
+ * Lowercased area names that have a live `/rentals/<area>` page — WITHOUT
+ * touching the database.
  *
- * Used by lib/seo/indexability.ts to decide whether a `?city=` filter may
- * canonicalize to an area page — pointing a canonical at a URL that 404s is
- * worse than not setting one.
+ * ── Why this is synchronous, and must stay that way ────────────────────────
+ * This is read from `/listings`'s `generateMetadata`, and Next runs
+ * generateMetadata CONCURRENTLY with the page body. The page body already
+ * queries (getUser → getActiveListings → resolvePublishers), so an awaited
+ * query here is a second connection checkout racing the first — on a pool that
+ * is `max: 1` behind Supabase's transaction pooler.
+ *
+ * That is not theoretical. Shipping the async version wedged `/listings` in
+ * production on 2026-09-07: the request held its function open until the
+ * 300-second ceiling, the RSC stream aborted with "Connection closed", and for
+ * a while every route returned a connection failure. It is the same defect as
+ * commit a3ac4f9, and the reason getListingById is request-memoized.
+ *
+ * So this reads only what is ALREADY in memory. A cold instance returns an
+ * empty set, and the caller falls back to canonicalizing at /listings — which
+ * costs almost nothing, because every `?city=` URL is `noindex` anyway and a
+ * canonical on a noindexed page carries little weight. Correctness of the hot
+ * path beats a marginal canonical.
+ *
+ * The snapshot is warmed by /rentals and /rentals/<area>, which are allowed to
+ * await because their own render depends on it.
  */
-export async function liveAreaCitySlugs(): Promise<ReadonlySet<string>> {
-  const areas = await eligibleAreas();
-  return new Set(areas.map((a) => a.name.toLowerCase()));
+export function cachedLiveAreaNames(): ReadonlySet<string> {
+  return new Set(snapshot.map((a) => a.name.toLowerCase()));
 }

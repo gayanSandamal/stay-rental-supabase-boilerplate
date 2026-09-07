@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { listingsIndexability } from '@/lib/seo/indexability';
 import { areaSlug, listingUrl, absoluteUrl } from '@/lib/seo/urls';
@@ -171,5 +173,47 @@ describe('structured data honesty', () => {
     ]) as { itemListElement: Array<{ position: number; item: string }> };
     expect(crumbs.itemListElement.map((i) => i.position)).toEqual([1, 2]);
     expect(crumbs.itemListElement[1].item).toMatch(/^https?:\/\/.*\/rentals$/);
+  });
+});
+
+/**
+ * Production regression, 2026-09-07.
+ *
+ * `/listings` generateMetadata awaited a database call (the eligible-area
+ * lookup, to canonicalize `?city=` at its area page). Next runs
+ * generateMetadata CONCURRENTLY with the page body, which is already querying
+ * — so on the `max: 1` pool behind Supabase's transaction pooler that was a
+ * second connection checkout racing the first. The request held its function
+ * open to the 300-second ceiling, the RSC stream aborted with "Connection
+ * closed", and for a while every route returned a connection failure.
+ *
+ * Same defect as commit a3ac4f9, and the reason getListingById is
+ * request-memoized. These scans read CODE with comments stripped, because the
+ * explanation above would otherwise match the pattern it warns about.
+ */
+describe('no database work on the /listings metadata path', () => {
+  const stripComments = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const read = (p: string) =>
+    stripComments(readFileSync(join(process.cwd(), p), 'utf-8'));
+
+  it('generateMetadata never awaits the eligibility lookup', () => {
+    const src = read('app/(dashboard)/listings/page.tsx');
+    expect(src).not.toMatch(/await\s+liveAreaCitySlugs/);
+    expect(src).not.toMatch(/await\s+eligibleAreas/);
+    expect(src).not.toMatch(/await\s+findEligibleArea/);
+    expect(src).toContain('cachedLiveAreaNames(');
+  });
+
+  /*
+   * The synchronous reader is what makes the above safe. If it ever becomes
+   * async, the await creeps back in at the call site.
+   */
+  it('cachedLiveAreaNames stays synchronous and query-free', () => {
+    const src = read('lib/seo/area-eligibility.ts');
+    const fn = src.slice(src.indexOf('export function cachedLiveAreaNames'));
+    expect(fn).toMatch(/export function cachedLiveAreaNames\(\)\s*:\s*ReadonlySet<string>/);
+    expect(fn).not.toMatch(/async|await|db\./);
   });
 });

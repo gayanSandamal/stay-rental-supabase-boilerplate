@@ -6,7 +6,7 @@ import { ActiveFiltersChips } from '@/components/active-filters-chips';
 import { ListingsSearchFilter } from '@/components/listings-search-filter';
 import type { Metadata } from 'next';
 import { listingsIndexability } from '@/lib/seo/indexability';
-import { liveAreaCitySlugs } from '@/lib/seo/area-eligibility';
+import { cachedLiveAreaNames } from '@/lib/seo/area-eligibility';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   apartment: 'Apartments',
@@ -59,9 +59,16 @@ export async function generateMetadata({
    * each other. lib/seo/indexability.ts now owns which shapes may be indexed
    * and where the rest point — see the policy table there.
    */
+  /*
+   * cachedLiveAreaNames() is SYNCHRONOUS and never queries — see the long note
+   * on it. generateMetadata runs concurrently with the page body, which is
+   * already querying, and a second concurrent checkout on the `max: 1` pool
+   * wedges the request until the 300s function ceiling. That is exactly what
+   * an awaited call here did to production on 2026-09-07.
+   */
   const { canonical, robots } = listingsIndexability({
     params,
-    liveAreaCities: await liveAreaCitySlugs(),
+    liveAreaCities: cachedLiveAreaNames(),
   });
 
   return {
