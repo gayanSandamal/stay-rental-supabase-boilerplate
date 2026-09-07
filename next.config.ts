@@ -143,6 +143,24 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.supabase.in',
       },
+      /*
+       * The LOCAL Supabase stack serves storage from http://127.0.0.1:54341.
+       * Without these, `next/image` THROWS on any listing whose photos came
+       * through the WhatsApp intake (`Invalid src prop … hostname "127.0.0.1"
+       * is not configured`), which takes down the whole page render — /listings
+       * and every area page alike — and makes local visual QA impossible.
+       *
+       * No production effect: a deployed listing's photos are always
+       * `<ref>.supabase.co`, so nothing in prod can ever match a loopback host.
+       */
+      {
+        protocol: 'http',
+        hostname: '127.0.0.1',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
     ],
   },
   async redirects() {

@@ -28,6 +28,7 @@ import { businessAccountMembers, businessAccounts, users, landlords } from '@/li
 import { eq, and } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { getFirstListingPhoto } from '@/lib/seo';
+import { jsonLdHtml, breadcrumbList, isListingAvailable } from '@/lib/seo/jsonld';
 import Link from 'next/link';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
@@ -39,10 +40,22 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const resolvedParams = params instanceof Promise ? await params : params;
   const listingId = Number(resolvedParams.id);
-  if (isNaN(listingId) || listingId <= 0) return {};
+
+  /*
+   * A missing or non-active listing renders the not-found UI for anonymous
+   * visitors, and the owner/admin view for everyone else — neither belongs in
+   * an index. This used to `return {}`, which inherited the site-wide metadata
+   * and relied on Next's not-found default to add the noindex. That worked, but
+   * only by accident: the moment this page renders anything other than
+   * `notFound()` for a non-active listing, the protection disappears silently.
+   * State it here instead.
+   */
+  const HIDDEN: Metadata = { robots: { index: false, follow: false } };
+
+  if (isNaN(listingId) || listingId <= 0) return HIDDEN;
 
   const listing = await getListingById(listingId);
-  if (!listing || listing.status !== 'active') return {};
+  if (!listing || listing.status !== 'active') return HIDDEN;
 
   const description = `${listing.bedrooms} bed rental in ${listing.city}${listing.district ? `, ${listing.district}` : ''} - LKR ${Number(listing.rentPerMonth).toLocaleString()}/month. ${listing.description?.slice(0, 140) ?? ''}`;
   const listingUrl = `${baseUrl}/listings/${listing.id}`;
@@ -220,7 +233,15 @@ export default async function ListingDetailPage({
       '@type': 'Offer',
       price: Number(listing.rentPerMonth),
       priceCurrency: 'LKR',
-      availability: listing.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+      // Rent is monthly. Without a unit the figure reads as a sale price, which
+      // for a Colombo apartment is off by two orders of magnitude.
+      unitCode: 'MON',
+      // `status === 'active'` alone was not enough: listings expire 30 days
+      // after publish, and an expired one stayed marked InStock until somebody
+      // archived it. isListingAvailable() checks both.
+      availability: isListingAvailable(listing)
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/SoldOut',
     },
     numberOfBedrooms: listing.bedrooms,
     numberOfBathroomsTotal: listing.bathrooms ?? undefined,
@@ -228,14 +249,27 @@ export default async function ListingDetailPage({
     ...(photos.length > 0 ? { image: photos } : {}),
   };
 
-  const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+  /*
+   * The visual breadcrumb below has existed since launch with no markup behind
+   * it — which threw away the whole point of it. Same trail, same order, so the
+   * two can never disagree.
+   */
+  const breadcrumbJsonLd = breadcrumbList([
+    { name: 'Home', path: '/' },
+    { name: 'Rentals', path: '/listings' },
+    { name: listing.title, path: `/listings/${listing.id}` },
+  ]);
 
   return (
     <>
       {listing.status === 'active' && <ListingViewTracker listingId={listing.id} />}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: jsonLdHtml }}
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml(breadcrumbJsonLd) }}
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { isReservedSlug } from '@/lib/reserved-slugs';
+import {
+  getKnownRoutes,
+  listingIsMissing,
+  landlordIsMissing,
+} from '@/lib/seo/known-routes';
 
 const protectedRoutes = '/dashboard';
 
@@ -51,6 +57,38 @@ export async function middleware(request: NextRequest) {
       },
       { status: 403 }
     );
+  }
+
+  /*
+   * Answer unknown URLs with a real 404, before the auth round trip.
+   *
+   * The root `[slug]` catch-all matches every path, so without this every
+   * mistyped or probed URL on the site returned HTTP 200 (measured on prod
+   * 2026-09-07). The status cannot be fixed inside the page: under PPR the
+   * shell is flushed — committing 200 — before `notFound()` runs in the
+   * Suspense child, and both ways of forcing the check earlier (force-dynamic,
+   * or awaiting above the boundary) cost the page its prerendered shell.
+   *
+   * GET/HEAD only. A POST to an unknown path is a server action or a form, not
+   * something a crawler will ever see, and answering it with a 404 page would
+   * break error handling that expects a JSON body.
+   */
+  if (isSafeMethod && !hasAuthCookie(request)) {
+    const missing = await isMissingRoute(pathname);
+    if (missing) {
+      return new NextResponse(NOT_FOUND_HTML, {
+        status: 404,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          // Belt and braces: a 404 is already not indexed, but this also covers
+          // crawlers that render before reading the status line.
+          'x-robots-tag': 'noindex',
+          // Short, not immutable — a listing can come back, and a landlord can
+          // claim the slug that 404s today.
+          'cache-control': 'public, max-age=0, s-maxage=60, must-revalidate',
+        },
+      });
+    }
   }
 
   let response = NextResponse.next({
@@ -129,6 +167,99 @@ export async function middleware(request: NextRequest) {
 
   return response;
 }
+
+/**
+ * Does this request carry a Supabase session at all?
+ *
+ * THE 404 CHECK MUST NOT RUN FOR SIGNED-IN USERS. A landlord may legitimately
+ * open their own `pending`, `rented` or `rejected` listing, and ops/admin can
+ * open anyone's — `/listings/[id]` renders exactly that, and only calls
+ * `notFound()` for anonymous visitors. The snapshot holds ACTIVE listings only,
+ * so 404ing before auth would take the owner's own preview away from them.
+ *
+ * Presence, not validity: an expired or forged cookie simply means the request
+ * falls through to render, and `getUser()` decides what it actually grants. The
+ * cost of being wrong here is a soft 200 for one signed-in visitor — never a
+ * wrongly-404'd page, and never anything a crawler sees, since crawlers are
+ * always anonymous.
+ */
+function hasAuthCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith('sb-') && c.name.includes('auth-token'));
+}
+
+/**
+ * Can we PROVE this path does not exist?
+ *
+ * Deliberately conservative: only the two namespaces the root catch-all made
+ * unbounded are checked, and anything we cannot prove missing is allowed
+ * through to render as before. A wrong 404 is far more expensive than a wrong
+ * 200 — it de-indexes a real page.
+ */
+async function isMissingRoute(pathname: string): Promise<boolean> {
+  const segments = pathname.split('/').filter(Boolean);
+
+  const isListingDetail = segments.length === 2 && segments[0] === 'listings';
+  const isRootSlug = segments.length === 1;
+  if (!isListingDetail && !isRootSlug) return false;
+
+  // Real routes and everything reserved against them resolve normally.
+  if (isRootSlug && isReservedSlug(segments[0])) return false;
+
+  const snap = await getKnownRoutes();
+  // Snapshot unavailable (cold instance mid-load, or a database blip) — we
+  // cannot tell, so we do not guess. See getKnownRoutes.
+  if (!snap) return false;
+
+  if (isListingDetail) return await listingIsMissing(snap, segments[1]);
+
+  /*
+   * A vanity slug claimed within the last TTL is not in the snapshot yet, so it
+   * 404s for up to a minute. Accepted deliberately: the alternative is a
+   * database lookup for every unknown root path, which hands any bot walking
+   * /wp-admin, /.env and friends a query each on a `max: 1` pool. Claiming a
+   * slug is rare and never time-critical; being probed is constant.
+   */
+  return landlordIsMissing(snap, segments[0]);
+}
+
+/**
+ * Standalone 404 body.
+ *
+ * Middleware cannot render a React page, and rewriting to one would hand the
+ * status back to the renderer — which is the very thing that produced the soft
+ * 200s. So this is deliberately self-contained: no CSS bundle, no fonts, no
+ * JavaScript, nothing that can fail. It is what a crawler and a mistyped URL
+ * get; every real page still renders through the app as normal.
+ */
+const NOT_FOUND_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Page not found | Easy Rent</title>
+<style>
+:root{color-scheme:light}
+body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:#F7F4ED;color:#1F2933;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:32rem;padding:2rem;text-align:center}
+h1{margin:0 0 .5rem;font-size:1.5rem;color:#062C2B}
+p{margin:0 0 1.5rem;color:#52606D}
+a{display:inline-block;margin:0 .25rem;padding:.65rem 1.15rem;border-radius:.75rem;text-decoration:none;font-weight:600;font-size:.9rem}
+.primary{background:#0A3F3D;color:#fff}
+.secondary{border:1px solid #d6d3ca;color:#1F2933}
+</style>
+</head>
+<body>
+<main>
+<h1>Page not found</h1>
+<p>The listing may have been rented or removed, or the link may be mistyped.</p>
+<a class="primary" href="/listings">Browse rentals</a>
+<a class="secondary" href="/">Go home</a>
+</main>
+</body>
+</html>`;
 
 export const config = {
   /*

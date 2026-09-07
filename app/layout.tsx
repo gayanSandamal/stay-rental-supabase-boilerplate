@@ -7,6 +7,9 @@ import { SWRConfig } from 'swr';
 import { Suspense } from 'react';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { publisherDisplayName } from '@/lib/publisher-name';
+import { jsonLdHtml } from '@/lib/seo/jsonld';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -41,6 +44,28 @@ export const metadata: Metadata = {
     description: 'Mid-to-long-term rentals in Sri Lanka, 100% free of charge. Free to browse, free to contact, free to list.',
   },
   metadataBase: new URL(baseUrl),
+  /*
+   * Search Console / Bing Webmaster ownership.
+   *
+   * Server-rendered metadata, so these are plain env vars — deliberately NOT
+   * NEXT_PUBLIC_*. They are not secrets (the tag is public in the HTML either
+   * way), but nothing here needs to reach the client bundle.
+   *
+   * Both fall back to undefined, which Next omits entirely — an unset var
+   * renders no tag rather than an empty one that fails verification.
+   */
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+    other: process.env.BING_SITE_VERIFICATION
+      ? { 'msvalidate.01': process.env.BING_SITE_VERIFICATION }
+      : undefined,
+  },
+  alternates: {
+    languages: {
+      'en-LK': baseUrl,
+      'x-default': baseUrl,
+    },
+  },
 };
 
 export const viewport: Viewport = {
@@ -101,13 +126,18 @@ export default async function RootLayout({
       className={`bg-[#F7F4ED] dark:bg-[#0d1917] text-[#1F2933] dark:text-[#f0ede5] ${manrope.className}`}
     >
       <body className="min-h-[100dvh] bg-[#F7F4ED]">
+        {/*
+          jsonLdHtml, not JSON.stringify: a bare stringify leaves `<` intact
+          inside a <script> body, so any text that reaches these blocks could
+          close the tag early. See lib/seo/jsonld.ts.
+        */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(organizationJsonLd) }}
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(websiteJsonLd) }}
         />
         <SWRConfig
           value={{
@@ -129,6 +159,13 @@ export default async function RootLayout({
           </Suspense>
           {children}
         </SWRConfig>
+        {/*
+          Speed Insights reports FIELD Core Web Vitals — the only CWV signal
+          that feeds ranking. Lab scores from a local Lighthouse run do not.
+          Both components render nothing and ship no blocking script.
+        */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

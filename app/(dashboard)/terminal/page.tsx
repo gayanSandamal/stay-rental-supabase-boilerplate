@@ -3,8 +3,12 @@ import { getUser } from '@/lib/db/queries';
 import { Terminal } from '../terminal';
 
 export const metadata = {
-  title: 'Terminal | Easy Rent',
+  // `title.absolute` — a plain `title` runs through the root layout's
+  // '%s | Easy Rent' template, so the hardcoded suffix rendered twice.
+  title: { absolute: 'Terminal | Easy Rent' },
   description: 'Developer setup instructions for Easy Rent.',
+  // Auth-gated (redirects to /sign-in) and of no value in a search result.
+  robots: { index: false, follow: false },
 };
 
 export default async function TerminalPage() {

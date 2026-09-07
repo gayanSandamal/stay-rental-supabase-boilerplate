@@ -11,6 +11,7 @@ import { FoundingLandlordCta } from '@/components/founding-landlord-cta';
 import { SiteFooter } from '@/components/site-footer';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isPlatformFullyFree } from '@/lib/free-copy';
+import type { Metadata } from 'next';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
@@ -34,9 +35,56 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
  */
 export const revalidate = 30;
 
-export const metadata = {
+/*
+ * The homepage carried ONLY a canonical and inherited its title, description
+ * and OpenGraph from the root layout — so the most valuable page on the site
+ * competed for "rent in Sri Lanka" with the same generic snippet every other
+ * page showed.
+ *
+ * `title.absolute` bypasses the root `'%s | Easy Rent'` template: the brand is
+ * already in the string, and letting the template run would render
+ * "… | Easy Rent | Easy Rent".
+ *
+ * Static export, so it cannot read `enablePricingSection` (metadata is
+ * evaluated without the per-instance flag snapshot). Every claim here is
+ * therefore scoped to things that are free on EVERY tier — free to browse,
+ * free to contact, free to list — never "the whole platform is free". See
+ * lib/free-copy.ts for why that distinction is load-bearing.
+ */
+export const metadata: Metadata = {
+  title: {
+    absolute: 'Houses & Apartments for Rent in Sri Lanka | Easy Rent',
+  },
+  description:
+    'Browse verified mid-to-long-term rentals (1–12+ months) across Sri Lanka. Every contact number is verified and you deal directly with the owner — free to browse, free to contact, free to list. Filter by power backup, water source, fibre and deposit months.',
   alternates: {
     canonical: baseUrl,
+  },
+  openGraph: {
+    type: 'website',
+    url: baseUrl,
+    siteName: 'Easy Rent',
+    locale: 'en_LK',
+    title: 'Houses & Apartments for Rent in Sri Lanka | Easy Rent',
+    description:
+      'Verified mid-to-long-term rentals across Sri Lanka. Deal directly with the owner — free to browse, free to contact, free to list.',
+    /*
+     * `images` MUST be listed explicitly here.
+     *
+     * app/opengraph-image.tsx is injected automatically only for routes that do
+     * not declare their own `openGraph` — and metadata merges by top-level key,
+     * so declaring this block at all replaces the parent's wholesale. Omitting
+     * images therefore silently stripped og:image from the homepage, which is
+     * the single most-shared URL on the site. e2e/seo.spec.ts B3 caught it.
+     */
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Easy Rent' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Houses & Apartments for Rent in Sri Lanka | Easy Rent',
+    description:
+      'Verified mid-to-long-term rentals across Sri Lanka. Deal directly with the owner — no fees, no commission.',
+    images: ['/opengraph-image'],
   },
 };
 
