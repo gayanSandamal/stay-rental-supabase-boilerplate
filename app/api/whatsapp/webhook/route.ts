@@ -40,6 +40,9 @@ import {
   verifyWrongSenderMessage,
   socialConsentGrantedMessage,
   socialConsentDeclinedMessage,
+  searchNotAvailableMessage,
+  intentUnclearMessage,
+  intentUnclearButtons,
 } from '@/lib/intake/messages';
 import { setReportFrequency } from '@/lib/reports/prefs';
 import { recordConsent } from '@/lib/social/consent';
@@ -365,6 +368,30 @@ async function handleInbound(
         message.senderId,
         cityChoiceUnclearMessage(outcome.choiceCount ?? 0)
       );
+    } else if (outcome.action === 'search') {
+      /*
+       * Someone looking for a place, not offering one.
+       *
+       * Until the classifier existed this message became a LISTING: their own
+       * phone number published as the contact on a property they do not own,
+       * and their account converted to a landlord. Replying with a link is a
+       * modest answer; not doing that is the point.
+       */
+      await whatsappAdapter.sendText(message.senderId, searchNotAvailableMessage(lang));
+    } else if (outcome.action === 'intent_unclear') {
+      // Ask rather than guess. Buttons when they are available, the numbered
+      // text otherwise — enableWhatsAppRichReplies defaults off, so the text
+      // form is the live path and not a fallback in name only.
+      const asked =
+        rich &&
+        (await sendWhatsAppButtons(
+          message.senderId,
+          intentUnclearMessage(lang),
+          intentUnclearButtons()
+        ));
+      if (!asked) {
+        await whatsappAdapter.sendText(message.senderId, intentUnclearMessage(lang));
+      }
     } else if (outcome.action === 'help') {
       await whatsappAdapter.sendText(message.senderId, helpMessage(lang));
     } else if (outcome.action === 'reports_off' || outcome.action === 'reports_on') {
