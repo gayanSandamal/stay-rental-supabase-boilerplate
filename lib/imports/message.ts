@@ -29,22 +29,42 @@
  */
 
 /**
- * Register EXACTLY this body in the WhatsApp Manager, category **Utility**,
- * with ONE dynamic URL button whose base is `https://easyrent.lk/l/` and whose
- * suffix is the access token.
+ * This is the body REGISTERED with Meta on 2026-09-09, verbatim. Template
+ * `listing_imported_notice`, English, **category Marketing**, with one dynamic
+ * URL button based on `https://easyrent.lk/l/` taking the access token as its
+ * suffix.
  *
- * Category note for whoever registers it: Utility is the honest reading — the
- * message concerns the recipient's own property and its main purpose is to
- * offer control over it. Meta may nonetheless reclassify a message about a
- * service the recipient never signed up for as Marketing, which costs more and
- * is blocked more often. If that happens, the fix is to cut everything that
- * reads as promotion, not to argue the category.
+ * WHY MARKETING, NOT UTILITY. Utility was tried first and refused twice by
+ * Meta's pre-submit classifier — "This message template will be rejected" —
+ * including on a second attempt with every promotional line stripped out. So
+ * the objection is not the wording. Meta defines Utility as a message "about an
+ * existing order or account", and the recipient of this one has neither: that
+ * they are not yet a customer is the entire premise of importing their ad. No
+ * rewrite fixes a category mismatch that is structural.
+ *
+ * Marketing is worse in two ways worth knowing. It costs more per message, and
+ * a recipient who has switched off marketing messages never receives it — with
+ * no error, because Meta accepted the send. A rejected Utility template would
+ * have reached nobody at all, so this is the better of the two, not a good one.
+ *
+ * That silent-drop risk is also the strongest argument for the alternative we
+ * did not build: post the claim link as a comment on the original Facebook ad
+ * and let the owner message us first. That opens the 24-hour service window,
+ * needs no template, costs nothing per message, and is a real opt-in.
+ *
+ * THE TWO LINES THAT WERE CUT. "Listing is completely free — we never charge
+ * for it" and "We never take a commission" were removed while registering, on
+ * the assumption they were what tripped the classifier. They were not, and they
+ * are not being restored: they read as promotion, they are the first thing a
+ * reviewer would object to on a re-submission, and the message works without
+ * them. "Sri Lanka's rental marketplace" became "a rental marketplace in Sri
+ * Lanka" for the same reason — the possessive reads as a claim to be the one.
  */
 export const IMPORT_TEMPLATE_TEXT = `🏠 Easy Rent — your property is now listed
 
-Hi {{1}}, we saw your rental ad for {{2}} in {{3}} on Facebook and listed it on Easy Rent, Sri Lanka's rental marketplace. Listing is completely free — we never charge for it.
+Hi {{1}}, we saw your rental ad for {{2}} in {{3}} on Facebook and listed it on Easy Rent, a rental marketplace in Sri Lanka.
 
-Tenants will contact you directly on {{4}}. We never take a commission.
+Tenants will contact you directly on {{4}}.
 
 Tap below to edit the details or take it down — no password needed. Or reply REMOVE and we'll delete it.`;
 
