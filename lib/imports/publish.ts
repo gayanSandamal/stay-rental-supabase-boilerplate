@@ -46,7 +46,12 @@ export interface PublishResult {
   listingId: number;
   /** True when the listing is public NOW; false when moderation holds it. */
   live: boolean;
-  notify: NotifyOutcome;
+  /**
+   * How the owner notice went — or `deferred` when the listing is pending and
+   * the moderation sweeper will send it on a pass. Never reports a send that
+   * has not happened.
+   */
+  notify: NotifyOutcome | 'deferred';
   /** The account is new to us, i.e. this owner had never been seen before. */
   newAccount: boolean;
 }
@@ -188,7 +193,7 @@ export async function publishImport(
 
   // Past this point the listing exists and the import says published. A failed
   // audit write, link mint or message must never bubble out and undo that.
-  let notify: NotifyOutcome = 'dry_run';
+  let notify: NotifyOutcome | 'deferred' = moderationArmed ? 'deferred' : 'dry_run';
   try {
     await logListingAction('listing_created', listing.id, opsUserId, {
       source: 'facebook_import',
@@ -205,12 +210,19 @@ export async function publishImport(
       metadata: { listingId: listing.id, sourceUrl: record.sourceUrl },
     });
 
-    notify = await notifyOwner(record, listing.id, listing.title, parsed.city, owner);
-
-    await db
-      .update(postImports)
-      .set({ notifiedAt: new Date(), notifyOutcome: notify, updatedAt: new Date() })
-      .where(eq(postImports.id, record.id));
+    // ONLY when the listing is genuinely public. The template says the property
+    // "is now listed" and links to it; sending that while moderation still has
+    // it pending describes something the owner cannot see, and if the checks
+    // then hold it, something that never appears. When moderation is armed the
+    // sweeper sends this after it passes — the same division the intake
+    // pipeline draws between publishedMessage and pendingReviewMessage.
+    if (!moderationArmed) {
+      notify = await notifyOwner(record, listing.id, listing.title, parsed.city, owner);
+      await db
+        .update(postImports)
+        .set({ notifiedAt: new Date(), notifyOutcome: notify, updatedAt: new Date() })
+        .where(eq(postImports.id, record.id));
+    }
 
     await notifyOps(
       moderationArmed

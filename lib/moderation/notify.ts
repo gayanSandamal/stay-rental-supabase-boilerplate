@@ -134,6 +134,26 @@ export async function notifyModerationOutcome(
   }
   const message = lines.join('\n');
 
+  // An imported listing has no intake row and no 24-hour service window — its
+  // owner has never messaged us. It gets the approved template instead, and
+  // only now, because only now is the listing actually public. Returns null for
+  // every listing that did not come from an import, which is the common case.
+  if (!intake?.fromNumber && isFirstPublish) {
+    const { notifyImportedOwnerForListing } = await import('@/lib/imports/notify');
+    const imported = await notifyImportedOwnerForListing(listing.id).catch((err) => {
+      console.error('[moderation] imported-owner notice failed', err);
+      return null;
+    });
+    if (imported) {
+      // Treated exactly like a delivered intake announcement: stamped so
+      // reconcileMissedAnnouncements does not chase it, and the social prompt
+      // follows the go-live rather than riding along with it.
+      await markLandlordNotified(listing.id);
+      await offerSocialSharing(listing);
+      return;
+    }
+  }
+
   if (intake?.fromNumber) {
     const sent = await whatsappAdapter.sendText(intake.fromNumber, message);
     if (sent) {

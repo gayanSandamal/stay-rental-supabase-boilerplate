@@ -18,6 +18,15 @@
  * THE IN-APP NOTIFICATION IS WRITTEN EITHER WAY. It is the owner's durable copy
  * the moment they follow the access link, and a Graph outage should not erase
  * the fact that we told them.
+ *
+ * WHEN IT IS SENT. Only once the listing is actually PUBLIC. The template says
+ * the property "is now listed" and carries a link to manage it, so sending it
+ * while the listing is still `pending` tells the owner about something they
+ * cannot see — and if moderation then holds it, about something that never
+ * appears at all. With `enableListingModeration` on (its state in production)
+ * every import lands pending, so that was every import. The intake pipeline
+ * draws the same line: publishedMessage only when it really went live,
+ * otherwise the sweeper announces it later (lib/moderation/notify.ts).
  */
 
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -81,6 +90,75 @@ export async function notifyImportedOwner(args: NotifyArgs): Promise<NotifyOutco
     body,
     link: '/dashboard/listings',
   }).catch(() => {});
+
+  return outcome;
+}
+
+/**
+ * Send the owner notice for a listing that has just become public, if that
+ * listing came from an import and its owner has not already been told.
+ *
+ * Called from two places, because a listing can go live by two routes: straight
+ * from `publishImport` when moderation is disarmed, or later from the
+ * moderation sweeper when it passes. Both funnel through here so the message,
+ * the access link and the bookkeeping cannot drift apart.
+ *
+ * Returns null when the listing did not come from an import — the ordinary case
+ * for every WhatsApp intake listing, and not a failure.
+ */
+export async function notifyImportedOwnerForListing(
+  listingId: number
+): Promise<NotifyOutcome | null> {
+  const { db } = await import('@/lib/db/drizzle');
+  const { postImports, listings, landlords } = await import('@/lib/db/schema');
+  const { and, eq, isNull } = await import('drizzle-orm');
+  const { mintAccessLink } = await import('@/lib/auth/access-links');
+
+  const record = await db.query.postImports.findFirst({
+    // notifiedAt null is the idempotency guard: the sweeper re-runs whenever a
+    // listing is re-checked, and an owner must not be told twice that their
+    // property is now listed.
+    where: and(eq(postImports.listingId, listingId), isNull(postImports.notifiedAt)),
+  });
+  if (!record?.ownerPhone) return null;
+
+  const listing = await db.query.listings.findFirst({ where: eq(listings.id, listingId) });
+  if (!listing) return null;
+
+  const landlord = await db.query.landlords.findFirst({
+    where: eq(landlords.id, listing.landlordId),
+  });
+  if (!landlord) return null;
+
+  let token: string | null = null;
+  let dashboardUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk'}/listings/${listingId}`;
+  try {
+    const minted = await mintAccessLink({
+      userId: landlord.userId,
+      listingId,
+      channel: 'facebook_import',
+    });
+    token = minted.token;
+    dashboardUrl = minted.dashboardUrl;
+  } catch (err) {
+    // Costs the owner their one-tap link, not their message.
+    console.error('[imports] access link minting failed', err);
+  }
+
+  const outcome = await notifyImportedOwner({
+    userId: landlord.userId,
+    ownerName: record.ownerName,
+    listingTitle: listing.title,
+    city: listing.city,
+    ownerPhone: record.ownerPhone,
+    token,
+    dashboardUrl,
+  });
+
+  await db
+    .update(postImports)
+    .set({ notifiedAt: new Date(), notifyOutcome: outcome, updatedAt: new Date() })
+    .where(eq(postImports.id, record.id));
 
   return outcome;
 }
