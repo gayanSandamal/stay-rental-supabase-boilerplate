@@ -525,13 +525,19 @@ successful build, a migration runner that prints “Done”, or keeping
 code can select the new user column outside importer routes.
 
 Only after migration 0057 and drift both pass may the deployment receive
-traffic. Smoke-test the importer with `enableFacebookImport` off, then on for
-both `ops` and `admin`, and return it off if rollout approval is still pending.
+traffic. Smoke-test the importer with `enableFacebookImport` off, then on, for
+both `ops` and `admin` — and put it back off if rollout approval is still
+pending.
+
+### Step 4 — The flags, in this order
+
 Turn on `enableFacebookImport` first and import a few listings with
-`notifyImportedOwners` OFF. That seeds the marketplace with nothing irreversible:
-a listing can be unpublished, a cold WhatsApp to a stranger cannot be unsent.
-Keep notifications off until their separate rollout is approved and the copy
-has been reviewed by someone comfortable receiving it.
+`notifyImportedOwners` OFF. That seeds the marketplace with nothing
+irreversible: a listing can be unpublished, a cold WhatsApp to a stranger
+cannot be unsent.
+
+Keep notifications off until their separate rollout is approved and the copy has
+been read by someone who would be comfortable receiving it.
 
 ## `wa_phone` no longer means "verified"
 

@@ -147,6 +147,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 - Tech/infra detail & env → `Tech Stack.md`
 - Auth/Supabase setup → `docs/AUTH_CONFIGURATION.md`, `docs/SUPABASE_DATABASE.md`
 - Form builder → `FORM_BUILDER_GUIDE.md`, `lib/forms/README.md`
+- Facebook post import → `docs/deep-dive-facebook-post-import.md`
 
 ## WhatsApp intake v2 (2026-08-04)
 
