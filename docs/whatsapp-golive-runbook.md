@@ -488,16 +488,56 @@ in-app notification is written, `[imports:dryrun] …` is logged, and the row is
 recorded as `notify_outcome = 'dry_run'` — never `failed`. The back-office list
 shows a **not sent** badge, so nothing claims a message that was never sent.
 
-### Step 3 — Migration, then the flags
+### Step 3 — Migration and drift gates before traffic promotion
 
-`pnpm db:migrate-all` (adds `post_imports` and `users.wa_phone_verified_at`),
-then **`pnpm db:check-drift`**, then Back Office → Settings.
+Migration `lib/db/migrations/0057_facebook_imports.sql` is a mandatory release
+prerequisite. It creates `post_imports`, adds `users.wa_phone_verified_at`, and
+adds the importer-required audit enum values and columns. It must remain listed
+in `lib/db/run-all-migrations.ts`.
+
+Before promoting an application build that contains the importer:
+
+1. Record the target environment, database identity, and deployment identifier
+   in the PR or release evidence. `DATABASE_URL` must point to that target's
+   Supabase **transaction pooler**, not a developer or preview database.
+2. Against an isolated representative database, verify replay safety by running
+   migration-all twice, then drift:
+
+   ```sh
+   DATABASE_URL=<isolated-test-transaction-pooler-url> pnpm db:migrate-all
+   DATABASE_URL=<isolated-test-transaction-pooler-url> pnpm db:migrate-all
+   DATABASE_URL=<isolated-test-transaction-pooler-url> pnpm db:check-drift
+   ```
+
+3. Against the actual traffic target, apply migrations and immediately check
+   drift against the same database:
+
+   ```sh
+   DATABASE_URL=<target-transaction-pooler-url> pnpm db:migrate-all
+   DATABASE_URL=<target-transaction-pooler-url> pnpm db:check-drift
+   ```
+
+The final drift command must exit zero and prove that `post_imports`,
+`users.wa_phone_verified_at`, and every schema-declared importer enum value and
+column are present. Attach both command outputs to the release evidence. A
+successful build, a migration runner that prints “Done”, or keeping
+`enableFacebookImport` off is **not** sufficient promotion evidence: application
+code can select the new user column outside importer routes.
+
+Only after migration 0057 and drift both pass may the deployment receive
+traffic. Smoke-test the importer with `enableFacebookImport` off, then on, for
+both `ops` and `admin` — and put it back off if rollout approval is still
+pending.
+
+### Step 4 — The flags, in this order
 
 Turn on `enableFacebookImport` first and import a few listings with
-`notifyImportedOwners` OFF. That seeds the marketplace with nothing irreversible:
-a listing can be unpublished, a cold WhatsApp to a stranger cannot be unsent.
-Turn the notifications on once the copy has been read by a person who would be
-comfortable receiving it.
+`notifyImportedOwners` OFF. That seeds the marketplace with nothing
+irreversible: a listing can be unpublished, a cold WhatsApp to a stranger
+cannot be unsent.
+
+Keep notifications off until their separate rollout is approved and the copy has
+been read by someone who would be comfortable receiving it.
 
 ## `wa_phone` no longer means "verified"
 

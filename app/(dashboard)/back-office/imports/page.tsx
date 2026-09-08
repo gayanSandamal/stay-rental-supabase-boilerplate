@@ -5,7 +5,6 @@ import { Download, Plus } from 'lucide-react';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { postImports } from '@/lib/db/schema';
-import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { PageHeader } from '@/components/back-office/page-header';
 import { FilterBar } from '@/components/back-office/filter-bar';
@@ -62,9 +61,9 @@ export default async function ImportsPage({
   searchParams: Promise<RawSearchParams>;
 }) {
   await requireBackOfficeAccess();
-  await loadFeatureFlags();
+  const flags = await loadFeatureFlags();
   // A switched-off feature should not be a visible-but-broken screen.
-  if (!isFeatureEnabled('enableFacebookImport')) notFound();
+  if (!flags.enableFacebookImport) notFound();
 
   const params = parseListParams(await searchParams, { tabs: TABS, defaultTab: 'draft' });
 

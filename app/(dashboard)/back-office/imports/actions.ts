@@ -2,12 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { postImports } from '@/lib/db/schema';
 import { logAudit } from '@/lib/db/audit-logger';
 import { getUser } from '@/lib/db/queries';
-import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { normalizePhone } from '@/lib/auth/phone-verification';
 import { resolvePost, UnsupportedUrlError } from '@/lib/imports/facebook/resolve';
@@ -26,12 +25,13 @@ const BASE_PATH = '/back-office/imports';
  * control, and these actions create accounts and publish listings.
  */
 async function requireStaff() {
-  await loadFeatureFlags();
   const user = await getUser();
   if (!user || (user.role !== 'admin' && user.role !== 'ops')) {
     throw new Error('Unauthorized');
   }
-  if (!isFeatureEnabled('enableFacebookImport')) {
+
+  const flags = await loadFeatureFlags();
+  if (!flags.enableFacebookImport) {
     throw new Error('Facebook import is switched off.');
   }
   return user;
@@ -233,14 +233,6 @@ export async function discardImportAction(formData: FormData): Promise<void> {
 
   revalidatePath(BASE_PATH);
   redirect(`${BASE_PATH}?discarded=1`);
-}
-
-/** Has this ad already been imported? Advisory — never blocks the operator. */
-export async function findExistingImport(sourceUrl: string) {
-  return db.query.postImports.findFirst({
-    where: and(eq(postImports.sourceUrl, sourceUrl), ne(postImports.status, 'discarded')),
-    orderBy: [desc(postImports.createdAt)],
-  });
 }
 
 /** Form fields over the stored parse. Blank clears; absent leaves alone. */

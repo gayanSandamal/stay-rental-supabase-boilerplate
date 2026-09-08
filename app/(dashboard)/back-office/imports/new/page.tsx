@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Download, Info } from 'lucide-react';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
-import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { PageHeader } from '@/components/back-office/page-header';
 import { ImportUrlForm } from './import-url-form';
@@ -23,8 +22,8 @@ export default async function NewImportPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   await requireBackOfficeAccess();
-  await loadFeatureFlags();
-  if (!isFeatureEnabled('enableFacebookImport')) notFound();
+  const flags = await loadFeatureFlags();
+  if (!flags.enableFacebookImport) notFound();
 
   const { error } = await searchParams;
   const message = error ? ERRORS[error] : null;
