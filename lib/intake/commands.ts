@@ -46,7 +46,13 @@ export type ConversationState =
    * social accounts; waiting for yes/no. Unlike the states above, an
    * unrecognised reply here does NOT reprompt — see lib/intake/session.ts.
    */
-  | 'confirm_social';
+  | 'confirm_social'
+  /**
+   * Asked whether the sender is listing a property or looking for one, because
+   * the message read equally as both. Waiting for the answer, which carries the
+   * original text forward so nobody retypes it. See lib/intake/intent.ts.
+   */
+  | 'confirm_intent';
 
 export interface ConversationPayload {
   /** Listing ids in menu order, so "2" always means the same listing. */
@@ -64,6 +70,11 @@ export interface ConversationPayload {
   cityIntakeId?: number;
   /** The listing a confirm_social answer applies to. */
   socialListingId?: number;
+  /**
+   * The message that could not be classified, parked verbatim so answering
+   * "listing" resumes the submission with the text they already sent.
+   */
+  intentText?: string;
 }
 
 export interface Conversation {

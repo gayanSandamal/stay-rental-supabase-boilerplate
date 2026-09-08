@@ -1,7 +1,8 @@
 import { db } from '@/lib/db/drizzle';
 import { whatsappIntakes, listings, landlords, users } from '@/lib/db/schema';
 import { and, eq, gte, desc, sql, inArray, isNull, or } from 'drizzle-orm';
-import { detectUpdateIntent } from './parser/rule-parser';
+import { detectUpdateIntent, parseIntakeRules } from './parser/rule-parser';
+import { classifyIntent } from './intent';
 import { appendPendingAnswer } from './accumulator';
 import {
   clearConversation,
@@ -89,6 +90,13 @@ export interface AppendOutcome {
     | 'city_kept'
     | 'city_choice_unclear'
     /**
+     * The message is someone LOOKING for a place, not offering one. No intake
+     * row is created — see lib/intake/intent.ts for why that matters.
+     */
+    | 'search'
+    /** Could be either. The sender is asked which, rather than guessed at. */
+    | 'intent_unclear'
+    /**
      * A contact-number verification code (see lib/auth/phone-verification.ts).
      * Never listing content, so it is answered before anything else and never
      * enters an intake session.
@@ -137,6 +145,11 @@ export interface AppendOutcome {
    * to received, so an ack keyed on this can never spam a multi-message burst.
    */
   reopenedFromNeedsInfo?: boolean;
+  /**
+   * The query text for a `search` outcome — either this message, or the one
+   * parked when the sender was asked which they meant.
+   */
+  searchText?: string | null;
   /** Photos persisted / photo downloads that failed (all actions). */
   mediaStored: number;
   mediaFailed: number;
@@ -381,6 +394,45 @@ export async function appendToIntake(
         return { action: 'command_cancelled' } as const;
       }
 
+      if (convo.state === 'confirm_intent') {
+        // 1 = listing, 2 = searching. Buttons carry an explicit id; a typed
+        // reply is matched on the digit or the obvious word.
+        const raw = (msg.text ?? '').trim().toLowerCase();
+        const wantsListing =
+          msg.interactiveReplyId === 'intent_listing' || /^1[.)]?$/.test(raw) || /\blist/.test(raw);
+        const wantsSearch =
+          msg.interactiveReplyId === 'intent_search' ||
+          /^2[.)]?$/.test(raw) ||
+          /\b(?:search|look|find|rent(?:ing)?\s+a)\b/.test(raw);
+
+        if (wantsListing || wantsSearch) {
+          const parked = convo.payload.intentText ?? '';
+          await clearConversation(tx, msg.channel, msg.senderId);
+          await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+
+          if (wantsSearch) {
+            return { action: 'search', searchText: parked || msg.text } as const;
+          }
+
+          // They meant to list. Resume with the text they already sent, so the
+          // question costs a tap rather than a retype.
+          const [resumed] = await tx
+            .insert(whatsappIntakes)
+            .values({
+              channel: msg.channel,
+              fromNumber: msg.senderId,
+              profileName: msg.senderName,
+              messageText: parked || msg.text,
+              mediaPaths: '[]',
+              waMessageIds: JSON.stringify(msg.messageId ? [msg.messageId] : []),
+            })
+            .returning({ id: whatsappIntakes.id });
+          return { action: 'created', intakeId: resumed.id, pinStored: false } as const;
+        }
+        // Unrecognised: fall through so DELETE, HELP and the rest still work.
+        await clearConversation(tx, msg.channel, msg.senderId);
+      }
+
       if (convo.state === 'confirm_social') {
         // Deliberately the ONLY pending state that can fall through.
         //
@@ -614,6 +666,40 @@ export async function appendToIntake(
       });
       await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
       return { action: 'delete_menu', menu } as const;
+    }
+
+    /*
+     * Is this someone LOOKING for a place rather than offering one?
+     *
+     * Checked here — after the commands, before anything writes to
+     * whatsapp_intakes — because a search must never become a listing. Until
+     * this existed, "Maharagama, 2 bedrooms, under 70k" was extracted as a
+     * property renting at 70,000 and published with the tenant's own number on
+     * it. See lib/intake/intent.ts for the full reasoning.
+     *
+     * `hasOpenIntake` is passed rather than checked inside, so a landlord
+     * halfway through a submission is never reinterpreted mid-flow.
+     */
+    const hasOpenIntake = recent.some(
+      (r) =>
+        (r.status === 'received' &&
+          Date.now() - r.lastMessageAt.getTime() <= SESSION_WINDOW_MS) ||
+        (r.status === 'needs_info' &&
+          Date.now() - r.lastMessageAt.getTime() <= NEEDS_INFO_WINDOW_MS)
+    );
+    if (msg.text && !msg.location) {
+      const intent = classifyIntent(msg, parseIntakeRules(msg.text), { hasOpenIntake });
+      if (intent === 'search') {
+        await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+        return { action: 'search', searchText: msg.text } as const;
+      }
+      if (intent === 'ambiguous') {
+        await setConversation(tx, msg.channel, msg.senderId, 'confirm_intent', {
+          intentText: msg.text,
+        });
+        await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+        return { action: 'intent_unclear' } as const;
+      }
     }
 
     // Open session (received within 6h, needs_info within 7d): append + reopen.

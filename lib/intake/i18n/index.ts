@@ -76,7 +76,12 @@ export type MsgKey =
   | 'delete.done'
   | 'delete.cancelled'
   | 'saleAd'
-  | 'socialConsent';
+  | 'socialConsent'
+  // Tenant-search safety net: the sender is looking for a place, not offering
+  // one. Keys are declared here so the copy can be localised later; the English
+  // literals in messages.ts remain the live path until a catalogue defines them.
+  | 'search.unavailable'
+  | 'intent.unclear';
 
 export type Catalogue = Partial<Record<MsgKey, string>>;
 

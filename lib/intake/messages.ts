@@ -15,6 +15,7 @@
 
 import type { ReplyLang } from './language';
 import { t } from './i18n';
+import { absoluteUrl } from '@/lib/seo/urls';
 
 /** Appended when the sender's attachments arrived as video/file/voice note. */
 export const RESEND_AS_PHOTOS_NOTE =
@@ -735,3 +736,57 @@ export function socialResultsMessage(
   return lines.join('\n');
 }
 
+/**
+ * Someone is looking for a place, and search is not switched on yet.
+ *
+ * The important half is what this message REPLACES: until the intent classifier
+ * existed, this person's message was published as a listing with their own phone
+ * number on it. Pointing them at the website is a small answer; it is a far
+ * better one than that.
+ */
+function listingsUrl(): string {
+  return absoluteUrl('/listings');
+}
+
+export function searchNotAvailableMessage(lang: ReplyLang = 'en'): string {
+  return (
+    t(lang, 'search.unavailable') ??
+    [
+      "Looks like you're searching for a place to rent 🏠",
+      '',
+      "We can't search over WhatsApp just yet — browse everything at",
+      listingsUrl(),
+      '',
+      'You can filter by town, rent and bedrooms there, and contact owners directly.',
+      '',
+      'Renting your own property out? Send us the details and photos and we\'ll list it free.',
+    ].join('\n')
+  );
+}
+
+/**
+ * The message read equally as an advert and as a search, so we ask instead of
+ * guessing. Getting this wrong silently publishes a stranger's phone number on a
+ * property they do not own, which is worth one extra tap to avoid.
+ */
+export function intentUnclearMessage(lang: ReplyLang = 'en'): string {
+  return (
+    t(lang, 'intent.unclear') ??
+    [
+      'Quick check so we get this right 🙂',
+      '',
+      '1️⃣ I\'m listing a property to rent out',
+      '2️⃣ I\'m looking for a place to rent',
+      '',
+      'Reply 1 or 2.',
+    ].join('\n')
+  );
+}
+
+/** The two-button form of the question, when rich replies are on. */
+export function intentUnclearButtons(): Array<{ id: string; title: string }> {
+  return [
+    { id: 'intent_listing', title: "I'm listing" },
+    { id: 'intent_search', title: "I'm looking" },
+  ];
+}
