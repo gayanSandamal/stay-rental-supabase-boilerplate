@@ -29,7 +29,11 @@ export type ModerationPhoto = {
   reason: string | null;
 };
 
+import { ImportOriginBadge } from '@/components/back-office/import-origin-badge';
+import type { ListingOrigin } from '@/lib/imports/origin-label';
+
 export type ModerationRow = {
+  importOrigin: ListingOrigin | null;
   id: number;
   title: string;
   city: string | null;
@@ -160,6 +164,7 @@ export function ModerationList({ rows }: { rows: ModerationRow[] }) {
                     {row.city && (
                       <span className="shrink-0 text-xs text-slate-500">· {row.city}</span>
                     )}
+                    {row.importOrigin && <ImportOriginBadge origin={row.importOrigin} />}
                   </div>
                   {row.moderationSummary && (
                     <p className="mt-0.5 line-clamp-1 text-[13px] text-slate-600">
@@ -216,6 +221,7 @@ export function ModerationList({ rows }: { rows: ModerationRow[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={open.moderationStatus} />
               <Badge variant="outline">listing {open.status}</Badge>
+              {open.importOrigin && <ImportOriginBadge origin={open.importOrigin} />}
               {open.moderationLanguage && (
                 <Badge variant="neutral">{open.moderationLanguage}</Badge>
               )}

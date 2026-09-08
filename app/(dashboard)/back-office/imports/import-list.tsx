@@ -110,8 +110,30 @@ export function ImportList({ rows }: { rows: ImportRow[] }) {
                   something never sent is the same lie as a social row reading
                   `posted` for a post that was never made.
                 */}
-                {row.notifyOutcome === 'dry_run' && <Badge variant="warn">not sent</Badge>}
-                {row.notifyOutcome === 'failed' && <Badge variant="danger">send failed</Badge>}
+                {/*
+                  Never let a row imply a message that did not go out. `deferred`
+                  is its own state so a pending listing does not read as a
+                  failure, and the tooltip says WHICH of the three silent
+                  reasons applied.
+                */}
+                {row.notifyOutcome === 'deferred' && (
+                  <Badge variant="queued" title="Waiting for the automated checks to pass">
+                    owner notice queued
+                  </Badge>
+                )}
+                {row.notifyOutcome === 'dry_run' && (
+                  <Badge
+                    variant="warn"
+                    title="Composed and logged, but not delivered — either no approved WhatsApp template is registered, or owner notifications are switched off"
+                  >
+                    not sent
+                  </Badge>
+                )}
+                {row.notifyOutcome === 'failed' && (
+                  <Badge variant="danger" title="WhatsApp rejected the message — contact the owner another way">
+                    send failed
+                  </Badge>
+                )}
               </div>
             </TableCell>
 

@@ -59,9 +59,10 @@ export async function resolvePost(input: string): Promise<ResolvedPost> {
       imageUrls: og.imageUrls,
       authorName: null,
       note:
-        'Facebook only returned its public preview, which truncates long posts ' +
-        'and gives one photo. Check the details against the original and paste ' +
-        'the full text if anything is missing.',
+        'Facebook only served its public preview — usually the first line of ' +
+        'the post and the cover photo, and nothing else. The rest of the ad, ' +
+        'including the phone number, is not in what it sends us. Open the ' +
+        'original, paste the full text below and add the other photos.',
     };
   }
 

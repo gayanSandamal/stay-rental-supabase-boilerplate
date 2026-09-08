@@ -14,6 +14,10 @@ import { EmptyState } from '@/components/back-office/empty-state';
 import { Button } from '@/components/ui/button';
 import { parseListParams, type RawSearchParams } from '@/lib/back-office/list-params';
 import { ImportList, type ImportRow } from './import-list';
+import { isIntakeConfigured } from '@/lib/intake/channels/whatsapp/config';
+import { whatsappTemplateName } from '@/lib/intake/channels/whatsapp/send';
+import { AlarmBanner } from '@/components/back-office/alarm-banner';
+import { MessageCircleOff } from 'lucide-react';
 
 /*
  * revalidate, NOT force-dynamic. This page gates on a feature flag, and the
@@ -126,6 +130,22 @@ export default async function ImportsPage({
           </Button>
         }
       />
+
+      {/*
+        Silence here is not a failure, but it IS invisible: without a template
+        every owner notice is composed, logged and dropped. Saying so is the
+        difference between "unfinished setup" and "the feature is broken".
+      */}
+      {isIntakeConfigured() && !whatsappTemplateName('import') && (
+        <AlarmBanner icon={MessageCircleOff} title="Owners are not being messaged">
+          <p>
+            No approved WhatsApp template is registered, so every owner notice is
+            composed and logged but never delivered. Importing and publishing still
+            work. Register the template and set <code>WHATSAPP_IMPORT_TEMPLATE</code> —
+            see the WhatsApp go-live runbook.
+          </p>
+        </AlarmBanner>
+      )}
 
       <FilterBar
         basePath={BASE_PATH}

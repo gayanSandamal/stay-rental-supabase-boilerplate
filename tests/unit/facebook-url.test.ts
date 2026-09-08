@@ -113,3 +113,41 @@ describe('graphPostId', () => {
     expect(graphPostId(parsed!)).toBeNull();
   });
 });
+
+describe('OpenGraph extraction', () => {
+  it('strips the "| Facebook" suffix Facebook appends to og:title', async () => {
+    // Left in, it becomes part of the listing title someone has to delete by
+    // hand. Verified against a live post: "…RATMALANA | Facebook".
+    const { __test } = await import('@/lib/imports/facebook/fetch');
+    expect(__test.stripSiteSuffix('BRAND NEW APARTMENT – RATMALANA | Facebook')).toBe(
+      'BRAND NEW APARTMENT – RATMALANA'
+    );
+    expect(__test.stripSiteSuffix('House in Kandy - Facebook')).toBe('House in Kandy');
+    expect(__test.stripSiteSuffix('A place | Facebook Marketplace')).toBe(
+      'A place | Facebook Marketplace'
+    );
+    expect(__test.stripSiteSuffix(null)).toBeNull();
+  });
+
+  it('collects every og:image in document order, deduped', async () => {
+    const { __test } = await import('@/lib/imports/facebook/fetch');
+    const html = `
+      <meta property="og:image" content="https://cdn/a.jpg">
+      <meta content="https://cdn/b.jpg" property="og:image">
+      <meta property="og:image:width" content="1200">
+      <meta property="og:image" content="https://cdn/a.jpg">
+    `;
+    // Order preserved across both attribute orders; og:image:width not matched;
+    // the repeat dropped.
+    expect(__test.metaContentAll(html, 'og:image')).toEqual([
+      'https://cdn/a.jpg',
+      'https://cdn/b.jpg',
+    ]);
+  });
+
+  it('decodes the entities Facebook CDN URLs are full of', async () => {
+    const { __test } = await import('@/lib/imports/facebook/fetch');
+    const html = `<meta property="og:image" content="https://cdn/x.jpg?a=1&amp;b=2">`;
+    expect(__test.metaContentAll(html, 'og:image')).toEqual(['https://cdn/x.jpg?a=1&b=2']);
+  });
+});

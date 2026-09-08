@@ -9,6 +9,9 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { PageHeader } from '@/components/back-office/page-header';
 import { StatusBadge } from '@/components/ui/badge';
 import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
+import { detectSaleAd } from '@/lib/intake/parser/sale-ad';
+import { isIntakeConfigured } from '@/lib/intake/channels/whatsapp/config';
+import { whatsappTemplateName } from '@/lib/intake/channels/whatsapp/send';
 import { parsePayload, parsePhotoUrls } from '@/lib/imports/publish';
 import { ReviewForm } from './review-form';
 
@@ -92,6 +95,20 @@ export default async function ImportReviewPage({
   // confirm is the one in front of them now.
   const phoneCandidates = extractPhoneNumbers(record.rawText);
 
+  // A sale ad published as a rental is worse than one not published at all.
+  // publishImport does not run the intake checks, so this is the only place it
+  // gets caught — advisory, never blocking, because the operator can see the
+  // original and we cannot.
+  // `hasRent` is passed so a stated monthly rent settles it — the function is
+  // explicitly a tiebreaker for ads the parser could not price.
+  const saleAd = record.rawText
+    ? detectSaleAd(record.rawText, parsed.rentPerMonth != null).looksLikeSale
+    : false;
+
+  // Owner messages need an approved template. Without one they are composed,
+  // logged and dropped — which is fine, but only if the operator knows.
+  const ownerMessagesUndeliverable = isIntakeConfigured() && !whatsappTemplateName('import');
+
   return (
     <section className="flex-1 p-4 lg:p-8">
       <Link
@@ -141,8 +158,21 @@ export default async function ImportReviewPage({
         </section>
       )}
 
+      {ownerMessagesUndeliverable && (
+        <section className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="font-semibold">Owners are not being messaged</p>
+          <p>
+            No approved WhatsApp template is registered, so the notice is composed and
+            logged but never sent. Publishing still works. See the go-live runbook to
+            register one and set <code>WHATSAPP_IMPORT_TEMPLATE</code>.
+          </p>
+        </section>
+      )}
+
       <ReviewForm
         importId={record.id}
+        saleAd={saleAd}
+        shareOnSocial={record.shareOnSocial}
         status={record.status}
         resolvedVia={record.resolvedVia}
         sourcePlatform={record.sourcePlatform}

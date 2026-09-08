@@ -1,4 +1,6 @@
 import { db } from '@/lib/db/drizzle';
+import { importOriginsFor } from '@/lib/imports/origin';
+import { ImportOriginBadge } from '@/components/back-office/import-origin-badge';
 import { businessAccounts, listings } from '@/lib/db/schema';
 import { and, count, desc, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
@@ -133,6 +135,9 @@ export default async function BackOfficeListingsPage({
     : [];
 
   const total = Number(totalRows[0]?.n ?? 0);
+
+  // One batched lookup for the page — never one per row.
+  const origins = await importOriginsFor(rows.map((r) => r.id));
   const counts = countsByKey(statusCounts);
   const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
 
@@ -208,6 +213,11 @@ export default async function BackOfficeListingsPage({
                     >
                       {listing.title}
                     </Link>
+                    {origins.get(listing.id) && (
+                      <div className="mt-1">
+                        <ImportOriginBadge origin={origins.get(listing.id)!} />
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="max-w-0 truncate text-[13px] text-slate-600">
                     {listing.address ?? listing.city}

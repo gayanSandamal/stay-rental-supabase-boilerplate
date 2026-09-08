@@ -116,13 +116,25 @@ export async function reExtractAction(formData: FormData): Promise<void> {
     where: eq(postImports.id, id),
   });
 
+  /*
+   * FILL EMPTY FIELDS — never overwrite.
+   *
+   * This used to replace parsedPayload wholesale, which silently discarded
+   * every correction the operator had made, while the button claimed the
+   * opposite. That matters more now than it did: with Facebook serving only a
+   * headline, pasting the text and re-reading is the MAIN path, not a repair.
+   *
+   * Keeping what is already set means a second re-read is safe, and an operator
+   * who fixes a mis-parsed town does not lose it by pressing the button again.
+   */
+  const merged = fillEmpty(parsePayload(existing?.parsedPayload ?? null), parsed);
+
   await db
     .update(postImports)
     .set({
       rawText,
-      parsedPayload: JSON.stringify(parsed),
-      // Only fill a phone we do not already have — the operator's confirmed
-      // choice outranks anything a regex finds on a re-read.
+      parsedPayload: JSON.stringify(merged),
+      // Same rule for the phone: a confirmed choice outranks a fresh regex hit.
       ownerPhone: existing?.ownerPhone ?? phoneCandidates[0] ?? null,
       updatedAt: new Date(),
     })
@@ -156,6 +168,7 @@ export async function updateDraftAction(formData: FormData): Promise<void> {
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
       ownerPhone: normalizePhone(String(formData.get('ownerPhone') ?? '')),
       ownerName: String(formData.get('ownerName') ?? '').trim() || null,
+      shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
     })
     .where(eq(postImports.id, id));
@@ -193,6 +206,7 @@ export async function publishImportAction(formData: FormData): Promise<void> {
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
       ownerPhone,
       ownerName,
+      shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
     })
     .where(eq(postImports.id, id))
@@ -233,6 +247,29 @@ export async function discardImportAction(formData: FormData): Promise<void> {
 
   revalidatePath(BASE_PATH);
   redirect(`${BASE_PATH}?discarded=1`);
+}
+
+/**
+ * Fields the fresh parse may fill: only those the stored payload leaves null.
+ * `missingFields` and the diagnostic keys always take the fresh value — they
+ * describe this parse, not the operator's edits.
+ */
+function fillEmpty(existing: ParsedIntake, fresh: ParsedIntake): ParsedIntake {
+  const keep = <K extends keyof ParsedIntake>(key: K): ParsedIntake[K] =>
+    existing[key] == null ? fresh[key] : existing[key];
+
+  return {
+    ...fresh,
+    title: keep('title'),
+    description: keep('description'),
+    propertyType: keep('propertyType'),
+    address: keep('address'),
+    city: keep('city'),
+    district: keep('district'),
+    bedrooms: keep('bedrooms'),
+    bathrooms: keep('bathrooms'),
+    rentPerMonth: keep('rentPerMonth'),
+  };
 }
 
 /** Form fields over the stored parse. Blank clears; absent leaves alone. */
