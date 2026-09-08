@@ -50,6 +50,8 @@ export function ReviewForm({
   ownerName,
   ownerPhone,
   phoneCandidates,
+  saleAd,
+  shareOnSocial,
 }: {
   importId: number;
   status: string;
@@ -61,6 +63,8 @@ export function ReviewForm({
   ownerName: string | null;
   ownerPhone: string | null;
   phoneCandidates: string[];
+  saleAd: boolean;
+  shareOnSocial: boolean;
 }) {
   const [pending, start] = useTransition();
   const [photoUrls, setPhotoUrls] = useState<string[]>(photos);
@@ -96,7 +100,7 @@ export function ReviewForm({
               ? 'Facebook does not allow group posts to be read automatically — it removed that API in April 2024.'
               : 'Facebook served a login wall instead of this post.'}{' '}
             Open the original, copy its text into the box below, press{' '}
-            <strong>Re-read text</strong>, and upload the photos.
+            <strong>Fill empty fields</strong>, and add the photos.
           </p>
         </section>
       )}
@@ -105,9 +109,20 @@ export function ReviewForm({
         <section className="flex gap-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-3 text-sm text-sky-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Only Facebook&rsquo;s public preview came back. It truncates long posts and
-            gives one photo, so check the rent and location against the original before
-            publishing.
+            Only Facebook&rsquo;s public preview came back — usually just the first line
+            of the post and the cover photo. The rest of the ad, including the phone
+            number, is not in what Facebook sends us. Paste the full text below and add
+            the other photos.
+          </p>
+        </section>
+      )}
+
+      {saleAd && !published && (
+        <section className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            This reads like a property <strong>for sale</strong>, not for rent. Easy Rent
+            is a rental marketplace — check the original before publishing.
           </p>
         </section>
       )}
@@ -136,10 +151,11 @@ export function ReviewForm({
           <div className="flex items-center gap-3">
             <Button type="submit" variant="outline" size="sm" disabled={pending}>
               <RefreshCw className="mr-1.5 h-4 w-4" />
-              Re-read text
+              Fill empty fields
             </Button>
             <span className="text-xs text-slate-500">
-              Fills the fields below from this text. Anything you typed by hand is kept.
+              Reads this text into any field still blank. Anything you have already set
+              is left alone.
             </span>
           </div>
         </form>
@@ -259,8 +275,12 @@ export function ReviewForm({
                 id="ownerName"
                 name="ownerName"
                 defaultValue={ownerName ?? ''}
-                placeholder="As it appears on the post"
+                placeholder="Leave blank if the post is anonymous"
               />
+              <p className="text-xs text-slate-500">
+                Optional — Facebook never gives us the author, and an anonymous post has
+                none.
+              </p>
             </div>
           </div>
         </fieldset>
@@ -268,9 +288,43 @@ export function ReviewForm({
         <fieldset disabled={locked} className="space-y-2">
           <legend className="mb-2 text-sm font-semibold text-slate-900">Photos</legend>
           <ImageUploader value={photoUrls} onChange={setPhotoUrls} disabled={locked} />
+          <p className="text-xs text-slate-500">
+            Facebook only ever hands over the cover photo. Save the rest from the
+            original post and drop them here.
+          </p>
           {photoUrls.map((url) => (
-            <input key={url} type="hidden" name="photoUrls" value={url} />
+            <input key={`photo-${url}`} type="hidden" name="photoUrls" value={url} />
           ))}
+        </fieldset>
+
+        <fieldset disabled={locked} className="space-y-2">
+          <legend className="mb-2 text-sm font-semibold text-slate-900">
+            Our social channels
+          </legend>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+            <input
+              type="checkbox"
+              name="shareOnSocial"
+              defaultChecked={shareOnSocial}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-slate-900">
+                Also post this to Easy Rent&rsquo;s Facebook, Instagram and TikTok
+              </span>
+              {/*
+                Said plainly on purpose. The landlord-facing checkbox is someone
+                consenting about their own property; this is an operator
+                consenting about a stranger's, and the screen should not let that
+                pass unnoticed.
+              */}
+              <span className="block text-xs text-slate-500">
+                Queued when the listing goes live. The owner has not been asked — the
+                consent is recorded as yours. Phone numbers are never included in a
+                post.
+              </span>
+            </span>
+          </label>
         </fieldset>
 
         {!locked && (

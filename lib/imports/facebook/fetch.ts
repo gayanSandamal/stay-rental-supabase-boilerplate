@@ -119,6 +119,35 @@ async function readCapped(res: Response): Promise<string> {
 }
 
 /**
+ * Every `<meta property="og:x">` value, IN DOCUMENT ORDER.
+ *
+ * Order matters and is why this scans tags rather than running each attribute-
+ * order pattern to exhaustion: doing the latter would return every
+ * property-first tag before every content-first one, silently reordering an
+ * album. For images that means the cover photo might not come first.
+ *
+ * Most Facebook posts still expose a single og:image — verified against a live
+ * multi-photo post, where the whole 346 KB response contained exactly one image
+ * URL. This is for the posts that do emit more, and it costs nothing when they
+ * do not.
+ */
+function metaContentAll(html: string, property: string): string[] {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const values: string[] = [];
+
+  for (const tag of html.match(/<meta[^>]*>/gi) ?? []) {
+    // The quote right after the name is what stops og:image matching
+    // og:image:width, so it must stay in the test.
+    if (!new RegExp(`(?:property|name)=["']${escaped}["']`, 'i').test(tag)) continue;
+    const content = tag.match(/content=["']([^"']*)["']/i);
+    const value = content?.[1] ? decodeEntities(content[1]).trim() : '';
+    if (value) values.push(value);
+  }
+
+  return [...new Set(values)];
+}
+
+/**
  * Pull one `<meta property="og:x" content="y">` value. Handles both attribute
  * orders and either quote style, because Facebook's markup uses both.
  */
@@ -139,6 +168,16 @@ function metaContent(html: string, property: string): string | null {
     if (match?.[1]) return decodeEntities(match[1]).trim() || null;
   }
   return null;
+}
+
+/**
+ * Facebook appends its own name to og:title — "… RATMALANA | Facebook". Left in,
+ * it becomes part of the listing title an operator then has to delete by hand.
+ */
+function stripSiteSuffix(title: string | null): string | null {
+  if (!title) return null;
+  const cleaned = title.replace(/\s*[|\u2013\u2014-]\s*Facebook\s*$/i, '').trim();
+  return cleaned || null;
 }
 
 /** The handful of entities that actually appear in an og: attribute. */
@@ -170,19 +209,15 @@ export async function fetchOpenGraph(url: string): Promise<OpenGraphPost | null>
   const html = await readCapped(res).catch(() => '');
   if (!html) return null;
 
-  const title = metaContent(html, 'og:title');
+  const title = stripSiteSuffix(metaContent(html, 'og:title'));
   const description = metaContent(html, 'og:description');
-  const image = metaContent(html, 'og:image');
+  const imageUrls = metaContentAll(html, 'og:image');
 
   // A login wall still renders a generic og:title ("Facebook"), so a title on
   // its own proves nothing. Real content has a description or an image.
-  if (!description && !image) return null;
+  if (!description && !imageUrls.length) return null;
 
-  return {
-    title,
-    description,
-    imageUrls: image ? [image] : [],
-  };
+  return { title, description, imageUrls };
 }
 
 /**
@@ -236,3 +271,6 @@ interface GraphPostResponse {
     data?: Array<GraphMedia & { subattachments?: { data?: GraphMedia[] } }>;
   };
 }
+
+/** Internals exposed for unit tests only. */
+export const __test = { metaContentAll, stripSiteSuffix };

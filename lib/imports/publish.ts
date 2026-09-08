@@ -173,6 +173,20 @@ export async function publishImport(
       // they exist for, and the sweeper flips it to active on a pass.
       status: moderationArmed ? ('pending' as const) : ('active' as const),
       ...(moderationArmed ? {} : { publishedAt: now, expiresAt: expires }),
+      /*
+       * Consent to post this to Easy Rent's own social channels, recorded as
+       * `ops` because that is what it is: the operator decided, and the
+       * property's owner has not been asked. Labelling it `web` (what a
+       * landlord ticking their own box produces) would erase that distinction
+       * from the record.
+       *
+       * Nothing else is needed to make it post: `offerSocialSharing` routes any
+       * listing with socialConsentAt to enqueueIfAlreadyConsented once it is
+       * live, from both the immediate path and the moderation sweeper.
+       */
+      ...(record.shareOnSocial
+        ? { socialConsentAt: now, socialConsentSource: 'ops' as const }
+        : {}),
     })
     .returning();
 
@@ -216,6 +230,24 @@ export async function publishImport(
     // then hold it, something that never appears. When moderation is armed the
     // sweeper sends this after it passes — the same division the intake
     // pipeline draws between publishedMessage and pendingReviewMessage.
+    if (record.shareOnSocial) {
+      await logListingAction('listing_social_consent_granted', listing.id, opsUserId, {
+        source: 'ops',
+        importId: record.id,
+        // Named plainly so a decision taken on someone's behalf is legible in
+        // the audit trail rather than inferred from a source string.
+        ownerAsked: false,
+      });
+      if (!moderationArmed) {
+        // Already live, so there is no sweeper pass to wait for. When the
+        // checks ARE armed the sweeper handles it, via offerSocialSharing.
+        const { enqueueIfAlreadyConsented } = await import('@/lib/social/consent');
+        await enqueueIfAlreadyConsented({ ...listing, socialConsentAt: now }).catch((err) =>
+          console.error('[imports] social enqueue failed', err)
+        );
+      }
+    }
+
     if (!moderationArmed) {
       notify = await notifyOwner(record, listing.id, listing.title, parsed.city, owner);
       await db

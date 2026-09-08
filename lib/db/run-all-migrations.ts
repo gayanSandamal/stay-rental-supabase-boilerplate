@@ -61,6 +61,7 @@ const MIGRATIONS = [
   '0056_listing_location_indexes.sql',
   '0057_facebook_imports.sql',
   '0058_enable_rls_on_missed_tables.sql',
+  '0059_import_social_and_listing_index.sql',
 ];
 
 function splitStatements(sql: string): string[] {

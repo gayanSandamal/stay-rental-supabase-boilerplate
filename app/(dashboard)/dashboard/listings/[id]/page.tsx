@@ -1,4 +1,6 @@
 import { publisherDisplayName } from '@/lib/publisher-name';
+import { importOriginFor } from '@/lib/imports/origin';
+import { ImportOriginBadge } from '@/components/back-office/import-origin-badge';
 import { notFound } from 'next/navigation';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { getIncludedBoostsRemaining } from '@/lib/landlord-plans';
@@ -43,6 +45,10 @@ export default async function ListingEditPage({
   if (!listing) {
     notFound();
   }
+
+  // Sequential, like every other query on this page: the pool is max: 1 behind
+  // the transaction pooler and concurrent queries wedge the request.
+  const importOrigin = await importOriginFor(listingId);
 
   // Check if user can edit this listing
   const isAdminOrOps = user.role === 'admin' || user.role === 'ops';
@@ -214,6 +220,17 @@ export default async function ListingEditPage({
                     <p className="text-xs text-gray-500 ml-6 mt-1">
                       by {teamMemberName}
                     </p>
+                  )}
+                  {/*
+                    Without this the block reads as though Easy Rent wrote the
+                    listing — an imported one is attributed to Ops. The operator
+                    about to approve third-party photos and third-party text
+                    should be told that is what this is.
+                  */}
+                  {importOrigin && (
+                    <div className="ml-6 mt-2">
+                      <ImportOriginBadge origin={importOrigin} />
+                    </div>
                   )}
                   <div className="flex items-center gap-1 mt-2">
                     <Calendar className="h-3 w-3 text-gray-400" />

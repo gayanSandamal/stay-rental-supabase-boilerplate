@@ -701,6 +701,13 @@ export const postImports = pgTable('post_imports', {
   /** E.164 as the operator confirmed it. UNVERIFIED: see users.waPhoneVerifiedAt. */
   ownerPhone: varchar('owner_phone', { length: 20 }),
   ownerName: text('owner_name'),
+  /**
+   * Operator ticked "also post this to our social channels" on the review
+   * screen. Stored on the import so the choice survives a draft save; at
+   * publish it becomes `listings.socialConsentAt` with source `ops` — the
+   * honest label, since the property's owner was never asked.
+   */
+  shareOnSocial: boolean('share_on_social').notNull().default(false),
   status: postImportStatusEnum('status').notNull().default('draft'),
   listingId: integer('listing_id').references(() => listings.id, {
     onDelete: 'set null',

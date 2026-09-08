@@ -577,7 +577,23 @@ async function persist(
         reasons: verdict.reasons.slice(0, 3),
       });
     }
-    await notifyModerationOutcome(listing, verdict, result);
+    /*
+     * Re-read before notifying. `listing` is this function's PARAMETER — the row
+     * as it was claimed, before the transaction above set it `active`. Handing
+     * that stale row to the notifier means every downstream `listing.status`
+     * check sees `pending`, and both social paths bail on
+     * `status !== 'active'`: a landlord who ticked "share on social" is never
+     * enqueued, and nobody is even asked. The prompt only ever appeared on a
+     * LATER re-check, once the listing happened to already be live.
+     *
+     * Falls back to the stale row if the re-read fails — a notification with an
+     * out-of-date status beats no notification at all.
+     */
+    const fresh =
+      (await db.query.listings
+        .findFirst({ where: eq(listings.id, listing.id) })
+        .catch(() => null)) ?? listing;
+    await notifyModerationOutcome(fresh, verdict, result);
   } catch (err) {
     console.error('[moderation] post-decision follow-up failed', listing.id, err);
   }

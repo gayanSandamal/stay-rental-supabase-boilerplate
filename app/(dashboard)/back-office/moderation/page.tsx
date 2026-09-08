@@ -19,6 +19,7 @@ import {
   type RawSearchParams,
 } from '@/lib/back-office/list-params';
 import { ModerationList, type ModerationRow } from './moderation-list';
+import { importOriginsFor } from '@/lib/imports/origin';
 
 export const dynamic = 'force-dynamic';
 /*
@@ -158,6 +159,10 @@ export default async function ModerationQueuePage({
 
   const total = Number(totalRows[0]?.n ?? 0);
 
+  // ONE query for the whole page. A per-row lookup here is what wedges a max: 1
+  // pool behind the transaction pooler.
+  const origins = await importOriginsFor(rows.map((r) => r.id));
+
   const items: ModerationRow[] = rows.map((listing) => {
     const manifest = parseManifest(listing.photosManifest);
     return {
@@ -171,6 +176,9 @@ export default async function ModerationQueuePage({
       moderationAttempts: listing.moderationAttempts,
       // An I2 violation — a public photo no manifest entry accounts for — is a
       // bug worth seeing rather than a number worth hiding.
+      // Third-party photos and third-party text are exactly what this queue is
+      // for, so the reviewer should be told which rows those are.
+      importOrigin: origins.get(listing.id) ?? null,
       publicCount: parsePhotos(listing.photos).length,
       trackedCount: manifest.length,
       photos: manifest.map((entry) => ({
