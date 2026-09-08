@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getUser } from '@/lib/db/queries';
@@ -90,6 +91,10 @@ export async function POST(request: NextRequest) {
     userId: user.id,
     metadata: { flag, from: previous, to: value },
   });
+
+  if (flag === 'enableFacebookImport') {
+    revalidatePath('/back-office', 'layout');
+  }
 
   return NextResponse.json({ success: true, flag, value });
 }

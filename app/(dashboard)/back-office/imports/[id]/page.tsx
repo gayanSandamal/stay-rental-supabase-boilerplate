@@ -5,7 +5,6 @@ import { ArrowLeft, ExternalLink, FileWarning } from 'lucide-react';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { postImports } from '@/lib/db/schema';
-import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { PageHeader } from '@/components/back-office/page-header';
 import { StatusBadge } from '@/components/ui/badge';
@@ -67,8 +66,8 @@ export default async function ImportReviewPage({
   searchParams: Promise<{ error?: string; saved?: string; extracted?: string; published?: string }>;
 }) {
   await requireBackOfficeAccess();
-  await loadFeatureFlags();
-  if (!isFeatureEnabled('enableFacebookImport')) notFound();
+  const flags = await loadFeatureFlags();
+  if (!flags.enableFacebookImport) notFound();
 
   const { id } = await params;
   const importId = Number(id);
