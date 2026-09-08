@@ -132,3 +132,42 @@ describe('delivery rules', () => {
     expect(code('lib/reports/send.ts')).toContain('isNotNull(users.waPhoneVerifiedAt)');
   });
 });
+
+describe('the body registered with Meta', () => {
+  /*
+   * Registered 2026-09-09 as `listing_imported_notice`, category MARKETING.
+   * Utility was refused twice by Meta's pre-submit classifier — the second time
+   * with every promotional line already removed — so the objection is the
+   * premise, not the prose: Utility means "an existing order or account", and
+   * an imported owner has neither.
+   *
+   * These pin the copy that was actually approved. Editing IMPORT_TEMPLATE_TEXT
+   * without re-registering breaks delivery for every recipient at once, with
+   * nothing failing locally to warn you.
+   */
+  it('carries no promotional claims', () => {
+    // These two lines were cut during registration. Restoring them is the first
+    // thing a reviewer would object to on a re-submission.
+    for (const phrase of [
+      'completely free',
+      'never charge',
+      'never take a commission',
+      "Sri Lanka's rental marketplace",
+    ]) {
+      expect(IMPORT_TEMPLATE_TEXT, phrase).not.toContain(phrase);
+    }
+  });
+
+  it('still says the three things the message exists to say', () => {
+    // Where we found them, that it is now listed, and how to get rid of it.
+    expect(IMPORT_TEMPLATE_TEXT).toContain('Facebook');
+    expect(IMPORT_TEMPLATE_TEXT).toContain('now listed');
+    expect(IMPORT_TEMPLATE_TEXT).toContain('REMOVE');
+  });
+
+  it('keeps REMOVE, which the intake state machine already understands', () => {
+    // DELETE_RE in lib/intake/command-words.ts accepts it, so a one-word reply
+    // lands in the existing delete flow rather than a dead end.
+    expect(IMPORT_TEMPLATE_TEXT).toMatch(/\bREMOVE\b/);
+  });
+});

@@ -454,10 +454,21 @@ or nothing, and there is deliberately no free-form fallback.
 WhatsApp Manager → Account tools → Message templates → Create template.
 
 - **Name**: `listing_imported_notice` (must match `WHATSAPP_IMPORT_TEMPLATE`)
-- **Category**: **Utility**. It concerns the recipient's own property and its
-  main purpose is to offer control over it. Meta may still reclassify a message
-  about a service the recipient never signed up for as Marketing; if it does,
-  cut everything that reads as promotion rather than arguing the category.
+- **Category**: **Marketing**. Registered 2026-09-09. Utility was tried first
+  and refused twice by Meta's pre-submit classifier — *"This message template
+  will be rejected"* — the second time with every promotional line already
+  stripped out. The objection is not the wording: Utility means a message
+  "about an existing order or account", and the recipient of this one has
+  neither, which is the entire premise of importing their ad. Do not spend
+  another round rewriting copy to win that argument.
+
+  **Know what Marketing costs you.** It is dearer per message, and a recipient
+  who has switched off marketing messages **never receives it, with no error** —
+  Meta accepted the send. That is exactly the person the message exists for. If
+  delivery disappoints, the fix is not a better template: post the claim link as
+  a comment on the original ad and let the owner message you first, which opens
+  the 24-hour window, needs no template, costs nothing per message, and is a
+  genuine opt-in.
 - **Language**: must match `WHATSAPP_TEMPLATE_LANGUAGE` (default `en`).
 - **Body**: copy `IMPORT_TEMPLATE_TEXT` from `lib/imports/message.ts`
   **verbatim**. It declares exactly 4 variables and
