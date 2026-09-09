@@ -22,7 +22,7 @@ import {
  * pre-filled when we were lucky. The raw-text box and the uploader are the
  * primary controls, not a fallback bolted on the side.
  *
- * PUBLISH IS DISABLED UNTIL A PHONE NUMBER IS CHOSEN. Publishing messages that
+ * ASKING IS DISABLED UNTIL A PHONE NUMBER IS CHOSEN. The consent request goes to that
  * person and creates an account against their number; a regex guess is a
  * starting point for a human, never authority to do either.
  */
@@ -73,7 +73,7 @@ export function ReviewForm({
    * The four fields publish actually requires are CONTROLLED, the rest are not.
    * Not consistency for its own sake: the main path here is an operator pasting
    * a group post and typing these in, and reading them from the server-side
-   * parse would leave Publish disabled while they stare at a filled-in form.
+   * parse would leave the ask disabled while they stare at a filled-in form.
    */
   const [required, setRequired] = useState({
     title: parsed.title ?? '',
@@ -232,7 +232,8 @@ export function ReviewForm({
             <span className="ml-1 font-normal text-rose-600">required</span>
           </legend>
           <p className="text-sm text-slate-500">
-            Publishing creates an account against this number and messages it. Confirm it
+            We message this number to ask permission, and create their account only if
+            they say yes. Confirm it
             against the original post — nobody has verified it.
           </p>
 
@@ -339,7 +340,7 @@ export function ReviewForm({
               ) : (
                 <Send className="mr-1.5 h-4 w-4" />
               )}
-              Publish and notify owner
+              Ask the owner for consent
             </Button>
 
             <Button

@@ -680,6 +680,56 @@ export function socialConsentDeclinedMessage(): string {
   return "No problem — we'll keep it on Easy Rent only. 👍";
 }
 
+/**
+ * The answers to "may we list your property at all" (lib/imports/consent.ts).
+ *
+ * Free-form rather than templates, and that is not a shortcut: the YES or NO
+ * being answered IS the landlord's first message to us, so it opens the
+ * 24-hour service window these replies ride inside.
+ */
+export function importConsentGrantedMessage(live: boolean): string {
+  return live
+    ? [
+        '🎉 Thank you! Your property is now live on Easy Rent.',
+        '',
+        'Tenants will contact you directly on the number in your advert. We never charge you anything.',
+        '',
+        'Reply LINK anytime to edit it, or REMOVE to take it down.',
+      ].join('\n')
+    : [
+        '🎉 Thank you! We are running our usual checks on the photos and will publish it shortly.',
+        '',
+        "We'll message you the moment it goes live.",
+        '',
+        'Reply REMOVE anytime to cancel.',
+      ].join('\n');
+}
+
+/**
+ * Their yes landed but the listing could not be created. Never claim it is
+ * coming automatically — a human has to finish it, and the ops queue has been
+ * told so.
+ */
+export function importConsentPendingMessage(): string {
+  return [
+    '🙏 Thank you! Something went wrong on our side while setting up your listing.',
+    '',
+    'Our team has been alerted and will finish it by hand. Nothing further is needed from you.',
+  ].join('\n');
+}
+
+/**
+ * A no. It promises deletion because the consent template promised it, and
+ * `declineImportConsent` actually wipes the extracted advert.
+ */
+export function importConsentDeclinedMessage(): string {
+  return [
+    "Understood — we won't list your property, and we've deleted everything we had.",
+    '',
+    'Sorry for the interruption. If you ever want a free listing, just message us here.',
+  ].join('\n');
+}
+
 /** One published social post, as the landlord needs to see it. */
 export interface SocialResultItem {
   platform: string;

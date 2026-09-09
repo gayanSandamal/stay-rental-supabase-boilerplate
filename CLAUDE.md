@@ -137,7 +137,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 
 ## Key env vars
 
-`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `WHATSAPP_IMPORT_TEMPLATE` (owner notice for imported listings; unset = dry-run) · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
+`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `WHATSAPP_CONSENT_TEMPLATE` (asks an advert's owner whether we may list it; **unset = nothing can ever publish**, since the importer is opt-in) · `WHATSAPP_IMPORT_TEMPLATE` (the go-live notice sent after they say yes; unset = dry-run) · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
 
 ## Where to look
 
@@ -380,6 +380,38 @@ with a one-tap edit/remove link. Two flags, both OFF: `enableFacebookImport`
   variable count fails for every recipient at once with nothing failing locally.
   No free-form fallback, and `dry_run` (no template configured) is counted apart
   from `failed` (WhatsApp rejected it).
+- **THE IMPORTER IS OPT-IN (migration 0060). Silence is a no.** The operator's
+  button ASKS the owner over WhatsApp; their YES is what creates the listing.
+  `post_imports.consent_granted_at` is the authorisation and
+  `assertImportConsent` in `lib/imports/consent.ts` is the single gate, checked
+  inside `publishImport` — the one function that inserts the row — because the
+  bug this replaced was a missing call site, and a permission check spread
+  across the four calling screens fails the same way. It **throws** rather than
+  returning a boolean, so a caller that ignores the result still cannot publish.
+  There is deliberately **no timeout that publishes anyway**: an unanswered
+  import stays `awaiting_consent` forever, and that is the expected terminal
+  state for most of them. The importer is no longer a way to seed the
+  marketplace in bulk — it recruits landlords who actively said yes.
+- **One yes covers the website AND social**, because `CONSENT_TEMPLATE_TEXT`
+  names Facebook, Instagram and TikTok. That is what makes a single reply real
+  consent, and why `socialConsentSource` is now `'whatsapp'` and `ownerAsked`
+  is `true` — `'ops'` was the honest label only while nobody was asked.
+- **The preview link mints no session.** `/l/<token>` resolves consent tokens
+  *before* access tokens (the approved template's button base is baked in at
+  Meta and cannot differ), and forwards to `/preview/<token>`, which renders
+  from `post_imports` — **never** from `listings`, because no listing row exists
+  yet and nothing the marketplace queries can surface it. Signing someone in
+  before they have agreed to anything would be the wrong default. The token
+  stops resolving the moment they answer.
+- **A NO really deletes.** `declineImportConsent` wipes `raw_text`,
+  `parsed_payload` and `photo_urls`, because the template promised it; the row
+  survives only as a tombstone so the same advert is not imported and the same
+  person asked twice. `already_asked` blocks a second ask for the same reason.
+- **The consent reply is free-form, the go-live notice is a template.** The YES
+  *is* the landlord opening the 24-hour window, so the confirmation rides inside
+  it. Moderation can then hold the listing for hours, so the notice that follows
+  may land outside the window — which is why it stays an approved template on
+  all four go-live paths.
 - **An imported listing's contact number is `verified: false`** and, when
   moderation is armed, the listing lands `pending` for the sweeper. These are
   third-party photos and third-party text; `autoPublishWhatsAppIntakes` is about

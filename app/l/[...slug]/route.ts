@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAudit } from '@/lib/db/audit-logger';
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rate-limit';
 import { resolveAccessToken, touchAccessToken } from '@/lib/auth/access-links';
+import { resolveConsentToken } from '@/lib/imports/consent';
 
 /**
  * Passwordless access links: /l/<token>[/e/<id>|/d/<id>|/s/<id>]
@@ -58,6 +59,25 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ slug?: 
   const { slug = [] } = await ctx.params;
   const [token, action, idRaw] = slug;
   if (!token || token.length < 20) return expired('invalid');
+
+  /*
+   * CONSENT PREVIEW (0060) — checked before the access-link path because the
+   * two share this prefix by necessity: the approved WhatsApp template's URL
+   * button base is baked into it at Meta and cannot differ per message.
+   *
+   * The token spaces are disjoint, so trying this one first costs a single
+   * indexed lookup and can never shadow a real access link.
+   *
+   * What it must NOT do is what the code below does. This link goes to someone
+   * who has been asked whether we may list their property and has not yet
+   * answered; signing them in would hand a session to a person who has agreed
+   * to nothing. It forwards to a read-only render instead, and
+   * `resolveConsentToken` stops matching the moment they answer either way.
+   */
+  const consentImport = await resolveConsentToken(token);
+  if (consentImport) {
+    return forward(`/preview/${encodeURIComponent(token)}`);
+  }
 
   const resolved = await resolveAccessToken(token);
   if (!resolved.ok) return expired(resolved.reason);

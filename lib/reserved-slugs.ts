@@ -39,6 +39,9 @@ export const RESERVED_SLUGS = new Set([
   'link-expired',
   'list-your-property',
   'listings',
+  // 0060 — /preview/<token> renders an imported advert to the owner we are
+  // asking about it. A landlord holding this slug would shadow every one.
+  'preview',
   'privacy-policy',
   'reset-password',
   'sign-in',

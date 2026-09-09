@@ -28,10 +28,22 @@ describe('re-read fills empty fields instead of overwriting', () => {
 describe('share-on-social', () => {
   const publish = code('lib/imports/publish.ts');
 
-  it('records consent as ops, never as web', () => {
-    // 'web' is a landlord ticking a box about their own property. This is an
-    // operator ticking one about a stranger's, and the record must say so.
-    expect(publish).toContain("socialConsentSource: 'ops' as const");
+  it('records consent as whatsapp, because the owner really was asked', () => {
+    /*
+     * This assertion INVERTED at migration 0060, and the inversion is the point.
+     *
+     * It used to require `ops`, which was the honest label while the importer
+     * published first and told the owner afterwards: an operator had ticked a
+     * box about a stranger's property and nobody had asked its owner anything.
+     * The importer is now opt-in — the consent template names Facebook,
+     * Instagram and TikTok, and `assertImportConsent` proves the yes arrived
+     * before any listing row exists — so `whatsapp` is what actually happened.
+     *
+     * `web` remains wrong for a different reason: that is a landlord ticking a
+     * box in our own UI about their own property.
+     */
+    expect(publish).toContain("socialConsentSource: 'whatsapp' as const");
+    expect(publish).not.toContain("socialConsentSource: 'ops' as const");
   });
 
   it('only records consent when the box was ticked', () => {
@@ -41,9 +53,11 @@ describe('share-on-social', () => {
     expect(guard).toBeGreaterThanOrEqual(0);
   });
 
-  it('audits a decision taken on the owner behalf', () => {
+  it('audits that the owner was asked, which since 0060 they were', () => {
+    // Flipped with the assertion above: the audit trail has to say whether a
+    // human was actually asked, and under opt-in the answer is finally yes.
     expect(publish).toContain("logListingAction('listing_social_consent_granted'");
-    expect(publish).toContain('ownerAsked: false');
+    expect(publish).toContain('ownerAsked: true');
   });
 
   it('audits regardless of whether moderation holds the listing', () => {
