@@ -66,10 +66,22 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
 
   await logListingAction('listing_moderation_overridden', id, user.id, { action: 'publish_anyway' });
 
-  // The third path to going live, and it owes the same social-sharing offer as
-  // the sweeper and the ops approve endpoint. Only on a FIRST publish: a
-  // listing that was already live is being re-approved, not published.
+  // The third path to going live, and it owes what the sweeper does on a pass:
+  // the imported owner's notice, then the social-sharing offer. Only on a FIRST
+  // publish: a listing that was already live is being re-approved, not published.
   if (!listing.publishedAt) {
+    // An imported listing has no intake row and no 24-hour service window — its
+    // owner has never messaged us — so the sweeper sends them the approved
+    // template instead. An ops override reaches `active` WITHOUT the sweeper, so
+    // it has to make the same call or the owner is never told their property is
+    // listed, and nothing retries. No-ops for every listing that did not come
+    // from an import; the `notifiedAt` guard inside makes a re-approval safe.
+    try {
+      const { notifyImportedOwnerForListing } = await import('@/lib/imports/notify');
+      await notifyImportedOwnerForListing(id);
+    } catch (err) {
+      console.error('[moderation] imported-owner notice failed', err);
+    }
     try {
       const fresh = await db.query.listings.findFirst({ where: eq(listings.id, id) });
       if (fresh) {

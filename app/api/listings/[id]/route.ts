@@ -236,9 +236,20 @@ export async function PATCH(
     }
 
     // Manual ops approval is one of the three ways a listing first goes live,
-    // so it owes the same social-sharing offer the moderation sweeper makes.
-    // Without this, every ops-approved listing silently skips the question.
+    // so it owes what the moderation sweeper does on a pass: the imported
+    // owner's notice, then the social-sharing offer. Without these, every
+    // ops-approved listing silently skips both.
     if (status === 'active' && listing.status !== 'active') {
+      // An imported listing has no intake row, so notifyWhatsAppOwner above
+      // returned without sending — its owner has never messaged us, there is no
+      // 24-hour window, and they get the approved template instead. Returns
+      // null for every other origin, which is the common case.
+      try {
+        const { notifyImportedOwnerForListing } = await import('@/lib/imports/notify');
+        await notifyImportedOwnerForListing(listingId);
+      } catch (err) {
+        console.error('[listings PATCH] imported-owner notice failed', err);
+      }
       try {
         const { promptForSocialConsent, enqueueIfAlreadyConsented } = await import(
           '@/lib/social/consent'
