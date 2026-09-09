@@ -290,8 +290,19 @@ export async function reconcileMissedAnnouncements(
     try {
       const intake = await findIntakeForListing(listing.id).catch(() => null);
       if (!intake?.fromNumber) {
-        // No WhatsApp origin: the in-app path either fired or there is nobody
-        // to tell. Either way it is not this reconciler's to chase.
+        // No WhatsApp origin, but an IMPORTED listing still has somebody to
+        // tell: its owner never messaged us, so they get the approved template
+        // rather than a service-window message. Try that BEFORE writing the
+        // listing off — stamping first is what turned a missed notice into a
+        // permanent one, since nothing looks at the row again. Returns null for
+        // every other origin, where the in-app path either fired or there is
+        // nobody to tell, and it is not this reconciler's to chase.
+        const { notifyImportedOwnerForListing } = await import('@/lib/imports/notify');
+        const imported = await notifyImportedOwnerForListing(listing.id).catch((err) => {
+          console.error('[moderation] imported-owner reconcile failed', err);
+          return null;
+        });
+        if (imported === 'sent') sent++;
         await markLandlordNotified(listing.id);
         continue;
       }

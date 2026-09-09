@@ -85,6 +85,60 @@ describe('the notice resolver', () => {
   });
 });
 
+/**
+ * EVERY path to `active` owes the owner their notice.
+ *
+ * For a while only the moderation sweeper sent it, so an ops override or a
+ * PATCH to /api/listings/[id] published the listing and told nobody — and told
+ * nobody PERMANENTLY, because `postImports.notifiedAt` stays null and no job
+ * looks at the row again. The reconciler made it worse by stamping
+ * `landlordNotifiedAt` on any listing with no intake row, closing the last door.
+ *
+ * These assert the call SITE on each path rather than mocking a send, because
+ * the defect was a missing call, which no amount of mocking the sender catches.
+ */
+describe('every go-live path notifies the imported owner', () => {
+  const paths: ReadonlyArray<readonly [string, string]> = [
+    ['the moderation sweeper', 'lib/moderation/notify.ts'],
+    ['the ops publish-anyway override', 'app/(dashboard)/back-office/moderation/actions.ts'],
+    ['the ops approve endpoint', 'app/api/listings/[id]/route.ts'],
+  ];
+
+  for (const [label, file] of paths) {
+    it(`${label} calls notifyImportedOwnerForListing`, () => {
+      expect(code(file)).toContain('notifyImportedOwnerForListing');
+    });
+  }
+
+  it('the override sends only on a FIRST publish, not on a re-approval', () => {
+    const actions = code('app/(dashboard)/back-office/moderation/actions.ts');
+    const call = actions.indexOf('notifyImportedOwnerForListing');
+    expect(call).toBeGreaterThanOrEqual(0);
+    expect(actions.slice(Math.max(0, call - 300), call)).toContain('if (!listing.publishedAt)');
+  });
+
+  it('the endpoint sends only on a transition INTO active', () => {
+    const route = code('app/api/listings/[id]/route.ts');
+    const call = route.indexOf('notifyImportedOwnerForListing');
+    expect(call).toBeGreaterThanOrEqual(0);
+    expect(route.slice(Math.max(0, call - 300), call)).toContain(
+      "status === 'active' && listing.status !== 'active'"
+    );
+  });
+
+  it('the reconciler tries the notice BEFORE it writes a listing off', () => {
+    const sweeper = code('lib/moderation/notify.ts');
+    const reconciler = sweeper.slice(
+      sweeper.indexOf('export async function reconcileMissedAnnouncements')
+    );
+    const call = reconciler.indexOf('notifyImportedOwnerForListing');
+    const stamp = reconciler.indexOf('markLandlordNotified');
+    expect(call).toBeGreaterThanOrEqual(0);
+    // Stamping first is what turned one missed notice into a permanent one.
+    expect(call).toBeLessThan(stamp);
+  });
+});
+
 describe('migration 0058 closes the two public tables', () => {
   const sql = readFileSync(
     join(process.cwd(), 'lib/db/migrations/0058_enable_rls_on_missed_tables.sql'),

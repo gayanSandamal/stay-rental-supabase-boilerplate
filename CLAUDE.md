@@ -384,6 +384,28 @@ with a one-tap edit/remove link. Two flags, both OFF: `enableFacebookImport`
   moderation is armed, the listing lands `pending` for the sweeper. These are
   third-party photos and third-party text; `autoPublishWhatsAppIntakes` is about
   a landlord submitting their own property and does not apply.
+- **EVERY path to `active` owes the owner their notice, not just the sweeper.**
+  A listing goes live four ways — `publishImport` with moderation disarmed, the
+  moderation sweeper, `publishAnywayAction` in Back Office → Moderation, and a
+  PATCH to `/api/listings/[id]`. For a while only the first two called
+  `notifyImportedOwnerForListing`, so an ops override published the property and
+  told the owner nothing, **permanently**: `post_imports.notified_at` stays null
+  and no job re-reads the row. `reconcileMissedAnnouncements` made it worse by
+  stamping `landlord_notified_at` on any listing with no intake row — it now
+  tries the import notice before writing one off. The `notifiedAt IS NULL` guard
+  inside makes the call safe from all four, so add it to any fifth;
+  `tests/unit/import-owner-notice-timing.test.ts` fails if a path drops it.
+- **Nothing may take the dry-run branch on a repair.** `notifyImportedOwner`
+  stamps `notified_at` whatever the outcome — correct on the live paths, where a
+  notice is a snapshot and not a ledger. It means a backfill run with
+  `notifyImportedOwners` off or `WHATSAPP_IMPORT_TEMPLATE` unset marks every
+  owner told while sending nothing, and there is no second chance.
+  `pnpm imports:notify-owners` refuses to run in that state rather than
+  reporting `dry_run` rows; listing mode (no arguments) is read-only.
+- **`post_imports.status = 'published'` is not "the listing is live".** It is set
+  unconditionally at the end of `publishImport`, so with moderation armed the
+  Imports screen reads `published` for a listing still sitting `pending` in the
+  moderation queue. Read `listings.status` for liveness.
 - The importer reuses `parseIntake`, `getOrCreateWhatsAppLandlord`,
   `mintAccessLink`, `photoCap`/`capPhotos` and the manifest helpers. Note the
   parser is not reliable on real ads — an ad saying "hot water" above its rent
