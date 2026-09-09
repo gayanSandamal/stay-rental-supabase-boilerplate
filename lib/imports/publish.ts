@@ -40,6 +40,7 @@ import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
+import { assertImportConsent } from './consent';
 import { notifyImportedOwner, type NotifyOutcome } from './notify';
 
 export interface PublishResult {
@@ -70,6 +71,20 @@ export async function publishImport(
   if (record.status === 'published') {
     throw new ImportPublishError('This import has already been published.');
   }
+
+  /*
+   * THE AUTHORISATION. Since 0060 the importer is opt-in: the owner is asked
+   * over WhatsApp and nothing of theirs becomes public until they answer yes.
+   *
+   * It is checked HERE, in the one function that inserts the listing row,
+   * rather than on each of the screens that call it. The bug this feature
+   * replaced was a missing call site — the owner notice was wired into two of
+   * four publish paths — and a permission check spread across callers fails the
+   * same way, except the failure is publishing a stranger's property instead of
+   * staying quiet about it. One chokepoint, and it throws rather than returning
+   * false, so a caller that ignores it still cannot publish.
+   */
+  assertImportConsent(record);
 
   const parsed = parsePayload(record.parsedPayload);
   if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
@@ -175,17 +190,18 @@ export async function publishImport(
       ...(moderationArmed ? {} : { publishedAt: now, expiresAt: expires }),
       /*
        * Consent to post this to Easy Rent's own social channels, recorded as
-       * `ops` because that is what it is: the operator decided, and the
-       * property's owner has not been asked. Labelling it `web` (what a
-       * landlord ticking their own box produces) would erase that distinction
-       * from the record.
+       * `whatsapp` since 0060: the consent template names Facebook, Instagram
+       * and TikTok, so the owner's yes covered them and `assertImportConsent`
+       * above has already proven it arrived. It read `ops` under the old
+       * opt-out flow, which was the honest label then — the operator decided
+       * alone. Do not put `ops` back while the ask precedes the publish.
        *
        * Nothing else is needed to make it post: `offerSocialSharing` routes any
        * listing with socialConsentAt to enqueueIfAlreadyConsented once it is
        * live, from both the immediate path and the moderation sweeper.
        */
       ...(record.shareOnSocial
-        ? { socialConsentAt: now, socialConsentSource: 'ops' as const }
+        ? { socialConsentAt: now, socialConsentSource: 'whatsapp' as const }
         : {}),
     })
     .returning();
@@ -234,9 +250,9 @@ export async function publishImport(
       await logListingAction('listing_social_consent_granted', listing.id, opsUserId, {
         source: 'ops',
         importId: record.id,
-        // Named plainly so a decision taken on someone's behalf is legible in
-        // the audit trail rather than inferred from a source string.
-        ownerAsked: false,
+        // Named plainly so the record says whether a human was actually
+        // asked, rather than leaving it inferred from a source string.
+        ownerAsked: true,
       });
       if (!moderationArmed) {
         // Already live, so there is no sweeper pass to wait for. When the

@@ -38,6 +38,9 @@ import {
   updateAckMessage,
   verifyCodeUnusableMessage,
   verifyWrongSenderMessage,
+  importConsentDeclinedMessage,
+  importConsentGrantedMessage,
+  importConsentPendingMessage,
   socialConsentGrantedMessage,
   socialConsentDeclinedMessage,
   searchNotAvailableMessage,
@@ -344,6 +347,48 @@ async function handleInbound(
         source: 'whatsapp',
       });
       await whatsappAdapter.sendText(message.senderId, socialConsentDeclinedMessage());
+    } else if (outcome.action === 'import_consent_granted') {
+      /*
+       * The moment an imported advert becomes a listing. Everything before this
+       * point was a question; `grantImportConsent` stamps the permission and
+       * `publishImport` refuses to run without it.
+       *
+       * The reply is free-form rather than a template, and legitimately so:
+       * this message IS the landlord opening the 24-hour service window, so we
+       * are inside it by definition. The go-live notice later may not be —
+       * moderation can hold the listing for hours — which is why that one stays
+       * an approved template.
+       */
+      const { grantImportConsent } = await import('@/lib/imports/consent');
+      const { publishImport } = await import('@/lib/imports/publish');
+      const granted = await grantImportConsent(outcome.importId!);
+      if (!granted) {
+        // Already answered — a double tap, or Meta redelivering the reply.
+        // Saying nothing is right: they have had the confirmation already.
+        console.log(`[imports] consent for ${outcome.importId} was already recorded`);
+      } else {
+        try {
+          const published = await publishImport(granted, granted.importedBy ?? 0);
+          await whatsappAdapter.sendText(
+            message.senderId,
+            importConsentGrantedMessage(published.live)
+          );
+        } catch (err) {
+          // The permission stands even if creating the listing failed — it was
+          // freely given and must not be silently thrown away. Ops finish it.
+          console.error('[imports] publish after consent failed', err);
+          await createNotificationsForOpsAndAdmin({
+            type: 'whatsapp_intake',
+            title: `Owner said YES to import #${outcome.importId} but publishing failed — finish it manually`,
+            link: `/back-office/imports/${outcome.importId}`,
+          }).catch(() => {});
+          await whatsappAdapter.sendText(message.senderId, importConsentPendingMessage());
+        }
+      }
+    } else if (outcome.action === 'import_consent_declined') {
+      const { declineImportConsent } = await import('@/lib/imports/consent');
+      await declineImportConsent(outcome.importId!);
+      await whatsappAdapter.sendText(message.senderId, importConsentDeclinedMessage());
     } else if (outcome.action === 'command_cancelled') {
       await whatsappAdapter.sendText(message.senderId, deleteCancelledMessage(lang));
     } else if (outcome.action === 'no_listings') {

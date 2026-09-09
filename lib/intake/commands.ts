@@ -48,6 +48,18 @@ export type ConversationState =
    */
   | 'confirm_social'
   /**
+   * Asked an advert's owner whether we may list their property at all, before
+   * anything of theirs is public. Like `confirm_social` an unrecognised reply
+   * falls through rather than reprompting, and for the same reason: the message
+   * is unsolicited and the recipient has never contacted us, so swallowing
+   * their DELETE or HELP for the life of the prompt would be worse than
+   * dropping the question.
+   *
+   * Unlike `confirm_social`, silence here is load-bearing rather than merely
+   * safe — no answer means the listing is never created. See lib/imports/consent.ts.
+   */
+  | 'confirm_import'
+  /**
    * Asked whether the sender is listing a property or looking for one, because
    * the message read equally as both. Waiting for the answer, which carries the
    * original text forward so nobody retypes it. See lib/intake/intent.ts.
@@ -70,6 +82,8 @@ export interface ConversationPayload {
   cityIntakeId?: number;
   /** The listing a confirm_social answer applies to. */
   socialListingId?: number;
+  /** The post_imports row a confirm_import answer applies to. */
+  consentImportId?: number;
   /**
    * The message that could not be classified, parked verbatim so answering
    * "listing" resumes the submission with the text they already sent.

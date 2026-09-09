@@ -70,6 +70,71 @@ Tap below to edit the details or take it down — no password needed. Or reply R
 
 export const IMPORT_TEMPLATE_PARAM_COUNT = 4;
 
+/**
+ * The ASK, registered as `listing_consent_request`. Sent before anything of the
+ * owner's is public; `IMPORT_TEMPLATE_TEXT` above is sent after, and only if
+ * this one is answered yes.
+ *
+ * THREE VARIABLES, NOT FOUR. The notice above renders "{{2}} in {{3}}" and
+ * `composeTitle()` already writes the town into the title, so a real send read
+ * "3BR House in Nugegoda in Nugegoda". The title alone identifies the property
+ * to the one person who wrote the advert, so the separate city variable is gone
+ * rather than deduplicated — a variable that only sometimes duplicates another
+ * is a bug waiting for the title format to change.
+ *
+ * WHY IT NAMES THE PLATFORMS. One reply grants publication AND social sharing,
+ * so the message has to say which accounts, or the consent covers something the
+ * owner did not picture. Naming them is what makes a single yes honest.
+ *
+ * WHY IT SAYS SILENCE MEANS NO. It is the actual behaviour — no reply, no
+ * listing, forever — and stating it is what separates an ask from a warning.
+ *
+ * SAME BUTTON BASE as the notice: `https://easyrent.lk/l/` plus a token. The
+ * route is shared, but a CONSENT token resolves to a read-only preview and
+ * mints no session, because the recipient has not agreed to anything yet.
+ */
+export const CONSENT_TEMPLATE_TEXT = `🏠 Easy Rent — may we list your property, free of charge?
+
+Hi {{1}}, we found your rental advert for {{2}} on Facebook. We would like to list it on Easy Rent, a rental marketplace in Sri Lanka, and share it on our Facebook, Instagram and TikTok pages.
+
+It is completely free. We never charge landlords anything, and we never take a commission.
+
+Nothing is published yet — tap below to see exactly how your listing would look.
+
+Reply YES and we will publish it. Reply NO and we will delete everything we hold. If you do not reply, we will not publish it.
+
+Tenants would contact you directly on {{3}}. Your number is never shown on our social posts.`;
+
+export const CONSENT_TEMPLATE_PARAM_COUNT = 3;
+
+export interface ImportConsentInput {
+  ownerName: string | null;
+  listingTitle: string;
+  ownerPhone: string;
+}
+
+/**
+ * Exactly CONSENT_TEMPLATE_PARAM_COUNT values, none ever empty — Meta rejects
+ * the whole send if a declared variable resolves to an empty string.
+ */
+export function consentTemplateParams(input: ImportConsentInput): string[] {
+  return [
+    greetingName(input.ownerName),
+    input.listingTitle.trim() || 'your property',
+    input.ownerPhone.trim(),
+  ];
+}
+
+/** What the consent template reads as, for the dry-run log and the ops record. */
+export function renderConsentText(params: string[], link: string): string {
+  return params
+    .reduce(
+      (text, value, index) => text.replaceAll(`{{${index + 1}}}`, value),
+      CONSENT_TEMPLATE_TEXT
+    )
+    .concat(`\n\n${link}`);
+}
+
 export interface ImportNotificationInput {
   ownerName: string | null;
   listingTitle: string;

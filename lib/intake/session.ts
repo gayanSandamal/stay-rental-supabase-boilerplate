@@ -110,6 +110,14 @@ export interface AppendOutcome {
     | 'social_consent_granted'
     | 'social_consent_declined'
     /**
+     * confirm_import: the owner of an imported advert agreed to (or refused)
+     * having their property listed at all. Unlike the social pair above, the
+     * grant here is what CREATES the listing — there is nothing published yet
+     * when the question is asked.
+     */
+    | 'import_consent_granted'
+    | 'import_consent_declined'
+    /**
      * STOP / START REPORTS: scheduled performance reports switched off or back
      * on. The preference WRITE deliberately happens in the webhook rather than
      * here — see the handler for why a second connection inside this
@@ -129,6 +137,8 @@ export interface AppendOutcome {
   listingStatus?: string;
   /** appended/created: a location pin was stored on the intake. */
   pinStored?: boolean;
+  /** import_consent_granted/declined: the post_imports row answered. */
+  importId?: number;
   /** city_chosen/city_kept: what to use, and what they originally typed. */
   chosenCity?: string;
   chosenDistrict?: string;
@@ -467,6 +477,35 @@ export async function appendToIntake(
         }
         await clearConversation(tx, msg.channel, msg.senderId);
         // No return — fall through to detectCommand and the session append.
+      }
+
+      if (convo.state === 'confirm_import') {
+        /*
+         * May we list your property at all. The second state that falls through
+         * on an unrecognised reply, for confirm_social's reason: the question
+         * was unsolicited and this person has never messaged us, so holding
+         * their thread hostage to it would be the wrong trade.
+         *
+         * The asymmetry that matters is between the two answers. A yes creates
+         * a listing from someone's advert, so it must be an unambiguous yes —
+         * `isAffirmative`, nothing inferred. A no costs only a listing that was
+         * never ours to make, so silence lands in the same place as no: the
+         * import simply stays unanswered forever and nothing is published.
+         */
+        const importId = convo.payload.consentImportId;
+        const yes = isAffirmative(msg.text);
+        const no = isCancel(msg.text);
+
+        if (importId && (yes || no)) {
+          await clearConversation(tx, msg.channel, msg.senderId);
+          await recordHandled(tx, msg.channel, msg.senderId, msg.messageId);
+          return {
+            action: yes ? 'import_consent_granted' : 'import_consent_declined',
+            importId,
+          } as const;
+        }
+        await clearConversation(tx, msg.channel, msg.senderId);
+        // No return — fall through, exactly as confirm_social does.
       }
 
       if (convo.state === 'confirm_city') {

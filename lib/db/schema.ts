@@ -673,7 +673,14 @@ export const whatsappIntakes = pgTable('whatsapp_intakes', {
  */
 export const postImportStatusEnum = pgEnum('post_import_status', [
   'draft', // extracted, awaiting operator review
-  'published', // a listing was created from it
+  // Operator approved it and we ASKED the owner. Nothing is public: no listing
+  // row exists yet. This is the terminal state for most imports, because the
+  // consent model is opt-in and silence is a no.
+  'awaiting_consent',
+  'published', // the owner said yes and a listing was created from it
+  // The owner said no. Kept as a tombstone so the same advert is not imported
+  // and asked about a second time; the extracted content is wiped.
+  'declined',
   'discarded', // operator rejected it; kept so the URL is not re-imported blind
 ]);
 
@@ -716,6 +723,24 @@ export const postImports = pgTable('post_imports', {
   notifiedAt: timestamp('notified_at'),
   /** sent | dry_run | failed. dry_run is unfinished setup, never an outage. */
   notifyOutcome: varchar('notify_outcome', { length: 16 }),
+  /*
+   * OWNER CONSENT (migration 0060). The importer is opt-in: we ask before
+   * anything is public, and silence is a no. `consentGrantedAt` is the ONLY
+   * thing that authorises a listing row — see assertImportConsent in
+   * lib/imports/consent.ts, which every publish path calls.
+   */
+  consentRequestedAt: timestamp('consent_requested_at'),
+  consentGrantedAt: timestamp('consent_granted_at'),
+  consentDeclinedAt: timestamp('consent_declined_at'),
+  /**
+   * sha256 of the preview token in the consent message's URL button, never the
+   * token itself — same rule as landlord_access_tokens. It resolves to a
+   * read-only render of what we are ASKING to publish, so unlike an access link
+   * it mints no session: the recipient has not agreed to anything yet.
+   */
+  consentTokenHash: varchar('consent_token_hash', { length: 64 }),
+  /** sent | dry_run | failed, for the consent request itself. */
+  consentOutcome: varchar('consent_outcome', { length: 16 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

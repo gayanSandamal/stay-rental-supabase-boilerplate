@@ -26,22 +26,23 @@ const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = 
     title: 'Re-read the post text',
     detail: 'Check the fields below — anything you had typed by hand was kept.',
   },
-  'published-sent': {
+  'asked-sent': {
     ok: true,
-    title: 'Published, and the owner was messaged',
-    detail: 'They have a link to edit or remove it themselves.',
-  },
-  'published-dry_run': {
-    ok: true,
-    title: 'Published — the owner was NOT messaged',
+    title: 'Asked the owner — nothing is published',
     detail:
-      'Either owner notifications are switched off or no approved WhatsApp template is registered. The message was composed and logged, not sent.',
+      'They have a preview link and can reply YES or NO. If they never reply, this stays unpublished, which is the intended outcome.',
   },
-  'published-failed': {
+  'asked-dry_run': {
     ok: false,
-    title: 'Published, but WhatsApp rejected the message',
+    title: 'The owner was NOT asked',
     detail:
-      'The listing is live and the owner does not know. Check the number and contact them another way.',
+      'Either owner messaging is switched off or no approved WhatsApp consent template is registered. The message was composed and logged, not sent — so no consent can arrive and this will never publish.',
+  },
+  'asked-failed': {
+    ok: false,
+    title: 'WhatsApp rejected the consent request',
+    detail:
+      'The owner does not know we are asking, and nothing will publish. Check the number and the approved template.',
   },
   no_text: {
     ok: false,
@@ -50,13 +51,19 @@ const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = 
   },
   incomplete: {
     ok: false,
-    title: 'Not enough to publish',
+    title: 'Not enough to ask about',
     detail:
-      'Title, city, bedrooms, monthly rent and the owner’s phone number are all required.',
+      'Title, city, bedrooms, monthly rent and the owner’s phone number are all required. The consent message quotes these back to the owner.',
   },
-  publish_failed: {
+  already_asked: {
     ok: false,
-    title: 'Publishing failed',
+    title: 'This owner has already been asked',
+    detail:
+      'A second unsolicited message to someone who has not replied is harassment, and it costs WhatsApp account quality. Wait for their answer.',
+  },
+  consent_failed: {
+    ok: false,
+    title: 'Could not send the consent request',
     detail: 'Nothing was published. Try again; if it repeats, check the server logs.',
   },
 };
@@ -66,7 +73,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; extracted?: string; published?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; extracted?: string; asked?: string }>;
 }) {
   await requireBackOfficeAccess();
   const flags = await loadFeatureFlags();
@@ -82,8 +89,8 @@ export default async function ImportReviewPage({
   if (!record) notFound();
 
   const query = await searchParams;
-  const resultKey = query.published
-    ? `published-${query.published}`
+  const resultKey = query.asked
+    ? `asked-${query.asked}`
     : query.error ?? (query.saved ? 'saved' : query.extracted ? 'extracted' : null);
   const result = resultKey ? RESULTS[resultKey] : null;
 

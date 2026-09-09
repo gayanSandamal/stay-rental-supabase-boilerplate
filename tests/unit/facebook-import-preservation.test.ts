@@ -296,7 +296,14 @@ describe('Property 2: Authorization, Concealment, Caching, and Independent Notif
     const notify = read(notifyPath);
 
     expect(actions).toContain("status: 'discarded'");
-    expect(actions).toContain('publishImport(saved, user.id)');
+    /*
+     * Was `publishImport(saved, user.id)`. Since 0060 the operator's button
+     * ASKS the owner and their reply is what publishes, so the review screen
+     * calls requestImportConsent and must NOT be able to publish directly —
+     * a publish path that skips the consent gate is the whole risk here.
+     */
+    expect(actions).toContain('requestImportConsent(saved, user.id)');
+    expect(actions).not.toContain('publishImport(saved, user.id)');
     expect(list).toContain("const TABS = ['draft', 'published', 'discarded', 'all'] as const");
     expect(notify).toContain("export type NotifyOutcome = 'sent' | 'dry_run' | 'failed'");
   });

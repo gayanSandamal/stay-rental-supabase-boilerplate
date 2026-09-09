@@ -11,7 +11,8 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { normalizePhone } from '@/lib/auth/phone-verification';
 import { resolvePost, UnsupportedUrlError } from '@/lib/imports/facebook/resolve';
 import { extractFromText, ingestRemoteImages } from '@/lib/imports/extract';
-import { publishImport, ImportPublishError, parsePayload } from '@/lib/imports/publish';
+import { ImportPublishError, parsePayload } from '@/lib/imports/publish';
+import { requestImportConsent } from '@/lib/imports/consent';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 const BASE_PATH = '/back-office/imports';
@@ -212,20 +213,41 @@ export async function publishImportAction(formData: FormData): Promise<void> {
     .where(eq(postImports.id, id))
     .returning();
 
-  let result;
+  /*
+   * THE OPERATOR NO LONGER PUBLISHES. Since 0060 this button ASKS the owner,
+   * and their reply is what creates the listing (see lib/imports/consent.ts).
+   *
+   * The completeness check still runs first and still runs here, because the
+   * consent message quotes the title back to the owner and links to a preview
+   * of the rent and rooms — asking someone to approve a half-empty advert of
+   * their own property is worse than not asking at all. `publishImport` will
+   * re-validate on the way through; this is the copy that produces a usable
+   * error on the review screen rather than a dead WhatsApp message.
+   */
+  if (!saved.ownerPhone) {
+    redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
+    redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  if (saved.consentRequestedAt) {
+    // Asking twice is how a stranger's polite silence becomes harassment, and
+    // it burns WABA quality on a recipient who has already declined by not
+    // answering. NEEDS_INFO_MAX_ROUNDS draws the same line for intake.
+    redirect(`${BASE_PATH}/${id}?error=already_asked`);
+  }
+
+  let consent;
   try {
-    result = await publishImport(saved, user.id);
+    consent = await requestImportConsent(saved, user.id);
   } catch (err) {
-    if (err instanceof ImportPublishError) {
-      redirect(`${BASE_PATH}/${id}?error=incomplete`);
-    }
-    console.error('[imports] publish failed', err);
-    redirect(`${BASE_PATH}/${id}?error=publish_failed`);
+    console.error('[imports] consent request failed', err);
+    redirect(`${BASE_PATH}/${id}?error=consent_failed`);
   }
 
   revalidatePath(BASE_PATH);
   revalidatePath(`${BASE_PATH}/${id}`);
-  redirect(`${BASE_PATH}/${id}?published=${result.notify}`);
+  redirect(`${BASE_PATH}/${id}?asked=${consent.outcome}`);
 }
 
 export async function discardImportAction(formData: FormData): Promise<void> {
