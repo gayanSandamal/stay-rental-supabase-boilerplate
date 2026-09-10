@@ -38,6 +38,7 @@ import { getOrCreateWhatsAppLandlord } from '@/lib/intake/landlord-identity';
 import { isModerationConfigured } from '@/lib/moderation/config';
 import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
 import { scrubContactNumbers } from '@/lib/moderation/contact-scrub';
+import { tidyImportedAdvert } from './advert-text';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
@@ -308,12 +309,29 @@ export async function publishImport(
  * advert, give or take the ellipsis it added. Anything else is the operator's
  * writing and wins outright — they can see the original post and we cannot.
  *
- * WHY THE FALLBACK IS SCRUBBED. Publishing more of the advert means publishing
- * the part that carries the phone number, and an imported number is
- * `verified: false` by definition. `moderateListing` scrubs descriptions, but
- * only when moderation is ARMED; with it disarmed this insert goes straight to
- * `active` and nothing else would ever look. An empty allow-list is the correct
- * one here: nobody has proven any of these numbers.
+ * THE PREFIX TEST COMPARES COLLAPSED WHITESPACE, and must. `composeDescription`
+ * reads text that `normalize()` has already run `\s+ → ' '` over, so the
+ * composed description holds spaces exactly where the advert holds newlines. A
+ * byte-wise `full.startsWith(written)` is therefore false for every multi-line
+ * advert — which is every real Facebook post — and this function used to answer
+ * "the operator wrote that" about text it had composed itself. Measured
+ * 2026-09-11 on a seven-line advert: the restore never fired.
+ *
+ * EVERY BRANCH IS SCRUBBED. Publishing an advert means publishing the part that
+ * carries the phone number, and an imported number is `verified: false` by
+ * definition — the contact system, its rate limits and its verified badge all
+ * exist to stop a raw number appearing on a listing. `moderateListing` scrubs
+ * descriptions, but only when moderation is ARMED; with it disarmed this insert
+ * goes straight to `active` and nothing else would ever look. Scrubbing only
+ * the fallback was the same bug wearing a second hat: the branch a multi-line
+ * advert actually took was the unscrubbed one. An empty allow-list is the
+ * correct one here — nobody has proven any of these numbers, whoever typed them.
+ *
+ * WHY `tidyImportedAdvert` RUNS ONLY ON THE FALLBACK. That branch is our own
+ * composition of somebody else's post, so a duplicated headline and a row of
+ * tofu boxes are artefacts we introduced and ours to clean up. The other branch
+ * is the operator's writing, and they can see the original: if they left the
+ * decorative squares in, that was a choice.
  */
 export function importDescription(
   composed: string | null | undefined,
@@ -322,16 +340,30 @@ export function importDescription(
   const full = rawText?.trim() ?? '';
   const written = composed?.trim() ?? '';
 
+  // No length comparison: `startsWith` already implies one. Requiring the raw
+  // text to be strictly LONGER meant an advert short enough to escape the
+  // 400-character clip was handed back flattened — same words, every line break
+  // and every bullet gone. A composed description that equals the whole advert
+  // is still ours, and the raw text is the better copy of it.
+  const collapse = (text: string) => text.replace(/\s+/g, ' ').trim();
   const isAutoClip =
     !!full &&
     !!written &&
-    full.length > written.length &&
-    full.startsWith(written.replace(/…$/, '').trimEnd());
+    collapse(full).startsWith(collapse(written).replace(/…$/, '').trimEnd());
 
-  if (full && (!written || isAutoClip)) {
-    return scrubContactNumbers(full, []).cleaned.trim() || written || IMPORT_DESCRIPTION_FALLBACK;
+  // Tidy BEFORE the scrub, never after: the scrub is the security-relevant pass
+  // and must be the last thing that reads this text. NOTHING below may fall
+  // back to an unscrubbed candidate — an advert that is nothing but a phone
+  // number scrubs to empty, and the old `|| written` reached past the scrub to
+  // publish the number it had just removed.
+  const primary = full && (!written || isAutoClip) ? tidyImportedAdvert(full) : written;
+
+  for (const candidate of [primary, written]) {
+    if (!candidate) continue;
+    const cleaned = scrubContactNumbers(candidate, []).cleaned.trim();
+    if (cleaned) return cleaned;
   }
-  return written || IMPORT_DESCRIPTION_FALLBACK;
+  return IMPORT_DESCRIPTION_FALLBACK;
 }
 
 const IMPORT_DESCRIPTION_FALLBACK =
