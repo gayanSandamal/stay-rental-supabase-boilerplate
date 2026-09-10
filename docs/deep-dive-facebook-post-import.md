@@ -24,13 +24,17 @@ Two Meta templates gate delivery, both category **Marketing** (see
 | `listing_consent_request` | `WHATSAPP_CONSENT_TEMPLATE` | Before anything is public | "May we list your property?" — the ask |
 | `listing_imported_notice` | `WHATSAPP_IMPORT_TEMPLATE` | After a YES, once the listing goes live | "It's live" — the go-live notice |
 
-`WHATSAPP_IMPORT_TEMPLATE` was submitted and its registration is documented
-below; `WHATSAPP_CONSENT_TEMPLATE`'s registration is **not yet written up** in
+**Checked directly in WhatsApp Manager on 2026-09-10**: `listing_imported_notice`
+is **Active** (approved, quality rating still pending — normal for a brand-new
+template with no volume yet). `listing_consent_request` is genuinely **In
+review** — it was submitted the same day as the notice (2026-09-09), which the
+previous version of this document got wrong by claiming it had not been
+registered at all. Its registration is still **not written up** in
 [`whatsapp-golive-runbook.md`](./whatsapp-golive-runbook.md) — that runbook
-still only names the go-live notice. Whoever registers the consent template
-should follow the same walkthrough and expect the same Marketing-not-Utility
-result, since the underlying reason (the recipient is not yet a customer)
-applies at least as strongly to a first-contact ask as to a go-live notice.
+covers only the go-live notice — even though it exists and is pending. Whoever
+finishes that write-up should expect the same Marketing-not-Utility category,
+since the underlying reason (the recipient is not yet a customer) applies at
+least as strongly to a first-contact ask as to a go-live notice.
 
 Without either template set, both steps compose, log `[imports:dryrun] …`, and
 record their outcome as `dry_run` — importing and reviewing still work, nothing
@@ -395,9 +399,10 @@ Note this template *keeps* the two lines cut from the notice — *"It is
 completely free… we never take a commission"* — because at the ask stage they
 are simply true and reassuring rather than promotional-sounding filler; Meta's
 classifier objected to the notice on structural grounds (Utility vs Marketing),
-never to that specific copy. There is no record yet of this template having
-been through registration; its category should be assumed Marketing by default
-per the reasoning above, and confirmed when it is actually submitted.
+never to that specific copy. It was submitted as Marketing directly — nobody
+re-ran the Utility-then-refused dance for this one, presumably on the strength
+of the notice's result — and is genuinely **In review** with Meta as of
+2026-09-10, not yet approved and not yet rejected.
 
 ### What Marketing costs, and the honest alternative
 
@@ -818,15 +823,18 @@ Cumulative across every PR touching this feature.
 | Template registration | Utility refused twice by Meta's own classifier for the notice (once with promotional copy already removed); Marketing accepted with no warning |
 | Consent idempotency | `grantImportConsent` returns `null` on a second call for the same import; no duplicate listing |
 | Production data (2026-09-10) | 1 import genuinely `awaiting_consent`, 5 `published` (pre-0060, opt-out era), 1 `discarded`, 1 `draft` |
+| Live template status, WhatsApp Manager (2026-09-10) | `listing_imported_notice`: **Active**, quality pending. `listing_consent_request`: submitted 2026-09-09, still **In review**. |
 
 ### Not verified
 
-**A full opt-in cycle in production with both templates approved.** As of this
-writing `WHATSAPP_IMPORT_TEMPLATE` was registered and its approval status is
-tracked in the runbook; `WHATSAPP_CONSENT_TEMPLATE`'s registration is not yet
-documented anywhere in the repo, so the ask side of the flow is presumed to
-still be dry-running in production regardless of the `notifyImportedOwners`
-flag being on.
+**A full opt-in cycle in production with both templates approved and sending.**
+`listing_imported_notice` is Active (approved) as of 2026-09-10, so the go-live
+notice can deliver once `WHATSAPP_IMPORT_TEMPLATE` is confirmed set in Vercel.
+`listing_consent_request` remains **In review** — the ask side of the flow is
+still necessarily dry-running in production regardless of the
+`notifyImportedOwners` flag, not because nobody submitted it, but because Meta
+has not yet approved it. Once it clears, the first live consent ask will be the
+first real test of `requestImportConsent` → reply → `publishImport` end to end.
 
 ---
 
@@ -849,13 +857,16 @@ Meta's own `hello_world` sample before this feature's templates were added.
 reports have been dry-running silently since they shipped. Same registration
 process documented above.
 
-### `WHATSAPP_CONSENT_TEMPLATE` registration is undocumented
+### `listing_consent_request`'s registration is undocumented, though the template itself is not
 
-The runbook covers `listing_imported_notice` in detail and does not yet mention
+The runbook covers `listing_imported_notice` in detail and does not mention
 `listing_consent_request` at all, despite `CLAUDE.md` and the env-var list
-already naming it as required. Whoever registers it should expect the same
-Marketing-not-Utility outcome for the same structural reason, and should update
-the runbook with that template's walkthrough alongside the existing one.
+already naming it as required — and despite the template having been submitted
+to Meta on 2026-09-09 (**In review** as of 2026-09-10, confirmed in WhatsApp
+Manager). Whoever writes up its rollout should record the outcome once it
+clears review — Marketing, per the same structural reasoning that applied to
+the notice — rather than re-litigating the category question, and should add
+its walkthrough to the runbook alongside the existing one.
 
 ---
 
@@ -942,11 +953,13 @@ this work and touches the same intake pipeline, but is a WhatsApp
 
 ## What's left
 
-1. **Register `listing_consent_request` with Meta** and document the
-   walkthrough in the runbook — currently only the go-live notice is written
-   up.
-2. **Confirm `listing_imported_notice`'s approval status** and that
-   `WHATSAPP_IMPORT_TEMPLATE` is actually set in Vercel.
+1. **Wait for `listing_consent_request` to clear Meta review** — submitted
+   2026-09-09, still In review as of 2026-09-10 — then document its rollout in
+   the runbook, which currently only covers the go-live notice.
+2. **Confirm `WHATSAPP_IMPORT_TEMPLATE` is actually set in Vercel.**
+   `listing_imported_notice` itself is already **Active** (approved) — the
+   remaining unknown is only whether the env var and a redeploy have caught up
+   with that approval.
 3. **Run one full opt-in cycle end to end in production** with both templates
    approved — there has not yet been a live test of ask → YES → publish → notice
    with real Meta delivery on both templates.
