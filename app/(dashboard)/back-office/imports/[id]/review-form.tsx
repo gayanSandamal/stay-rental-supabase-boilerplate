@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImageUploader } from '@/components/image-uploader';
 import { inviteCommentText } from '@/lib/imports/invite';
+import { useFeatureFlag, useFeatureValue } from '@/lib/hooks/use-feature-flags';
+import { capPhotos, effectiveCap } from '@/lib/images/cap';
 import {
   addPhotoUrlsAction,
   discardImportAction,
@@ -113,6 +115,19 @@ export function ReviewForm({
   });
   const setField = (key: keyof typeof required) => (value: string) =>
     setRequired((prev) => ({ ...prev, [key]: value }));
+
+  /*
+   * The same two flags and the same two functions publishImport uses, so the
+   * warning below and the photos actually dropped can never disagree.
+   * `enforcePhotoCap` matters as much as the number: with it off nothing is
+   * dropped at all, and a warning about a cap that is not applied would send an
+   * operator deleting photos for no reason.
+   */
+  const photoCap = effectiveCap(
+    useFeatureFlag('enforcePhotoCap'),
+    useFeatureValue('maxPhotosPerListing')
+  );
+  const overCap = capPhotos(photoUrls, photoCap).dropped.length;
 
   const published = status === 'published';
   const discarded = status === 'discarded';
@@ -378,6 +393,26 @@ export function ReviewForm({
             Facebook only ever hands over the cover photo. Add the rest by dropping the
             files above, or by pasting their URLs below.
           </p>
+
+          {/*
+            The cap is applied at PUBLISH — capPhotos records the extras in the
+            manifest as rejects — and the uploader blocks a file past it, but
+            pasted URLs go through addPhotoUrlsAction, which has no such check.
+            So an operator could hold more photos than will ever be published
+            and be told nothing until they compared the live listing with the
+            draft. Saying which ones is the point: the cover controls below
+            reorder the album, so this is a choice rather than an accident.
+          */}
+          {overCap > 0 && (
+            <p className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
+              <span>
+                Only the first {photoCap} publish, so{' '}
+                {overCap === 1 ? 'the last one' : `the last ${overCap}`} will be left
+                out. Reorder them below to choose which.
+              </span>
+            </p>
+          )}
 
           {/* Paste image URLs. Only Facebook's own photo CDN is fetched — the
               server dereferences whatever is typed here, so the host is checked
