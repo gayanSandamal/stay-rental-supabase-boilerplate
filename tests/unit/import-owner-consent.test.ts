@@ -181,6 +181,27 @@ describe('answering the question', () => {
     expect(publish).toContain("socialConsentSource: 'whatsapp'");
     expect(publish).not.toContain("socialConsentSource: 'ops'");
   });
+
+  /*
+   * The review screen kept the opt-OUT wording after 0060 inverted the flow, so
+   * it told the operator the owner had not been asked while publishImport was
+   * recording that they had. `code()` strips comments, so this reads only what
+   * the operator actually sees.
+   */
+  it('does not tell the operator the owner was never asked', () => {
+    const form = code('app/(dashboard)/back-office/imports/[id]/review-form.tsx');
+    expect(form).not.toContain('has not been asked');
+    expect(form).not.toContain('consent is recorded as yours');
+  });
+
+  it('says the ask already covers social, matching CONSENT_TEMPLATE_TEXT', () => {
+    // The template names all three platforms unconditionally, which is what
+    // makes one reply cover the website AND social.
+    expect(CONSENT_TEMPLATE_TEXT).toContain('Facebook, Instagram and TikTok');
+    expect(code('app/(dashboard)/back-office/imports/[id]/review-form.tsx')).toContain(
+      'permission request already asks'
+    );
+  });
 });
 
 describe('the preview link', () => {

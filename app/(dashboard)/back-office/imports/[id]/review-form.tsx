@@ -458,15 +458,23 @@ export function ReviewForm({
                 Also post this to Easy Rent&rsquo;s Facebook, Instagram and TikTok
               </span>
               {/*
-                Said plainly on purpose. The landlord-facing checkbox is someone
-                consenting about their own property; this is an operator
-                consenting about a stranger's, and the screen should not let that
-                pass unnoticed.
+                This used to read "the owner has not been asked — the consent is
+                recorded as yours", which was the honest label under the opt-OUT
+                flow: the operator decided alone. Migration 0060 inverted that.
+                CONSENT_TEMPLATE_TEXT (lib/imports/message.ts) now names Facebook,
+                Instagram and TikTok in the ask itself, which is why publishImport
+                records socialConsentSource: 'whatsapp' and audits ownerAsked:
+                true. The screen was telling the operator the opposite of what the
+                database was recording.
+
+                Note the ask does not vary with this box — the template always
+                requests social permission. Unchecking does not narrow what we
+                asked for; it declines to use permission the owner gave.
               */}
               <span className="block text-xs text-slate-500">
-                Queued when the listing goes live. The owner has not been asked — the
-                consent is recorded as yours. Phone numbers are never included in a
-                post.
+                Queued when the listing goes live. The permission request already asks
+                for this, so the owner&rsquo;s yes covers it. Phone numbers are never
+                included in a post.
               </span>
             </span>
           </label>
