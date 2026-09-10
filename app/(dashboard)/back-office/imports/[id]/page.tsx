@@ -157,9 +157,25 @@ export default async function ImportReviewPage({
     ? detectSaleAd(record.rawText, parsed.rentPerMonth != null).looksLikeSale
     : false;
 
-  // Owner messages need an approved template. Without one they are composed,
-  // logged and dropped — which is fine, but only if the operator knows.
-  const ownerMessagesUndeliverable = isIntakeConfigured() && !whatsappTemplateName('import');
+  /*
+   * TWO templates, two different failures, and this screen used to check only
+   * the wrong one.
+   *
+   * `consent` is what the button on this page sends. Without it the ask is a
+   * dry run, so no consent can ever arrive and — the importer being opt-in —
+   * the listing can never publish. That is a blocker, and it has to be said
+   * BEFORE the operator presses Ask, not in a red banner afterwards.
+   *
+   * `import` is the go-live notice, sent after a YES. Without it the listing
+   * still publishes perfectly well; the owner is simply never told. That is a
+   * warning, not a blocker.
+   *
+   * Checking only `import` meant a project with the notice configured and the
+   * ask not — exactly production on 2026-09-11 — showed nothing at all.
+   */
+  const intakeLive = isIntakeConfigured();
+  const consentUndeliverable = intakeLive && !whatsappTemplateName('consent');
+  const ownerMessagesUndeliverable = intakeLive && !whatsappTemplateName('import');
 
   return (
     <section className="flex-1 p-4 lg:p-8">
@@ -207,6 +223,19 @@ export default async function ImportReviewPage({
         >
           <p className="font-semibold">{result.title}</p>
           <p>{result.detail}</p>
+        </section>
+      )}
+
+      {consentUndeliverable && (
+        <section className="mb-4 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+          <p className="font-semibold">Nothing here can be published yet</p>
+          <p>
+            No approved WhatsApp consent template is registered, so asking the owner
+            only composes and logs a message — no consent can arrive, and the importer
+            publishes nothing without it. Register the template and set{' '}
+            <code>WHATSAPP_CONSENT_TEMPLATE</code> before asking anyone. The invite
+            comment above still works today.
+          </p>
         </section>
       )}
 

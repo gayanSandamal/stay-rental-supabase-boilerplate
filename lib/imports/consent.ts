@@ -30,7 +30,7 @@
  */
 
 import crypto from 'node:crypto';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { postImports, type PostImport } from '@/lib/db/schema';
 import { logAudit } from '@/lib/db/audit-logger';
@@ -133,12 +133,35 @@ export async function requestImportConsent(
    * is in the rendered body an operator can read and resend by hand, and a
    * token that resolves to nothing would make that copy a dead link. It grants
    * no access on its own — consent still requires a reply.
+   *
+   * A DRY RUN IS NOT AN ASK, and must not be recorded as one.
+   *
+   * `consentRequestedAt` is what `already_asked` refuses a second ask on, and
+   * the reason it refuses is harassment: a second unsolicited message to
+   * someone who never replied. On a dry run there was no first message —
+   * `sendWhatsAppTemplate` was never called — so there is nobody to spare and
+   * nothing to be silent about. Stamping it anyway made an unset
+   * WHATSAPP_CONSENT_TEMPLATE **permanently** unpublishable: the ask is
+   * refused forever, consent can therefore never arrive, and under opt-in the
+   * listing can never go live. Setting the env var afterwards does not help,
+   * because nothing re-reads these rows. Reported 2026-09-11, from a
+   * production import stuck exactly this way.
+   *
+   * `status` is held back for the same reason. "awaiting_consent" on a row
+   * where nobody was asked is the same lie as `post_imports.status =
+   * 'published'` for a listing still sitting in the moderation queue.
+   *
+   * `failed` DOES stamp, and deliberately: Meta was called and rejected it, and
+   * CLAUDE.md is explicit that repeated failed business-initiated sends degrade
+   * the WABA quality rating every landlord's messages depend on. An operator
+   * who fixed the number needs a deliberate unblock, not a retry button.
    */
+  const reallyAsked = outcome !== 'dry_run';
+
   await db
     .update(postImports)
     .set({
-      status: 'awaiting_consent',
-      consentRequestedAt: new Date(),
+      ...(reallyAsked ? { status: 'awaiting_consent' as const, consentRequestedAt: new Date() } : {}),
       consentOutcome: outcome,
       consentTokenHash: hashConsentToken(token),
       updatedAt: new Date(),
@@ -189,7 +212,11 @@ export async function resolveConsentToken(token: string): Promise<PostImport | n
   const row = await db.query.postImports.findFirst({
     where: and(
       eq(postImports.consentTokenHash, hashConsentToken(token)),
-      isNotNull(postImports.consentRequestedAt),
+      // NOT gated on consentRequestedAt. The hash is 32 random bytes and is
+      // written nowhere but requestImportConsent, so the timestamp added no
+      // security — and now that a dry run leaves it null, requiring it would
+      // break the one thing the dry-run branch stores a token FOR: an operator
+      // reading the composed message out of the log and sending it by hand.
       isNull(postImports.consentGrantedAt),
       isNull(postImports.consentDeclinedAt)
     ),
