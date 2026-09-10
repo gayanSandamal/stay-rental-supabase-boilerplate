@@ -444,6 +444,64 @@ with a one-tap edit/remove link. Two flags, both OFF: `enableFacebookImport`
   loses the rent to `UTILITY_BEFORE_RE` — which is *why* a human reviews before
   anything publishes.
 
+### "It loses the photos, cuts the caption, misses the phone and the name" (2026-09-10)
+
+Reported again, and **three of the four are the OpenGraph limit above, not a
+regression** — `metaContentAll` has collected every `og:image` since PR #97 and
+a live multi-photo post still yielded exactly one. Do not go looking for a
+parser bug; the bytes are not in the response. But three of our own bugs sat on
+top and made the limit look worse than it is:
+
+- **The paste must survive every button on the review screen.** The Post-text
+  textarea lives in the re-extract `<form>`; Save and Publish submit a
+  *different* one, and neither wrote `rawText` — so an operator who pasted the
+  whole advert and pressed **Save draft** lost every word, and the phone chips
+  (recomputed from the STORED text) stayed empty too. That one bug reproduced
+  three of the four symptoms. A hidden `rawText` mirror in the editor form fixes
+  it; `keepRawText` uses `||` not `??` so a submission without the field can
+  never blank stored text. `tests/unit/import-extraction-losses.test.ts` guards it.
+- **The importer publishes the WHOLE advert, not 400 characters of it.**
+  `truncateDescription` in `rule-parser.ts` clips at 400 with an ellipsis — fine
+  for a WhatsApp intake, amputation for an import whose `raw_text` is stored in
+  full. `importDescription` in `lib/imports/publish.ts` prefers the full text
+  when the composed one is just its prefix, and **scrubs it** with an empty
+  allow-list: a longer description carries the phone number, imported numbers
+  are `verified: false`, and `moderateListing` only scrubs when moderation is
+  ARMED. Do **not** widen the clip in `rule-parser.ts` — it is shared with the
+  live intake and needs a `RULES_VERSION` bump plus `pnpm parser:probe`.
+- **`PHONE_PATTERNS` in `contact-scrub.ts` has DIVERGED from `PHONE_RES`**, which
+  that module's comment always allowed. It now reads `.`, `(`, `)` and Unicode
+  dashes, the `00` prefix, and asserts digit boundaries so `0771234567890` no
+  longer yields a confident, invented `+94771234567`. **The two-character
+  separator cap is load-bearing**: unlimited separators turn
+  `Rs. 25,000 - 0112345678` into `+94000112345`. Widening the parser's copy is a
+  separate change with a probe run.
+- **`preferMobile` picks the consent recipient**, not written order. An advert
+  lists a landline first as often as not, and the consent request only travels
+  on WhatsApp — a landline spends the one ask (`already_asked` refuses a second)
+  on a number that cannot receive it.
+- **A pasted image URL is an SSRF surface.** `fetchOriginal` is a bare `fetch`
+  with `redirect: 'follow'`, safe only because its input came from an
+  already-allowlisted document. Operator-typed URLs go through
+  `fetchPastedImage`, which allowlists Facebook's photo CDN and re-vets every
+  redirect hop. The suffix test is `.fbcdn.net` **with the dot** — `fbcdn.net`
+  alone accepts `evil-fbcdn.net`.
+- **The listing photo cap belongs at publish, not at ingest.**
+  `ingestRemoteImages` used a bare `break`, so over-cap photos were never
+  stored, never reached the manifest, and vanished with nothing recording it —
+  and the cap depended on arrival order, before the operator could choose a
+  cover. `INGEST_HARD_LIMIT` is an abuse ceiling, not the photo cap.
+- **The invite comment is the real answer** (`lib/imports/invite.ts`). Ops paste
+  it under the original advert; the owner messages us; the intake pipeline gets
+  the full text, every photo, their name and a Meta-proven number — everything
+  the scrape cannot reach. It is also better consent than the ask: the WhatsApp
+  template is **Marketing** (Meta refused Utility twice, structurally — the
+  recipient is not yet a customer), and a recipient with marketing messages
+  switched off never receives it, with no error, which is indistinguishable from
+  being ignored. Commenting cannot be automated — same App Review gate — so it
+  is composed here and pasted by hand. An inbound reply carrying `FB-<id>` only
+  notifies ops; it must never swallow the message, which IS the submission.
+
 ## Performance: where the time actually goes (2026-09-02)
 
 Navigation was slow for three reasons that multiplied, and none of them was slow

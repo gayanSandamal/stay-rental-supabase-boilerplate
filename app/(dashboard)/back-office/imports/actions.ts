@@ -10,7 +10,11 @@ import { getUser } from '@/lib/db/queries';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { normalizePhone } from '@/lib/auth/phone-verification';
 import { resolvePost, UnsupportedUrlError } from '@/lib/imports/facebook/resolve';
-import { extractFromText, ingestRemoteImages } from '@/lib/imports/extract';
+import {
+  extractFromText,
+  ingestPastedImageUrls,
+  ingestRemoteImages,
+} from '@/lib/imports/extract';
 import { ImportPublishError, parsePayload } from '@/lib/imports/publish';
 import { requestImportConsent } from '@/lib/imports/consent';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
@@ -39,6 +43,24 @@ async function requireStaff() {
 }
 
 /**
+ * Which of the numbers in an advert to offer as the owner's.
+ *
+ * A Sri Lankan rental ad routinely carries two: the landlord's mobile and an
+ * office or agency landline. `phoneCandidates` is in written order, and the
+ * landline is often written first — but the mobile is the one on WhatsApp, and
+ * WhatsApp is the only channel the consent request travels on. An office
+ * landline chosen here does not merely fail: it spends the ONE ask this owner
+ * ever gets (`already_asked` refuses a second), on a number that cannot receive
+ * it.
+ *
+ * The full list stays in written order for the chips, so the operator can pick
+ * the other one in a click when this guess is wrong.
+ */
+function preferMobile(candidates: string[]): string | null {
+  return candidates.find((c) => c.startsWith('+947')) ?? candidates[0] ?? null;
+}
+
+/**
  * Paste a URL → a draft to review.
  *
  * Resolution failure is NOT an error path: Facebook refuses group posts
@@ -59,9 +81,9 @@ export async function createImportAction(formData: FormData): Promise<void> {
     redirect(`${BASE_PATH}/new?error=resolve_failed`);
   }
 
-  const { parsed, phoneCandidates } = resolved.text
+  const { parsed, phoneCandidates, ownerName: extractedName } = resolved.text
     ? await extractFromText(resolved.text)
-    : { parsed: null, phoneCandidates: [] as string[] };
+    : { parsed: null, phoneCandidates: [] as string[], ownerName: null };
 
   // Copy the images into our own bucket now rather than at publish: Facebook's
   // CDN URLs are signed and expire, so a draft reviewed an hour later would
@@ -79,8 +101,10 @@ export async function createImportAction(formData: FormData): Promise<void> {
       rawText: resolved.text || null,
       parsedPayload: parsed ? JSON.stringify(parsed) : null,
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
-      ownerPhone: phoneCandidates[0] ?? null,
-      ownerName: resolved.authorName,
+      ownerPhone: preferMobile(phoneCandidates),
+      // Graph gives a real byline for our own Page; everywhere else it is null
+      // and the best available answer is whatever the advert itself labelled.
+      ownerName: resolved.authorName ?? extractedName,
       importedBy: user.id,
     })
     .returning();
@@ -112,7 +136,7 @@ export async function reExtractAction(formData: FormData): Promise<void> {
 
   if (!rawText) redirect(`${BASE_PATH}/${id}?error=no_text`);
 
-  const { parsed, phoneCandidates } = await extractFromText(rawText);
+  const { parsed, phoneCandidates, ownerName: extractedName } = await extractFromText(rawText);
   const existing = await db.query.postImports.findFirst({
     where: eq(postImports.id, id),
   });
@@ -136,13 +160,89 @@ export async function reExtractAction(formData: FormData): Promise<void> {
       rawText,
       parsedPayload: JSON.stringify(merged),
       // Same rule for the phone: a confirmed choice outranks a fresh regex hit.
-      ownerPhone: existing?.ownerPhone ?? phoneCandidates[0] ?? null,
+      ownerPhone: existing?.ownerPhone ?? preferMobile(phoneCandidates),
+      ownerName: existing?.ownerName ?? extractedName,
       updatedAt: new Date(),
     })
     .where(eq(postImports.id, id));
 
   revalidatePath(`${BASE_PATH}/${id}`);
   redirect(`${BASE_PATH}/${id}?extracted=1`);
+}
+
+/**
+ * The pasted post text, for a save that may or may not carry it.
+ *
+ * `|| existing` and not `??`: an absent field and an emptied one both arrive as
+ * '', and a save posted from a form without the mirror (or by a client that
+ * dropped it) must never blank text the operator already stored. Emptying the
+ * box deliberately is not a use case; losing a paste is the bug this exists to
+ * prevent.
+ */
+function keepRawText(formData: FormData, existing: string | null): string | null {
+  const posted = String(formData.get('rawText') ?? '').trim();
+  return posted || existing;
+}
+
+/**
+ * Add photos the operator pasted URLs for, then save everything else too.
+ *
+ * SAVES FIRST, for the reason publishImportAction gives: a button that quietly
+ * discards the edits on screen is a trap, and this one redirects.
+ *
+ * Facebook hands over one cover photo and keeps the album behind the login
+ * wall, so the rest arrive either as file uploads or as URLs copied out of the
+ * post. The URLs are signed and short-lived, which is exactly why the bytes are
+ * copied into our own bucket here and now rather than referenced.
+ *
+ * `ingestPastedImageUrls` refuses anything that is not on Facebook's photo CDN
+ * — an operator-typed URL that the SERVER then fetches is textbook SSRF, and
+ * being staff is not the same as being trusted with our network position.
+ */
+export async function addPhotoUrlsAction(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = Number(formData.get('importId'));
+  if (!Number.isFinite(id) || id <= 0) redirect(BASE_PATH);
+
+  const existing = await db.query.postImports.findFirst({
+    where: eq(postImports.id, id),
+  });
+  if (!existing) redirect(BASE_PATH);
+
+  const pasted = String(formData.get('imageUrls') ?? '')
+    .split(/[\s,]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  const { stored, refused } = pasted.length
+    ? await ingestPastedImageUrls(pasted)
+    : { stored: [] as string[], refused: 0 };
+
+  const kept = formData
+    .getAll('photoUrls')
+    .map((v) => String(v))
+    .filter(Boolean);
+
+  await db
+    .update(postImports)
+    .set({
+      rawText: keepRawText(formData, existing.rawText),
+      parsedPayload: JSON.stringify(
+        mergeParsedFromForm(parsePayload(existing.parsedPayload), formData)
+      ),
+      // Appended, never replacing: the uploader's photos and the pasted ones
+      // are the same album arriving by two routes. Deduped because an operator
+      // re-pasting the list after a partial refusal is the normal way to retry.
+      photoUrls: JSON.stringify([...new Set([...kept, ...stored])]),
+      ownerPhone: normalizePhone(String(formData.get('ownerPhone') ?? '')),
+      ownerName: String(formData.get('ownerName') ?? '').trim() || null,
+      shareOnSocial: formData.get('shareOnSocial') === 'on',
+      updatedAt: new Date(),
+    })
+    .where(eq(postImports.id, id));
+
+  revalidatePath(`${BASE_PATH}/${id}`);
+  redirect(`${BASE_PATH}/${id}?added=${stored.length}&refused=${refused}`);
 }
 
 /** Save the reviewed fields. Validation that matters happens at publish. */
@@ -165,6 +265,7 @@ export async function updateDraftAction(formData: FormData): Promise<void> {
   await db
     .update(postImports)
     .set({
+      rawText: keepRawText(formData, existing.rawText),
       parsedPayload: JSON.stringify(parsed),
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
       ownerPhone: normalizePhone(String(formData.get('ownerPhone') ?? '')),
@@ -203,6 +304,7 @@ export async function publishImportAction(formData: FormData): Promise<void> {
   const [saved] = await db
     .update(postImports)
     .set({
+      rawText: keepRawText(formData, existing.rawText),
       parsedPayload: JSON.stringify(parsed),
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
       ownerPhone,
@@ -313,7 +415,14 @@ function mergeParsedFromForm(base: ParsedIntake, formData: FormData): ParsedInta
 
   return {
     ...base,
-    title: text('title'),
+    /*
+     * `listings.title` is varchar(200) and Postgres raises 22001 rather than
+     * truncating, so a headline pasted straight out of a Facebook advert came
+     * back as an unhandled server-action error with the operator's whole draft
+     * still on screen and no explanation. The input carries maxLength=200 too;
+     * this is the half that survives a paste that bypasses it.
+     */
+    title: text('title')?.slice(0, 200) ?? null,
     description: text('description'),
     propertyType:
       propertyType === 'house' || propertyType === 'apartment' || propertyType === 'room'
