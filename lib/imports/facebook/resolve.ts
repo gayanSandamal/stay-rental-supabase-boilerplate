@@ -8,7 +8,7 @@
  * would mean the feature reports itself broken during ordinary use.
  */
 
-import { dropDuplicateLeadLine } from '../advert-text';
+import { composeOgText, dropDuplicateLeadLine } from '../advert-text';
 import { fetchOpenGraph, fetchOwnPagePost } from './fetch';
 import { graphPostId, parseFacebookUrl, type ParsedFacebookUrl } from './url';
 
@@ -56,10 +56,12 @@ export async function resolvePost(input: string): Promise<ResolvedPost> {
       canonicalUrl: parsed.canonicalUrl,
       platform,
       resolvedVia: 'og',
-      // og:description opens with the post's own first line, which is also what
-      // Facebook put in og:title — so joining them says the headline twice. See
-      // dropDuplicateLeadLine: the duplicate is ours, not the advert's.
-      text: dropDuplicateLeadLine([og.title, og.description].filter(Boolean).join('\n\n')),
+      // NOT `og.title + og.description`. For a group post og:title is the
+      // GROUP's name with the post's first line pipe-appended, and joining the
+      // whole thing hands the group's name to the parser as advert text — see
+      // composeOgText. dropDuplicateLeadLine stays as the belt to that braces:
+      // it also runs at publish, for rows stored before this.
+      text: dropDuplicateLeadLine(composeOgText(og.title, og.description)),
       imageUrls: og.imageUrls,
       authorName: null,
       note:
