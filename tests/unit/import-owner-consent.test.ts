@@ -276,3 +276,70 @@ describe('migration 0060', () => {
     expect(sql).not.toMatch(/UPDATE\s+post_imports/i);
   });
 });
+
+/**
+ * Reported 2026-09-11 from production: an import stuck at "awaiting consent"
+ * with "The owner was NOT asked", permanently unpublishable.
+ *
+ * WHATSAPP_CONSENT_TEMPLATE was unset, so the ask was a dry run — nothing was
+ * sent — but `consent_requested_at` was stamped anyway, and `already_asked`
+ * refuses a second ask on that timestamp. Under opt-in that is terminal:
+ * consent can never arrive, so the listing can never go live, and setting the
+ * env var afterwards changes nothing because no job re-reads these rows.
+ */
+describe('a dry run is not an ask', () => {
+  const consent = code('lib/imports/consent.ts');
+
+  it('stamps consentRequestedAt only when a message really left', () => {
+    expect(consent).toContain("const reallyAsked = outcome !== 'dry_run'");
+    expect(consent).toContain('reallyAsked ?');
+    // The unconditional stamp is what made an unset template terminal.
+    expect(consent).not.toMatch(/\.set\(\{\s*status: 'awaiting_consent',\s*consentRequestedAt: new Date\(\),/);
+  });
+
+  it('does not move a row to awaiting_consent when nobody was asked', () => {
+    // The same lie as post_imports.status = 'published' for a listing still
+    // sitting in the moderation queue.
+    const block = consent.slice(consent.indexOf('const reallyAsked'), consent.indexOf('Arm the reply'));
+    expect(block).toContain("status: 'awaiting_consent' as const");
+    expect(block).toContain('reallyAsked');
+  });
+
+  it('still stamps a FAILED send, so the WABA guard holds', () => {
+    // Meta was called and rejected it. Repeated failed business-initiated
+    // sends degrade the quality rating every landlord's messages depend on.
+    expect(consent).toContain("outcome !== 'dry_run'");
+    expect(consent).not.toContain("outcome === 'sent' ? { status");
+  });
+
+  it('keeps the preview token resolving without the timestamp', () => {
+    // The dry-run branch stores a token precisely so an operator can resend
+    // the composed message by hand; gating resolution on consentRequestedAt
+    // would have made that link dead the moment the stamp went away.
+    const resolve = consent.slice(consent.indexOf('export async function resolveConsentToken'));
+    expect(resolve).not.toContain('isNotNull(postImports.consentRequestedAt)');
+    expect(resolve).toContain('consentTokenHash');
+  });
+
+  it('still refuses a second ask once one really went out', () => {
+    const actions = code('app/(dashboard)/back-office/imports/actions.ts');
+    expect(actions).toContain('saved.consentRequestedAt');
+    expect(actions).toContain('already_asked');
+  });
+});
+
+describe('the screen warns about the template it actually needs', () => {
+  const page = code('app/(dashboard)/back-office/imports/[id]/page.tsx');
+
+  it('checks the CONSENT template, not only the import notice', () => {
+    // Production had the notice configured and the ask not, so checking only
+    // 'import' showed nothing at all — and the operator learned about it from
+    // a red banner after the ask had already burned itself.
+    expect(page).toContain("whatsappTemplateName('consent')");
+    expect(page).toContain("whatsappTemplateName('import')");
+  });
+
+  it('says a missing consent template blocks publishing, not just messaging', () => {
+    expect(page).toContain('Nothing here can be published yet');
+  });
+});
