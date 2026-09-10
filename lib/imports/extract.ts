@@ -18,6 +18,7 @@ import { parseIntake } from '@/lib/intake/parser';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 import { loadLocations } from '@/lib/locations/store';
 import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
+import { withLocationDetail } from './location';
 import { fetchOriginal, storeImportedImage, MAX_ORIGINAL_BYTES } from '@/lib/images/store';
 import { fetchPastedImage } from './facebook/fetch';
 
@@ -104,7 +105,10 @@ export async function extractFromText(text: string): Promise<ExtractedDraft> {
   await loadLocations();
   const parsed = await parseIntake(text);
   return {
-    parsed,
+    // A Sri Lankan advert states its location as suburb names with no house
+    // number, which neither of the parser's address paths can match — see
+    // lib/imports/location.ts. Only fills an address the parse left empty.
+    parsed: withLocationDetail(parsed, text),
     phoneCandidates: extractPhoneNumbers(text),
     ownerName: extractOwnerName(text),
   };
