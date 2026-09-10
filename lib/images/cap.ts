@@ -12,16 +12,34 @@ import { getFeatureValue, isFeatureEnabled } from '@/lib/feature-flags';
 import type { PhotoManifestEntry } from './types';
 
 /**
+ * The effective cap, given the two flag values.
+ *
+ * Split out from `photoCap()` so a CLIENT component can reach the same answer:
+ * the back office's import review screen warns an operator when their album is
+ * over the cap, and that warning has to agree with what publishImport will
+ * actually drop. Reading the flags there through `useFeatureValue` and then
+ * doing its own arithmetic is how the two drift — one of them forgetting that
+ * `enforcePhotoCap` off means no cap at all, and telling an operator to delete
+ * photos nothing was going to drop.
+ *
+ * Pure, so it stays inside this file's no-I/O contract and pulls no server code
+ * into the client bundle.
+ */
+export function effectiveCap(enforced: boolean, rawValue: unknown): number {
+  if (!enforced) return Infinity;
+  const raw = Number(rawValue);
+  if (!Number.isFinite(raw) || raw < 1) return Infinity;
+  return Math.floor(raw);
+}
+
+/**
  * The effective cap. `Infinity` means "no cap", which is also what a
  * non-positive flag value yields: a fat-fingered `0` in the back office must
  * not blank every gallery on the site. (`engine.ts`'s old `?? 6` only guarded
  * null, not 0.)
  */
 export function photoCap(): number {
-  if (!isFeatureEnabled('enforcePhotoCap')) return Infinity;
-  const raw = Number(getFeatureValue('maxPhotosPerListing'));
-  if (!Number.isFinite(raw) || raw < 1) return Infinity;
-  return Math.floor(raw);
+  return effectiveCap(isFeatureEnabled('enforcePhotoCap'), getFeatureValue('maxPhotosPerListing'));
 }
 
 /** Split a URL list at the cap, preserving order. */

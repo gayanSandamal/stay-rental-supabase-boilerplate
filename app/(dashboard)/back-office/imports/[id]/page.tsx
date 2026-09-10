@@ -19,6 +19,37 @@ export const revalidate = 30;
 export const maxDuration = 60;
 
 /** Redirect codes → a banner. There is no toast library in this codebase. */
+/**
+ * What happened to the URLs the operator pasted.
+ *
+ * A refusal is not an error to apologise for — `ingestPastedImageUrls` declines
+ * anything off Facebook's photo CDN, which is the SSRF guard doing its job —
+ * but it must be VISIBLE, because the operator's next move (paste the right
+ * URL, or upload the file by hand) depends entirely on knowing it happened.
+ */
+function photoResult(
+  added: string | undefined,
+  refused: string | undefined
+): { ok: boolean; title: string; detail: string } | null {
+  if (added === undefined && refused === undefined) return null;
+
+  const stored = Number(added) || 0;
+  const rejected = Number(refused) || 0;
+  if (!stored && !rejected) return null;
+
+  return {
+    ok: rejected === 0,
+    title: rejected
+      ? `${plural(stored, 'photo')} added, ${rejected} could not be fetched`
+      : `${plural(stored, 'photo')} added`,
+    detail: rejected
+      ? 'Only Facebook’s own photo CDN is fetched, and a signed photo link expires. Re-copy the image address from the post, or download the photo and upload it above.'
+      : 'Copied into our storage, so they survive the original links expiring.',
+  };
+}
+
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
 const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = {
   saved: { ok: true, title: 'Draft saved', detail: 'Nothing is public yet.' },
   extracted: {
@@ -73,7 +104,14 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; extracted?: string; asked?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    saved?: string;
+    extracted?: string;
+    asked?: string;
+    added?: string;
+    refused?: string;
+  }>;
 }) {
   await requireBackOfficeAccess();
   const flags = await loadFeatureFlags();
@@ -92,7 +130,14 @@ export default async function ImportReviewPage({
   const resultKey = query.asked
     ? `asked-${query.asked}`
     : query.error ?? (query.saved ? 'saved' : query.extracted ? 'extracted' : null);
-  const result = resultKey ? RESULTS[resultKey] : null;
+  /*
+   * `addPhotoUrlsAction` has always redirected with these counts, and this page
+   * has never read them — so `ingestPastedImageUrls`'s promise that "the screen
+   * can say 3 added, 1 refused instead of silently keeping fewer photos than
+   * the operator pasted" went unkept, and a refused URL looked exactly like a
+   * successful one. The counts are dynamic, so this cannot live in RESULTS.
+   */
+  const result = photoResult(query.added, query.refused) ?? (resultKey ? RESULTS[resultKey] : null);
 
   const parsed = parsePayload(record.parsedPayload);
   const photos = parsePhotoUrls(record.photoUrls);
