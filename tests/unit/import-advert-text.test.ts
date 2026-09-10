@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  composeOgText,
   dropDuplicateLeadLine,
   tidyAdvertBullets,
   tidyImportedAdvert,
@@ -132,5 +133,60 @@ describe('the reported advert, end to end', () => {
     expect(published).toContain('• Pantry.');
     expect(published).not.toContain('071 769 3657');
     expect(published).not.toContain('0717693657');
+  });
+});
+
+/**
+ * FB-12, reported 2026-09-11: a Dehiwala HOUSE imported as "3BR Annex in
+ * Dehiwala" with the address "House, ඉක්මනින් හොයාගන්න" and its headline still
+ * doubled.
+ *
+ * All three came from one thing. og:title for a group post is the GROUP's own
+ * name with the post's first line pipe-appended, and we were joining the whole
+ * string onto the post body — so the group's name was parsed as if the landlord
+ * had written it.
+ */
+describe('a group’s name is not the advert', () => {
+  const GROUP_TITLE =
+    'House, Annex & Rooms For Rent - ඉක්මනින් හොයාගන්න | HOUSE FOR RENT - DEHIWALA';
+  const BODY = ['HOUSE FOR RENT - DEHIWALA', 'Rent: Rs. 80,000', '• 3 Bedrooms'].join('\n');
+
+  it('keeps only the post excerpt after the pipe, and drops it as a duplicate', () => {
+    expect(composeOgText(GROUP_TITLE, BODY)).toBe(BODY);
+  });
+
+  it('says the headline exactly once', () => {
+    const text = composeOgText(GROUP_TITLE, BODY);
+    expect(text.match(/HOUSE FOR RENT - DEHIWALA/g)).toHaveLength(1);
+  });
+
+  it('never lets the group’s name reach the advert text', () => {
+    const text = composeOgText(GROUP_TITLE, BODY);
+    expect(text).not.toContain('Annex');
+    expect(text).not.toContain('ඉක්මනින්');
+  });
+
+  it('keeps a pipe-appended excerpt the body does NOT already open with', () => {
+    // The one case where og:title carries something og:description lacks.
+    expect(composeOgText('Some Group | HOUSE FOR RENT', 'Rent: Rs. 80,000')).toBe(
+      'HOUSE FOR RENT\n\nRent: Rs. 80,000'
+    );
+  });
+
+  it('drops a title with no pipe — it cannot be told from a group name', () => {
+    // Every sample has og:description starting at the top of the post, so the
+    // title adds nothing and can only contaminate.
+    expect(composeOgText('House, Annex & Rooms For Rent', BODY)).toBe(BODY);
+  });
+
+  it('uses the title whole when there is no description at all', () => {
+    // fetchOpenGraph returns a result with an image and no description; then
+    // the title is the only text there is.
+    expect(composeOgText('Annex for girls', '')).toBe('Annex for girls');
+    expect(composeOgText('Annex for girls', null)).toBe('Annex for girls');
+  });
+
+  it('is empty when Facebook sent neither', () => {
+    expect(composeOgText(null, null)).toBe('');
   });
 });

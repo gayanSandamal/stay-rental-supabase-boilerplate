@@ -122,3 +122,42 @@ describe('withLocationDetail', () => {
     expect(withLocationDetail(before, 'Annex for girls\nCall 0771234567')).toEqual(before);
   });
 });
+
+/**
+ * The regression this file's own heuristic caused, reported 2026-09-11: an
+ * imported Dehiwala house came out with the address "House, ඉක්මනින් හොයාගන්න",
+ * which is the Facebook GROUP's name. og:title for a group post is
+ * "<group name> | <post's first line>", it was being joined onto the advert
+ * text, and this function found "DEHIWALA" on that line and kept the rest.
+ *
+ * composeOgText keeps it out of the text now. These are the second line of
+ * defence, for rows stored before that and for anything else pipe-separated.
+ */
+describe('a title line is never an address', () => {
+  const GROUP_LINE =
+    'House, Annex & Rooms For Rent - ඉක්මනින් හොයාගන්න | HOUSE FOR RENT - DEHIWALA';
+
+  it('refuses a line containing a pipe', () => {
+    expect(locationDetail(GROUP_LINE, { city: 'Dehiwala', district: 'Colombo' })).toBeNull();
+  });
+
+  it('refuses property types as place names, pipe or no pipe', () => {
+    // A group is routinely named after what it lists.
+    expect(
+      locationDetail('House, Annex & Rooms For Rent - Dehiwala', {
+        city: 'Dehiwala',
+        district: 'Colombo',
+      })
+    ).toBeNull();
+  });
+
+  it('still reads a real location line in the same advert', () => {
+    // The guard must not cost the thing this heuristic exists for.
+    expect(
+      locationDetail(`${GROUP_LINE}\n🟩 Colombo - Kirulapone, Polhengoda.`, {
+        city: 'Colombo',
+        district: 'Colombo',
+      })?.address
+    ).toBe('Kirulapone, Polhengoda');
+  });
+});

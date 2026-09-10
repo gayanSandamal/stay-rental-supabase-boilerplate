@@ -69,8 +69,21 @@ export function locationDetail(
     const cleaned = tidyAdvertBullets(line).replace(/^•\s*/, '').trim();
     if (!cleaned) continue;
 
+    /*
+     * A PIPE MEANS THIS IS A TITLE, NOT AN ADDRESS. Facebook's og:title for a
+     * group post is "<group name> | <post's first line>", and this function
+     * happily read a town out of the right-hand side and published the group's
+     * own name — "House, ඉක්මනින් හොයාගන්න" — as the property's address.
+     *
+     * composeOgText now keeps that string out of the advert text entirely, so
+     * this is the second line of defence, for the rows stored before it and for
+     * whatever else arrives pipe-separated. Nobody writes an address with a
+     * pipe in it.
+     */
+    if (cleaned.includes('|')) continue;
+
     const segments = cleaned
-      .split(/[,|]|\s[-–—]\s|[-–—]/u)
+      .split(/[,]|\s[-–—]\s|[-–—]/u)
       .map((segment) => segment.replace(/^[\s.:;]+|[\s.:;]+$/gu, ''))
       .filter(Boolean);
     if (segments.length < 2) continue;
@@ -153,4 +166,8 @@ function isPlausiblePlace(segment: string): boolean {
  * segments rather than the line.
  */
 const FEATURE_VOCABULARY_RE =
-  /\b(?:kitchen|hall|bathrooms?|bedrooms?|beds?|baths?|rooms?|annexe?|living|dining|pantry|garage|parking|vehicle|cctv|security|water|electricity|entrance|furnished|spacious|available|rent|rental|monthly|advance|deposit|negotiable|contact|info|call|whatsapp|month|perch(?:es)?|sq\.?\s*ft|floor|storey|upstairs|downstairs|preferred|only|please|near|close|main\s+roads?)\b|කාමර|කුලිය|නිවස|ගෙදර|මාසික|අමතන්න|அறை|வாடகை|வீடு|மாதம்|தொடர்பு/iu;
+  // `house|villa|apartment|flat|annexe?` are here because a Facebook GROUP is
+  // routinely named after what it lists — "House, Annex & Rooms For Rent" — and
+  // its name reached this function as an advert line. They are property types,
+  // never place names, so excluding them costs nothing either way.
+  /\b(?:house|villa|apartment|flat|annexe?|kitchen|hall|bathrooms?|bedrooms?|beds?|baths?|rooms?|living|dining|pantry|garage|parking|vehicle|cctv|security|water|electricity|entrance|furnished|unfurnished|spacious|available|rent|rental|monthly|advance|deposit|negotiable|contact|info|call|whatsapp|month|perch(?:es)?|sq\.?\s*ft|floor|storey|upstairs|downstairs|preferred|only|please|near|close|main\s+roads?)\b|කාමර|කුලිය|නිවස|ගෙදර|මාසික|අමතන්න|හොයාගන්න|அறை|வாடகை|வீடு|மாதம்|தொடர்பு/iu;

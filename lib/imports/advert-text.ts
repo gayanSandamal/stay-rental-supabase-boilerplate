@@ -15,6 +15,51 @@
  */
 
 /**
+ * The advert text an OpenGraph preview actually contains.
+ *
+ * `og:description` is the post body, truncated. `og:title` is the **group or
+ * page's own name** — for a group post Facebook writes
+ *
+ *     House, Annex & Rooms For Rent - ඉක්මනින් හොයාගන්න | HOUSE FOR RENT - DEHIWALA
+ *
+ * i.e. the group's name, then the post's first line after a pipe. Joining that
+ * whole string onto the description fed the GROUP'S NAME to the parser as if
+ * the landlord had written it, and it spread everywhere: the listing came out
+ * "3BR **Annex** in Dehiwala" for an advert that says HOUSE, because the group
+ * is called "House, Annex & Rooms For Rent"; `locationDetail` read "DEHIWALA"
+ * out of the same line and published the rest of the group's name as the
+ * property's address; and the headline still arrived twice, because
+ * `dropDuplicateLeadLine` compares whole lines and this one had a group name
+ * glued to the front.
+ *
+ * So: only the segment AFTER the last pipe can be post content, and it is kept
+ * only when the description does not already open with it. With no pipe there
+ * is no way to tell a group's name from a post's first line — and every sample
+ * we have shows `og:description` starting at the top of the post — so the title
+ * is dropped. It is used whole only when there is no description at all, which
+ * is the one case where it is the only text we have.
+ */
+export function composeOgText(
+  title: string | null | undefined,
+  description: string | null | undefined
+): string {
+  const body = description?.trim() ?? '';
+  const heading = title?.trim() ?? '';
+  if (!body) return heading;
+
+  const pipe = heading.lastIndexOf('|');
+  if (pipe === -1) return body;
+
+  const excerpt = heading.slice(pipe + 1).trim();
+  if (!excerpt) return body;
+
+  const firstLine = body.split('\n').find((line) => line.trim() !== '') ?? '';
+  if (compareKey(firstLine) === compareKey(excerpt)) return body;
+
+  return `${excerpt}\n\n${body}`;
+}
+
+/**
  * Remove a lead line that the very next line repeats.
  *
  * OUR BUG, NOT FACEBOOK'S. `resolvePost` composes the OG fallback as
