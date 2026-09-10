@@ -12,7 +12,7 @@ Detailed exhaustive analysis of specific areas:
 
 - [WhatsApp → Listing Intake Pipeline Deep-Dive](./deep-dive-whatsapp-intake-pipeline.md) — Comprehensive analysis of the automated WhatsApp concierge intake pipeline (webhook → parse → checks → publish under "Easy Rent Operations") (12 files, ~1,080 LOC) — Generated 2026-07-10. **Status: live but dormant until Meta/env setup; auto-publish ON.**
 - [Social Auto-Publish Deep-Dive](./deep-dive-social-auto-publish.md) — posting a published listing to Easy Rent's own Facebook Page, Instagram and TikTok with per-listing landlord consent; what each platform allows, and why Facebook Groups are paste-ready drafts. **Status: built, `enableSocialAutoPublish` OFF.**
-- [Facebook Post Import Deep-Dive](./deep-dive-facebook-post-import.md) — pasting a Facebook group/page post URL into the back office to create a listing: what Facebook will and will not serve, the SSRF guard on the pasted URL, why `users.wa_phone` no longer means verified, the migration replay hazard, and the Marketing-vs-Utility template registration saga. **Status: both flags ON in production (2026-09-09); owner-notice template submitted, awaiting Meta approval.**
+- [Facebook Post Import Deep-Dive](./deep-dive-facebook-post-import.md) — pasting a Facebook group/page post URL into the back office: extraction limits, the SSRF guards, why `users.wa_phone` no longer means verified, the opt-in redesign (the owner's YES is what creates the listing, silence is a no forever), and the Marketing-vs-Utility template saga. **Status: opt-in flow live in production (2026-09-10); `listing_consent_request` registration not yet documented in the runbook.**
 
 ## Plans (not yet built)
 
