@@ -37,6 +37,7 @@ import { getOrCreateOpsIdentity } from '@/lib/intake/ops-identity';
 import { getOrCreateWhatsAppLandlord } from '@/lib/intake/landlord-identity';
 import { isModerationConfigured } from '@/lib/moderation/config';
 import { capPhotos, capRejectEntries, photoCap } from '@/lib/images/cap';
+import { scrubContactNumbers } from '@/lib/moderation/contact-scrub';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
@@ -167,9 +168,7 @@ export async function publishImport(
       ...(owner ? {} : { businessAccountId: ops.businessAccountId }),
       createdBy: opsUserId,
       title: parsed.title,
-      description:
-        parsed.description ??
-        'Listed by Easy Rent from the owner’s public advert. Details confirmed before publishing.',
+      description: importDescription(parsed.description, record.rawText),
       propertyType: parsed.propertyType,
       address: parsed.address,
       city: parsed.city,
@@ -289,6 +288,54 @@ export async function publishImport(
     newAccount: owner?.isNew ?? false,
   };
 }
+
+/**
+ * The description to publish: the operator's words, else the WHOLE advert.
+ *
+ * `composeDescription` runs the parsed text through `truncateDescription`
+ * (lib/intake/parser/rule-parser.ts), which hard-clips at 400 characters and
+ * appends an ellipsis. On a WhatsApp intake that is a sensible ceiling on a
+ * landlord's own rambling; on an import it silently amputates an advert we
+ * stored in full — `post_imports.raw_text` is unbounded `text` — and it is what
+ * an operator sees as "the caption gets cut in the middle".
+ *
+ * The parser is NOT changed to fix this. `rule-parser.ts` is shared with the
+ * live intake pipeline, so widening the clip there alters every intake listing
+ * and needs a RULES_VERSION bump plus a `pnpm parser:probe` re-run. This is the
+ * importer making its own choice about its own text.
+ *
+ * HOW AN EDIT IS RECOGNISED: the auto-composed description is a prefix of the
+ * advert, give or take the ellipsis it added. Anything else is the operator's
+ * writing and wins outright — they can see the original post and we cannot.
+ *
+ * WHY THE FALLBACK IS SCRUBBED. Publishing more of the advert means publishing
+ * the part that carries the phone number, and an imported number is
+ * `verified: false` by definition. `moderateListing` scrubs descriptions, but
+ * only when moderation is ARMED; with it disarmed this insert goes straight to
+ * `active` and nothing else would ever look. An empty allow-list is the correct
+ * one here: nobody has proven any of these numbers.
+ */
+export function importDescription(
+  composed: string | null | undefined,
+  rawText: string | null | undefined
+): string {
+  const full = rawText?.trim() ?? '';
+  const written = composed?.trim() ?? '';
+
+  const isAutoClip =
+    !!full &&
+    !!written &&
+    full.length > written.length &&
+    full.startsWith(written.replace(/…$/, '').trimEnd());
+
+  if (full && (!written || isAutoClip)) {
+    return scrubContactNumbers(full, []).cleaned.trim() || written || IMPORT_DESCRIPTION_FALLBACK;
+  }
+  return written || IMPORT_DESCRIPTION_FALLBACK;
+}
+
+const IMPORT_DESCRIPTION_FALLBACK =
+  'Listed by Easy Rent from the owner’s public advert. Details confirmed before publishing.';
 
 /** Mint the self-service link and send the template. Owner-only by definition. */
 async function notifyOwner(

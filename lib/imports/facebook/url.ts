@@ -29,6 +29,30 @@ const ALLOWED_HOSTS = new Set([
   'fb.watch',
 ]);
 
+/**
+ * Hosts we will dereference for an IMAGE an operator pasted.
+ *
+ * Separate from ALLOWED_HOSTS because the shapes differ: post URLs live on a
+ * handful of fixed hostnames, while Facebook's photo CDN spreads across
+ * per-datacentre names — `scontent-lhr8-1.xx.fbcdn.net`, `scontent.fcmb1-2.fna.fbcdn.net`
+ * — that cannot be enumerated.
+ *
+ * So this one is a SUFFIX test, and the leading dot is the entire safety of it.
+ * `endsWith('fbcdn.net')` would accept `evil-fbcdn.net`; `endsWith('.fbcdn.net')`
+ * cannot, because the dot has to be a real label boundary. The exact apex is
+ * allowed separately rather than by loosening the suffix.
+ *
+ * Why an allowlist at all: `fetchOriginal` in lib/images/store.ts is a bare
+ * `fetch(url)` with no vetting. That is safe only while every URL reaching it
+ * came from an already-allowlisted document. An operator typing a URL into a
+ * box is exactly the SSRF shape parseFacebookUrl exists to refuse, and the
+ * operator being staff does not change what a stolen ops session can do.
+ */
+export function isAllowedImageHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === 'fbcdn.net' || h.endsWith('.fbcdn.net');
+}
+
 export type FacebookUrlKind = 'group_post' | 'page_post' | 'photo' | 'unknown';
 
 export interface ParsedFacebookUrl {

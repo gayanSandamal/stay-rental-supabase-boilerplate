@@ -58,6 +58,7 @@ import { db } from '@/lib/db/drizzle';
 import { landlords, users } from '@/lib/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
+import { parseInviteReference } from '@/lib/imports/invite';
 
 export const dynamic = 'force-dynamic';
 // Multi-photo albums mean several 2-hop Graph downloads per POST — the plan
@@ -160,6 +161,29 @@ async function handleInbound(
     // Session write + redelivery dedup happen BEFORE media download inside
     // appendToIntake; media resolves via this callback only for new messages.
     const outcome = await appendToIntake(message, whatsappAdapter.persistMedia);
+
+    /*
+     * An owner answering the invite comment we left under their advert.
+     *
+     * Deliberately does NOT interrupt the message. This is a landlord sending
+     * us their own property, which is precisely what the intake pipeline above
+     * already handles best — full text, every photo, a number Meta has proven —
+     * and swallowing it to process a reference code would throw away the very
+     * submission the invite existed to produce.
+     *
+     * So it only tells ops, and what it tells them is that a draft has been
+     * superseded: the same property now exists as a real intake, and publishing
+     * the scraped import too would list it twice. No status is written here
+     * because the operator, not a regex, decides which of the two survives.
+     */
+    const claimedImportId = parseInviteReference(message.text);
+    if (claimedImportId) {
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `The owner of import #${claimedImportId} sent us the listing themselves — discard the imported draft`,
+        link: `/back-office/imports/${claimedImportId}`,
+      }).catch(() => {});
+    }
     // One lookup per inbound message, reused by every reply below. Resolved
     // from what this sender has written before plus what they just wrote, so a
     // Sinhala landlord answering "50000" is still answered in Sinhala.

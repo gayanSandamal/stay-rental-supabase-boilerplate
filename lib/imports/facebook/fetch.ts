@@ -25,7 +25,7 @@
  */
 
 import { GRAPH_API_BASE, socialConfig } from '@/lib/social/config';
-import { isAllowedFacebookHost } from './url';
+import { isAllowedFacebookHost, isAllowedImageHost } from './url';
 
 /** Enough for <head>; a post page is megabytes of script we have no use for. */
 const MAX_HTML_BYTES = 512 * 1024;
@@ -52,7 +52,10 @@ export interface GraphPost {
  * address, which is the exact SSRF the allowlist exists to prevent — the guard
  * has to apply to where we END UP, not only to what was pasted.
  */
-async function fetchAllowlisted(url: string): Promise<Response | null> {
+async function fetchAllowlisted(
+  url: string,
+  isAllowedHost: (host: string) => boolean = isAllowedFacebookHost
+): Promise<Response | null> {
   let current = url;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -63,7 +66,7 @@ async function fetchAllowlisted(url: string): Promise<Response | null> {
       return null;
     }
     if (target.protocol !== 'https:' && target.protocol !== 'http:') return null;
-    if (!isAllowedFacebookHost(target.hostname)) return null;
+    if (!isAllowedHost(target.hostname)) return null;
 
     let res: Response;
     try {
@@ -139,8 +142,19 @@ function metaContentAll(html: string, property: string): string[] {
     // The quote right after the name is what stops og:image matching
     // og:image:width, so it must stay in the test.
     if (!new RegExp(`(?:property|name)=["']${escaped}["']`, 'i').test(tag)) continue;
-    const content = tag.match(/content=["']([^"']*)["']/i);
-    const value = content?.[1] ? decodeEntities(content[1]).trim() : '';
+    /*
+     * Back-reference the OPENING quote rather than excluding both quote
+     * characters. `content="…"` holding an apostrophe is ordinary English —
+     * "the owner's annex" — and `content=["']([^"']*)["']` stops dead at it,
+     * amputating the description mid-sentence with no error anywhere. Facebook
+     * entity-escapes today, which is the only reason this has not bitten; that
+     * is a property of their serialiser, not a guarantee to us.
+     *
+     * `[\s\S]*?` cannot overrun the tag: `tag` was matched by `<meta[^>]*>` and
+     * therefore contains no `>` of its own.
+     */
+    const content = tag.match(/content=(["'])([\s\S]*?)\1/i);
+    const value = content?.[2] ? decodeEntities(content[2]).trim() : '';
     if (value) values.push(value);
   }
 
@@ -148,26 +162,16 @@ function metaContentAll(html: string, property: string): string[] {
 }
 
 /**
- * Pull one `<meta property="og:x" content="y">` value. Handles both attribute
- * orders and either quote style, because Facebook's markup uses both.
+ * The first `<meta property="og:x">` value, or null.
+ *
+ * Delegates to `metaContentAll` instead of carrying its own attribute-order
+ * patterns. Two copies of this parse drifted once already — the single-value
+ * regex was left non-global when the album fix landed — and the quote handling
+ * is exactly the kind of detail that gets fixed in one copy and not the other.
+ * Document order is preserved there, so "first" means the same thing it did.
  */
 function metaContent(html: string, property: string): string | null {
-  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const patterns = [
-    new RegExp(
-      `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]*content=["']([^"']*)["']`,
-      'i'
-    ),
-    new RegExp(
-      `<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${escaped}["']`,
-      'i'
-    ),
-  ];
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match?.[1]) return decodeEntities(match[1]).trim() || null;
-  }
-  return null;
+  return metaContentAll(html, property)[0] ?? null;
 }
 
 /**
@@ -274,3 +278,40 @@ interface GraphPostResponse {
 
 /** Internals exposed for unit tests only. */
 export const __test = { metaContentAll, stripSiteSuffix };
+
+/**
+ * Download an image an operator pasted a URL for, vetting every redirect hop.
+ *
+ * NOT `fetchOriginal`. That one is a bare `fetch(url)` with `redirect: 'follow'`,
+ * which is fine while its input comes from a document we already allowlisted
+ * and unacceptable for a string somebody typed: a single hop is all it takes to
+ * turn a facebook.com URL into a request to an internal address from inside our
+ * own network. Same rule the post fetcher follows, same reason.
+ *
+ * Returns null for anything not on Facebook's photo CDN, anything non-image, and
+ * anything oversized — a refusal here costs the operator one photo they can
+ * still upload by hand.
+ */
+export async function fetchPastedImage(
+  url: string,
+  maxBytes: number
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  if (!isAllowedImageHost(host)) return null;
+
+  const res = await fetchAllowlisted(url, isAllowedImageHost);
+  if (!res || !res.ok) return null;
+
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().startsWith('image/')) return null;
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > maxBytes) return null;
+
+  return { buffer, contentType };
+}

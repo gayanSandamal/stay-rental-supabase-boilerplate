@@ -216,6 +216,11 @@ describe('Property 2: Authorization, Concealment, Caching, and Independent Notif
   /** **Validates: Requirements 3.2, 3.4, 3.6** */
   it('keeps all importer mutations guarded before downstream effects', () => {
     expect(guardedMutationNames()).toEqual([
+      // Fetches operator-pasted image URLs and saves the draft. Listed here
+      // because this assertion is an inventory, not a filter: a new mutating
+      // action has to be added deliberately, which is the point of enumerating
+      // them rather than pattern-matching whatever happens to exist.
+      'addPhotoUrlsAction',
       'createImportAction',
       'discardImportAction',
       'publishImportAction',

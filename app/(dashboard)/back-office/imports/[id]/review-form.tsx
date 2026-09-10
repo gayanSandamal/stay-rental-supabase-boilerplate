@@ -1,12 +1,23 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { AlertTriangle, Loader2, RefreshCw, Save, Send, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Copy,
+  ImagePlus,
+  Loader2,
+  RefreshCw,
+  Save,
+  Send,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImageUploader } from '@/components/image-uploader';
+import { inviteCommentText } from '@/lib/imports/invite';
 import {
+  addPhotoUrlsAction,
   discardImportAction,
   publishImportAction,
   reExtractAction,
@@ -70,6 +81,25 @@ export function ReviewForm({
   const [photoUrls, setPhotoUrls] = useState<string[]>(photos);
   const [phone, setPhone] = useState(ownerPhone ?? '');
   /*
+   * The pasted post text is CONTROLLED and mirrored into the editor form below.
+   *
+   * It lives in the re-extract form, which is a different <form> element from
+   * the one Save and Publish submit — so an operator who pasted the whole ad
+   * and then pressed "Save draft" used to lose every word of it. On a group
+   * post that paste IS the import: it carries the rent, the town and the phone
+   * number Facebook never sends. Losing it silently read as "extraction is
+   * broken", because the phone-candidate chips are recomputed from the STORED
+   * text and stayed empty too.
+   */
+  const [postText, setPostText] = useState(rawText);
+  const [copied, setCopied] = useState(false);
+  /*
+   * Built client-side: the support number is NEXT_PUBLIC_WHATSAPP_SUPPORT, so
+   * it renders in both places, and null when unset — which hides the whole
+   * block rather than offering a comment with a dead link in it.
+   */
+  const inviteComment = inviteCommentText(importId);
+  /*
    * The four fields publish actually requires are CONTROLLED, the rest are not.
    * Not consistency for its own sake: the main path here is an operator pasting
    * a group post and typing these in, and reading them from the server-side
@@ -117,6 +147,49 @@ export function ReviewForm({
         </section>
       )}
 
+      {/*
+        The other way to get this listing, and usually the better one.
+
+        Everything the review screen is working around — the missing body, the
+        album behind the login wall, the absent name and number — arrives
+        intact if the owner sends it themselves. This is also unambiguous
+        consent, where the WhatsApp ask is a Marketing template that a
+        recipient with marketing messages switched off never receives.
+      */}
+      {!published && !discarded && inviteComment && (
+        <section className="space-y-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+          <p className="text-sm font-semibold text-slate-900">
+            Or ask the owner to send it to us
+          </p>
+          <p className="text-xs text-slate-600">
+            Paste this as a comment on the original post. If they message us, the
+            listing arrives complete — every photo, the full text, their name and a
+            number WhatsApp has proven — and nothing here needs guessing. Facebook does
+            not allow comments to be posted automatically, so this one is by hand.
+          </p>
+          <textarea
+            readOnly
+            rows={7}
+            value={inviteComment}
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-700"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              navigator.clipboard
+                ?.writeText(inviteComment)
+                .then(() => setCopied(true))
+                .catch(() => setCopied(false));
+            }}
+          >
+            <Copy className="mr-1.5 h-4 w-4" />
+            {copied ? 'Copied' : 'Copy comment'}
+          </Button>
+        </section>
+      )}
+
       {saleAd && !published && (
         <section className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -143,7 +216,8 @@ export function ReviewForm({
           <textarea
             id="rawText"
             name="rawText"
-            defaultValue={rawText}
+            value={postText}
+            onChange={(e) => setPostText(e.target.value)}
             rows={8}
             placeholder="Paste the whole Facebook post here — rent, rooms, town, phone number, all of it."
             className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-xs focus-visible:border-teal-500 focus-visible:outline-none"
@@ -163,6 +237,12 @@ export function ReviewForm({
 
       <form className="space-y-6">
         <input type="hidden" name="importId" value={importId} />
+        {/* The paste, mirrored out of the re-extract form above so Save and
+            Publish persist it too. Without this the two forms are separate
+            submissions and the text is only ever stored by "Fill empty
+            fields" — which an operator has no reason to press if the fields
+            are already filled. */}
+        <input type="hidden" name="rawText" value={postText} />
 
         <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">
           <legend className="mb-2 text-sm font-semibold text-slate-900">
@@ -175,6 +255,11 @@ export function ReviewForm({
             value={required.title}
             onValueChange={setField('title')}
             required
+            /* listings.title is varchar(200) and Postgres raises 22001 rather
+               than truncating, so a pasted headline longer than this used to
+               come back as an unhandled server-action error instead of a
+               validation message. Mirrored server-side in mergeParsedFromForm. */
+            maxLength={200}
           />
           <Field
             label="Property type"
@@ -290,9 +375,68 @@ export function ReviewForm({
           <legend className="mb-2 text-sm font-semibold text-slate-900">Photos</legend>
           <ImageUploader value={photoUrls} onChange={setPhotoUrls} disabled={locked} />
           <p className="text-xs text-slate-500">
-            Facebook only ever hands over the cover photo. Save the rest from the
-            original post and drop them here.
+            Facebook only ever hands over the cover photo. Add the rest by dropping the
+            files above, or by pasting their URLs below.
           </p>
+
+          {/* Paste image URLs. Only Facebook's own photo CDN is fetched — the
+              server dereferences whatever is typed here, so the host is checked
+              before a socket is opened. */}
+          <div className="space-y-1.5 pt-1">
+            <Label htmlFor="imageUrls">Add photos by URL</Label>
+            <textarea
+              id="imageUrls"
+              name="imageUrls"
+              rows={2}
+              placeholder="Right-click each photo in the post → Copy image address, then paste them here (one per line)."
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-xs focus-visible:border-teal-500 focus-visible:outline-none"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              disabled={locked}
+              formAction={(fd) => start(() => addPhotoUrlsAction(fd))}
+            >
+              <ImagePlus className="mr-1.5 h-4 w-4" />
+              Fetch photos
+            </Button>
+            <p className="text-xs text-slate-500">
+              Copies the images into our own storage — Facebook&rsquo;s links are signed
+              and expire, so a draft opened tomorrow would otherwise lose them. Saves
+              your other edits at the same time.
+            </p>
+          </div>
+
+          {/* Which photo leads. Until now it was whichever URL happened to be
+              ingested first, with no way to change it. */}
+          {photoUrls.length > 1 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs font-medium text-slate-700">
+                Cover photo — the one renters see first in search results.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {photoUrls.map((url, index) => (
+                  <Button
+                    key={`cover-${url}`}
+                    type="button"
+                    variant={index === 0 ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={locked || index === 0}
+                    onClick={() =>
+                      setPhotoUrls((prev) => [
+                        prev[index],
+                        ...prev.filter((_, i) => i !== index),
+                      ])
+                    }
+                  >
+                    {index === 0 ? 'Cover: photo 1' : `Make photo ${index + 1} the cover`}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {photoUrls.map((url) => (
             <input key={`photo-${url}`} type="hidden" name="photoUrls" value={url} />
           ))}
@@ -404,6 +548,7 @@ function Field({
   type = 'text',
   required,
   placeholder,
+  maxLength,
 }: {
   label: string;
   name: string;
@@ -413,6 +558,7 @@ function Field({
   type?: string;
   required?: boolean;
   placeholder?: string;
+  maxLength?: number;
 }) {
   return (
     <div className="space-y-1.5">
@@ -425,6 +571,7 @@ function Field({
         name={name}
         type={type}
         placeholder={placeholder}
+        maxLength={maxLength}
         {...(onValueChange
           ? { value: value ?? '', onChange: (e) => onValueChange(e.target.value) }
           : { defaultValue: defaultValue ?? '' })}

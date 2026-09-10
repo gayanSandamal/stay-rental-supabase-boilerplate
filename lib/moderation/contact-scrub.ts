@@ -21,15 +21,40 @@
 import { normalizePhone } from '@/lib/auth/phone-verification';
 
 /**
- * Kept in step with PHONE_RES in lib/intake/parser/rule-parser.ts. Duplicated
- * rather than imported so this module stays free of the parser: they answer
- * different questions (mask-for-extraction vs remove-from-published-text) and
- * should be free to diverge.
+ * Started as a copy of PHONE_RES in lib/intake/parser/rule-parser.ts and has
+ * now DIVERGED, which that module's own comment anticipated: the two answer
+ * different questions (mask-for-extraction vs read-an-advert) and are free to.
+ *
+ * The divergence is deliberate and one-directional. Widening the parser's copy
+ * changes what every WhatsApp intake extracts, so it needs a RULES_VERSION bump
+ * (currently 5) and a `pnpm parser:probe` re-run; this copy only reads numbers
+ * out of a Facebook advert for an operator to confirm, so it can be widened on
+ * its own. If the parser's copy is ever widened to match, do it as its own
+ * change with the probe.
+ *
+ * WHAT CHANGED AND WHY:
+ *
+ *  - SEPARATORS. `[\s-]` matched a space or an ASCII hyphen and nothing else,
+ *    so `077.123.4567`, `+94 (77) 123 4567` and an en-dash `077–1234567` — all
+ *    ordinary in Sri Lankan adverts — were invisible.
+ *  - AT MOST TWO separator characters per gap, not unlimited. `") "` and `" ("`
+ *    have to fit; `" - "` must not, or `Rs. 25,000 - 0112345678` matches
+ *    "000 - 0112345" and yields a confident, wholly invented +94000112345.
+ *  - BOUNDARIES. Without `(?!\d)` the mobile pattern read `0771234567890` as
+ *    `0771234567` and normalised it to a real-looking number belonging to
+ *    nobody. A wrong number here is worse than no number: it is the address an
+ *    unrepeatable consent request gets sent to.
+ *  - `00` prefix. `0094771234567` is how a number written for an international
+ *    reader appears; normalizePhone already understood it, the matcher did not.
  */
+const SEP = '[\\s.()\\-\\u2010-\\u2015]{0,2}';
 const PHONE_PATTERNS = [
-  /(?:\+?94[\s-]?|0)7\d(?:[\s-]?\d){7}/g, // SL mobile: 07XXXXXXXX / +947XXXXXXXX
-  /0\d{2}[\s-]?\d{7}/g, // SL landline: 0112345678 / 011-2345678
-  /\+\d{10,13}/g, // generic international
+  // SL mobile: 07XXXXXXXX / +947XXXXXXXX / 00947XXXXXXXX, any separators above
+  new RegExp(`(?<!\\d)(?:(?:\\+|00)?94${SEP}|0)7\\d(?:${SEP}\\d){7}(?!\\d)`, 'g'),
+  // SL landline: 0112345678 / 011-2345678 / (011) 2345678
+  new RegExp(`(?<!\\d)0\\d{2}${SEP}\\d(?:${SEP}\\d){6}(?!\\d)`, 'g'),
+  // generic international
+  new RegExp(`(?<!\\d)\\+${SEP}\\d(?:${SEP}\\d){9,12}(?!\\d)`, 'g'),
 ];
 
 /**
