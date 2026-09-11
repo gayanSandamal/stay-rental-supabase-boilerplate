@@ -1,7 +1,7 @@
 import { publisherDisplayName } from '@/lib/publisher-name';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
-import { VerificationBadges } from '@/components/verification-badges';
+import { VerificationBadges, VERIFIED_NUMBER_LABEL } from '@/components/verification-badges';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -638,6 +638,21 @@ export default async function ListingDetailPage({
                     Contact {publisherType === 'business' ? 'Publisher' : 'Owner'}
                   </h4>
 
+                  {/* Who is on the other end of the number, at the moment the
+                      visitor decides to call a stranger about a deposit. */}
+                  <div className="flex items-center flex-wrap gap-2">
+                    {publisherType === 'business' ? (
+                      <Building2 className="h-4 w-4 text-teal-700" />
+                    ) : (
+                      <User className="h-4 w-4 text-gray-600" />
+                    )}
+                    <span className="text-sm font-medium text-gray-900">{publisherName}</span>
+                    <VerificationBadges
+                      kycVerified={publisherKycVerified}
+                      whatsappVerified={publisherWhatsappVerified}
+                    />
+                  </div>
+
                   {(() => {
                     // Every active number, verified first.
                     //
@@ -671,7 +686,7 @@ export default async function ListingDetailPage({
                                   <span className="font-semibold text-sm text-gray-900">{contact.phoneNumber}</span>
                                   {contact.verified && (
                                     <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded">
-                                      Verified
+                                      {VERIFIED_NUMBER_LABEL}
                                     </span>
                                   )}
                                   {contact.label && (
