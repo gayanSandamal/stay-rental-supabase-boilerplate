@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       parkingSpaces,
       petsAllowed,
       noticePeriodDays,
+      isTemporary,
       status,
       photos,
       contactNumbers, // Array of contact number IDs
@@ -231,6 +232,7 @@ export async function POST(request: NextRequest) {
         parkingSpaces: toNumberOrNull(parkingSpaces),
         petsAllowed: Boolean(petsAllowed),
         noticePeriodDays: toNumberOrNull(noticePeriodDays) ?? 30,
+        isTemporary: Boolean(isTemporary),
         photos: submittedPhotos.length > 0 ? JSON.stringify(submittedPhotos) : null,
         // ENQUEUE ON CREATE. `moderation_status` defaults to 'skipped' and
         // `claimListings` only ever claims 'queued', so a listing that nobody
