@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { resolveViewTotals } from '@/lib/listings/view-totals';
 import { trackImpressions } from '@/lib/analytics/impressions';
 import { parseListingFilters } from '@/lib/listings/filter-params';
 
@@ -61,9 +62,23 @@ export async function GET(request: NextRequest) {
       }),
     }));
 
+    /*
+     * View totals for the page — two more set-based queries, never one per row.
+     * `resolveViewTotals` loads the feature-flag snapshot itself, which matters
+     * most here: an API route has no root layout above it to have loaded one,
+     * and without it this handler would read flag DEFAULTS and keep serving
+     * counts after an admin switched them off — visible as cards that lose
+     * their number on a full reload but keep it while scrolling.
+     */
+    const viewTotals = await resolveViewTotals(listingsToReturn.map((l) => l.id));
+    const listingsWithViews = listingsWithPublisher.map((listing) => ({
+      ...listing,
+      viewTotal: viewTotals.get(listing.id),
+    }));
+
     return NextResponse.json({
       success: true,
-      listings: listingsWithPublisher,
+      listings: listingsWithViews,
       hasMore,
       page,
       limit,

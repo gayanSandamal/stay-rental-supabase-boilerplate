@@ -157,6 +157,25 @@ describe('the rendered block', () => {
   });
 });
 
+describe('Facebook insight metric names track Meta retirements', () => {
+  const source = code('lib/social/adapters/facebook-page.ts');
+
+  it('asks for the current metric, not the retired post_impressions family', () => {
+    // Measured live 2026-09-11: both old names returned
+    // "(#100) The value must be a valid insights metric" against our own Page.
+    expect(source).toContain('post_media_view');
+    expect(source).not.toMatch(/'post_impressions'/);
+    expect(source).not.toMatch(/'post_impressions_unique'/);
+  });
+
+  it('keeps the people-counting metric second so a degraded read under-counts', () => {
+    const chain = source.slice(source.indexOf('graphInsightValue(remotePostId'));
+    expect(chain.indexOf('post_media_view')).toBeLessThan(
+      chain.indexOf('post_total_media_view_unique')
+    );
+  });
+});
+
 describe('TikTok needs a read scope it did not used to request', () => {
   it('asks for video.list at connect time', () => {
     const source = code('app/api/social/tiktok/connect/route.ts');

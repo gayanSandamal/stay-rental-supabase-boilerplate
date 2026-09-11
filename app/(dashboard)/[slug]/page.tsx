@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Building2, Home, MapPin } from 'lucide-react';
 import { ListingCard } from '@/components/listing-card';
+import { resolveViewTotals } from '@/lib/listings/view-totals';
 import type { Metadata } from 'next';
 import { isReservedSlug } from '@/lib/reserved-slugs';
 import { publisherDisplayName } from '@/lib/publisher-name';
@@ -93,6 +94,9 @@ export default async function LandlordProfilePage({
     email: landlord.user?.email,
   });
   const listings = landlord.listings ?? [];
+
+  // Two set-based queries for the whole profile, never one per card.
+  const viewTotals = await resolveViewTotals(listings.map((l: { id: number }) => l.id));
   const canonicalSlug = landlord.profileSlug ?? slug;
 
   const agentJsonLd = realEstateAgent({
@@ -140,7 +144,7 @@ export default async function LandlordProfilePage({
             {listings.map((listing) => (
               <ListingCard
                 key={listing.id}
-                listing={listing}
+                listing={{ ...listing, viewTotal: viewTotals.get(listing.id) }}
                 showPublisher={false}
               />
             ))}
