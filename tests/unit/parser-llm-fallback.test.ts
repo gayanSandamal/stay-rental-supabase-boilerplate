@@ -24,6 +24,7 @@ const EMPTY: ParsedIntake = {
   bedrooms: null,
   bathrooms: null,
   rentPerMonth: null,
+  depositMonths: null,
   description: null,
   missingFields: [],
   suspicious: false,

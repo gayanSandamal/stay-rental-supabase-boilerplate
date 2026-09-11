@@ -722,6 +722,9 @@ export function parseIntakeRules(messageText: string): ParsedIntake {
     bedrooms,
     bathrooms,
     rentPerMonth,
+    // Not extracted by the rule parser (deliberate — see the ParsedIntake
+    // comment). Not a rule change, so no RULES_VERSION bump.
+    depositMonths: null,
     description,
     missingFields: [],
     suspicious: suspicion.suspicious,

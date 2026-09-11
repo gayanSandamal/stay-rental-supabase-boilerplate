@@ -177,6 +177,9 @@ export async function publishImport(
       bedrooms: parsed.bedrooms,
       bathrooms: parsed.bathrooms,
       rentPerMonth: String(parsed.rentPerMonth),
+      // Omitted rather than passed as null when unset: the column defaults to
+      // 3, and an explicit null would override that default with nothing.
+      ...(parsed.depositMonths != null ? { depositMonths: parsed.depositMonths } : {}),
       photos: kept.length ? JSON.stringify(kept) : null,
       ...(manifestEntries.length ? { photosManifest: serializeManifest(manifestEntries) } : {}),
       ...(moderationArmed ? { moderationStatus: 'queued' as const } : {}),
@@ -444,6 +447,7 @@ function emptyParsed(): ParsedIntake {
     bedrooms: null,
     bathrooms: null,
     rentPerMonth: null,
+    depositMonths: null,
     missingFields: [],
     suspicious: false,
     suspicionReason: null,

@@ -134,6 +134,8 @@ function coerceParsed(text: string): ParsedIntake | null {
       Number.isFinite(Number(raw.rentPerMonth)) && Number(raw.rentPerMonth) > 0
         ? Number(raw.rentPerMonth)
         : null,
+    // Not asked of the LLM (FIELD_SPECS doesn't request it) — always null here.
+    depositMonths: null,
     description: str(raw.description),
     missingFields: [],
     suspicious: raw.suspicious === true,

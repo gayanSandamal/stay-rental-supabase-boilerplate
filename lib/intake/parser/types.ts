@@ -14,6 +14,19 @@ export interface ParsedIntake {
   bedrooms: number | null;
   bathrooms: number | null;
   rentPerMonth: number | null;
+  /**
+   * Months of rent required upfront as a deposit/advance ("key money" in Sri
+   * Lankan usage) — 1, 2, 3, or occasionally many more. Not auto-extracted by
+   * either the rule parser or the LLM fallback today; every construction site
+   * sets it null. It exists on the type (and already on `listings.depositMonths`
+   * since migration 0001) so an operator or landlord can set it by hand on the
+   * create/edit form and the Facebook-import review screen without a new
+   * migration. Auto-extraction is a deliberate follow-up, not this change —
+   * touching rule-parser.ts needs a RULES_VERSION bump and a probe run
+   * (CLAUDE.md), and the WhatsApp intake side needs none of that to gain the
+   * field.
+   */
+  depositMonths: number | null;
   description: string | null;
   /** Required-for-publication fields the message didn't contain. */
   missingFields: string[];

@@ -251,6 +251,24 @@ export default async function ImportReviewPage({
       )}
 
       <ReviewForm
+        /*
+         * Force a fresh mount whenever the row actually changes server-side.
+         *
+         * ReviewForm's fields are local state seeded once from props (`useState`
+         * initializers, `defaultValue` on the uncontrolled ones) — the ordinary
+         * React trade-off that lets an operator's in-progress edits survive a
+         * background re-render. But every action here (reExtractAction,
+         * addPhotoUrlsAction, ...) redirects back to this SAME route with only
+         * the search string changed, which React reconciles as an update to the
+         * same component instance, not a new one — so local state never resyncs
+         * to the fresh server data, no matter which field changed. "Fill empty
+         * fields" reads as broken because `description` is exactly the field an
+         * operator watches to confirm it worked; every other field was silently
+         * as stale, just less noticeably so. Keying on `updatedAt` remounts
+         * ReviewForm precisely when, and only when, the row was actually
+         * rewritten — matching the "Check the fields below" the banner promises.
+         */
+        key={record.updatedAt.getTime()}
         importId={record.id}
         saleAd={saleAd}
         shareOnSocial={record.shareOnSocial}
@@ -268,6 +286,7 @@ export default async function ImportReviewPage({
           bedrooms: parsed.bedrooms,
           bathrooms: parsed.bathrooms,
           rentPerMonth: parsed.rentPerMonth,
+          depositMonths: parsed.depositMonths,
         }}
         photos={photos}
         ownerName={record.ownerName}

@@ -393,6 +393,7 @@ function fillEmpty(existing: ParsedIntake, fresh: ParsedIntake): ParsedIntake {
     bedrooms: keep('bedrooms'),
     bathrooms: keep('bathrooms'),
     rentPerMonth: keep('rentPerMonth'),
+    depositMonths: keep('depositMonths'),
   };
 }
 
@@ -434,5 +435,6 @@ function mergeParsedFromForm(base: ParsedIntake, formData: FormData): ParsedInta
     bedrooms: number('bedrooms'),
     bathrooms: number('bathrooms'),
     rentPerMonth: number('rentPerMonth'),
+    depositMonths: number('depositMonths'),
   };
 }
