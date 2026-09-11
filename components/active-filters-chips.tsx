@@ -57,6 +57,8 @@ export function ActiveFiltersChips() {
           return `Parking: ${value}+ spaces`;
         case 'maxNoticePeriod':
           return `Max Notice: ${value} days`;
+        case 'isTemporary':
+          return 'Temporary Rental Only';
         case 'locationRadius':
           return `Within ${value} km`;
         case 'hasFiber':

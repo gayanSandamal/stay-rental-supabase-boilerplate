@@ -63,6 +63,7 @@ const FILTER_SPEC = {
   petsAllowed: 'boolTrue',
 
   maxNoticePeriod: 'int',
+  isTemporary: 'boolTrue',
 
   verifiedOnly: 'boolTrue',
   visitedOnly: 'boolTrue',

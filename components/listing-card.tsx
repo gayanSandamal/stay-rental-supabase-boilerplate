@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2 } from 'lucide-react';
+import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2, CalendarClock } from 'lucide-react';
 import { PublisherInfo } from './publisher-info';
+import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
 
 interface ListingCardProps {
   listing: any;
@@ -165,6 +166,11 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                     <Droplet className="h-3 w-3" /> {listing.waterSource}
                   </span>
                 )}
+                {listing.isTemporary && (
+                  <span title={TEMPORARY_RENTAL_HELP_TEXT} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-medium border border-violet-200">
+                    <CalendarClock className="h-3 w-3" /> Temporary
+                  </span>
+                )}
               </div>
 
               {showPublisher && listing.publisherName && (
@@ -284,6 +290,11 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             {listing.waterSource && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 text-[10px] font-semibold border border-sky-200">
                 <Droplet className="h-2.5 w-2.5" /> {listing.waterSource}
+              </span>
+            )}
+            {listing.isTemporary && (
+              <span title={TEMPORARY_RENTAL_HELP_TEXT} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200">
+                <CalendarClock className="h-2.5 w-2.5" /> Temporary
               </span>
             )}
           </div>

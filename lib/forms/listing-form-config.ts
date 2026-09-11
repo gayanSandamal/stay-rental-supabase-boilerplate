@@ -1,6 +1,14 @@
 import { FormConfig } from '@/components/form-builder';
 import { DISTRICTS } from '@/lib/intake/parser/gazetteer';
 
+// Single source for the "temporary rental" copy, reused by the create/edit form,
+// the filter form, the listing card, and the detail page — never restated, so the
+// wording can't drift into "short-stay"/"nightly"/"vacation" on one surface while
+// staying compliant on another (Easy Rent is not a short-stay/vacation product).
+export const TEMPORARY_RENTAL_LABEL = 'Temporary Rental Only';
+export const TEMPORARY_RENTAL_HELP_TEXT =
+  'A shorter-duration listing, still within the platform\'s normal mid-to-long-term lease terms. Does not change deposit or notice-period requirements.';
+
 export const listingFormConfig: FormConfig = {
   title: 'Create New Listing',
   description: 'Fill in the details about your property. Required fields are marked with *',
@@ -177,6 +185,13 @@ export const listingFormConfig: FormConfig = {
       min: 0,
       defaultValue: 30,
       helpText: 'Number of days notice required before moving out',
+    },
+    {
+      name: 'isTemporary',
+      label: TEMPORARY_RENTAL_LABEL,
+      type: 'checkbox',
+      defaultValue: false,
+      helpText: TEMPORARY_RENTAL_HELP_TEXT,
     },
 
     // Utilities & Infrastructure Section
