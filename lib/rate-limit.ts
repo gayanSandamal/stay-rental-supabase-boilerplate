@@ -37,6 +37,12 @@ const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
   // from under a landlord who is mid-send.
   'POST:/api/contact-numbers/[id]/verify': { maxRequests: 5, windowMs: 60_000 },
   'POST:/api/business-accounts': { maxRequests: 5, windowMs: 60_000 },
+  // Server actions, not API routes — no real pathname, so signIn/signUp pass a
+  // synthetic one. Tighter than the default: sign-in is the highest-value
+  // brute-force target in the app, and it previously had NO rate limiting at
+  // all, unlike every other write path here.
+  'POST:/sign-in': { maxRequests: 10, windowMs: 60_000 },
+  'POST:/sign-up': { maxRequests: 5, windowMs: 60_000 },
   'default': { maxRequests: 60, windowMs: 60_000 },
 };
 
