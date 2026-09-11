@@ -556,11 +556,28 @@ not the launch switch).
   API since 2024-04-22, so a group post has no id to query. The group adapter
   deliberately has **no** `metrics` method; absence is how the page knows to
   omit the line instead of inventing a number.
-- Meta renames insight metrics on version boundaries, so `graphInsightValue`
-  tries a chain (`post_impressions` → `post_impressions_unique`; `views` →
-  `impressions` → `reach`). The order is not arbitrary: the fallbacks measure
-  *people*, not views, and are always the smaller number — putting them second
-  means a degraded reading under-counts rather than over-counts.
+- **Meta RETIRES insight metrics, and a retired one returns `(#100) The value
+  must be a valid insights metric` — not a deprecation warning.** So a metric
+  name that worked when it was written fails silently-ish later: the figure just
+  reads unknown forever. This already bit us once — the whole
+  `post_impressions` family was retired (`post_impressions_unique` 2025-06-15,
+  `post_impressions` 2025-11-15) and both names shipped in #117, so every
+  Facebook figure was unreadable on arrival (caught 2026-09-11 from the stored
+  `metrics_error`). Current mapping: `post_impressions` → `post_media_view`,
+  `post_impressions_unique` → `post_total_media_view_unique`. When a figure
+  reads `—` for every listing, **check `listing_social_posts.metrics_error`
+  first** — that column exists for exactly this.
+- `graphInsightValue` tries a chain (`post_media_view` →
+  `post_total_media_view_unique`; `views` → `impressions` → `reach`). The order
+  is not arbitrary: the fallbacks measure *people*, not views, and are always
+  the smaller number — putting them second means a degraded reading
+  under-counts rather than over-counts. Retired names are NOT kept as trailing
+  fallbacks; they only add a guaranteed-failed HTTP call per refresh.
+- **Instagram insights need App Review.** Ours returns `(#10) Application does
+  not have permission for this action` — a permission gap, not a code bug, and
+  no metric name fixes it. `isTokenError` covers code 10, so it is marked
+  permanent and the sweeper backs off; because the back-off is a timestamp and
+  not a dead flag, it heals by itself once the permission is granted.
 
 ## Performance: where the time actually goes (2026-09-02)
 

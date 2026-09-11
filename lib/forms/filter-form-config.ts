@@ -1,5 +1,6 @@
 import { FormConfig } from '@/components/form-builder';
 import { CITY_NAMES, DISTRICTS } from '@/lib/intake/parser/gazetteer';
+import { TEMPORARY_RENTAL_LABEL, TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
 
 export const filterFormConfig: FormConfig = {
   title: 'Filter Listings',
@@ -334,6 +335,13 @@ export const filterFormConfig: FormConfig = {
         { label: '60 days or less', value: '60' },
         { label: '90 days or less', value: '90' },
       ],
+    },
+    {
+      name: 'isTemporary',
+      label: TEMPORARY_RENTAL_LABEL,
+      type: 'checkbox',
+      defaultValue: false,
+      helpText: TEMPORARY_RENTAL_HELP_TEXT,
     },
 
     // ========== VERIFICATION STATUS ==========

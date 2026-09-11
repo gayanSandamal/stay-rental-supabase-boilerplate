@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2 } from 'lucide-react';
+import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2, CalendarClock } from 'lucide-react';
 import { PublisherInfo } from './publisher-info';
+import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
 
 interface ListingCardProps {
   listing: any;
@@ -30,6 +31,34 @@ function getListingImage(listing: any): string | null {
     // invalid json
   }
   return null;
+}
+
+/**
+ * Total views for this listing — website page views plus the views the social
+ * platforms report for its posts.
+ *
+ * Rendered only when the server handed us a number. `viewTotal` is attached by
+ * `resolveViewTotals`, which returns nothing at all when
+ * `showPublicViewCounts` is off — so the flag decision lives on the server and
+ * this card stays a dumb renderer. A card that was never given a count simply
+ * has no line, which is also the honest state for a listing nobody has opened:
+ * we show "0 views" only when the count really is zero, never as a stand-in for
+ * "not loaded on this surface".
+ *
+ * The figure is a floor — see lib/listings/view-totals.ts. Deduplicated per
+ * viewer per day, so a landlord reloading their own card does not move it.
+ */
+function ViewCount({ total, compact = false }: { total: unknown; compact?: boolean }) {
+  if (typeof total !== 'number' || !Number.isFinite(total)) return null;
+  return (
+    <span
+      className={`flex items-center gap-1 ${compact ? 'text-xs' : ''}`}
+      title="Views on Easy Rent plus our Facebook, Instagram and TikTok posts"
+    >
+      <Eye className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} text-slate-400`} />{' '}
+      {total.toLocaleString('en-US')} {total === 1 ? 'view' : 'views'}
+    </span>
+  );
 }
 
 export function ListingCard({ listing, viewMode = 'grid', showPublisher = false }: ListingCardProps) {
@@ -118,6 +147,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 {listing.bathrooms && (
                   <span className="flex items-center gap-1"><Bath className="h-4 w-4 text-slate-400" /> {listing.bathrooms} bath</span>
                 )}
+                <ViewCount total={listing.viewTotal} />
               </div>
 
               <div className="flex flex-wrap gap-1.5 mb-4">
@@ -134,6 +164,11 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 {listing.waterSource && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs font-medium border border-sky-200">
                     <Droplet className="h-3 w-3" /> {listing.waterSource}
+                  </span>
+                )}
+                {listing.isTemporary && (
+                  <span title={TEMPORARY_RENTAL_HELP_TEXT} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-medium border border-violet-200">
+                    <CalendarClock className="h-3 w-3" /> Temporary
                   </span>
                 )}
               </div>
@@ -237,6 +272,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             {listing.bathrooms && (
               <span className="flex items-center gap-1 text-xs"><Bath className="h-3.5 w-3.5 text-slate-400" /> {listing.bathrooms} bath</span>
             )}
+            <ViewCount total={listing.viewTotal} compact />
           </div>
 
           {/* Feature tags */}
@@ -254,6 +290,11 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             {listing.waterSource && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 text-[10px] font-semibold border border-sky-200">
                 <Droplet className="h-2.5 w-2.5" /> {listing.waterSource}
+              </span>
+            )}
+            {listing.isTemporary && (
+              <span title={TEMPORARY_RENTAL_HELP_TEXT} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200">
+                <CalendarClock className="h-2.5 w-2.5" /> Temporary
               </span>
             )}
           </div>

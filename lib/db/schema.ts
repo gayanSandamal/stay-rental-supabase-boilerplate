@@ -195,7 +195,8 @@ export const listings = pgTable('listings', {
   parkingSpaces: integer('parking_spaces'),
   petsAllowed: boolean('pets_allowed').default(false),
   noticePeriodDays: integer('notice_period_days').default(30),
-  
+  isTemporary: boolean('is_temporary').default(false), // Landlord-declared shorter-duration listing, still within normal lease terms
+
   // Verification
   verified: boolean('verified').notNull().default(false),
   verifiedAt: timestamp('verified_at'),

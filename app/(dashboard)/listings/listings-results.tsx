@@ -3,6 +3,7 @@ import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
 import { LandlordCrossSellBanner } from '@/components/landlord-cross-sell-banner';
 import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { resolveViewTotals } from '@/lib/listings/view-totals';
 import { parseListingFilters } from '@/lib/listings/filter-params';
 import { trackImpressions } from '@/lib/analytics/impressions';
 
@@ -77,6 +78,19 @@ export async function ListingsResults({
     }),
   }));
 
+  /*
+   * Total views for the whole page in two more queries, never one per card.
+   * Sequential after the publisher pass for the same reason it is sequential:
+   * `max: 1` pool, transaction pooler (CLAUDE.md, a3ac4f9). Returns an empty
+   * map when `showPublicViewCounts` is off, and a listing with no entry
+   * renders no count.
+   */
+  const viewTotals = await resolveViewTotals(listings.map((l) => l.id));
+  const listingsWithViews = listingsWithPublisher.map((listing) => ({
+    ...listing,
+    viewTotal: viewTotals.get(listing.id),
+  }));
+
   return (
     <>
       {/* Tenant→landlord cross-sell; suppressed while the signed-up banner
@@ -86,7 +100,7 @@ export async function ListingsResults({
         {listings.length}+ {listings.length === 1 ? 'listing' : 'listings'} available across
         Sri Lanka
       </p>
-      <EnhancedListingsGrid initialListings={listingsWithPublisher} showPublisher={true} />
+      <EnhancedListingsGrid initialListings={listingsWithViews} showPublisher={true} />
     </>
   );
 }

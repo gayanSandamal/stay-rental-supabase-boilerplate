@@ -1,5 +1,6 @@
 import { publisherDisplayName } from '@/lib/publisher-name';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
+import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -607,6 +608,11 @@ export default async function ListingDetailPage({
                 {listing.noticePeriodDays && (
                   <div className="text-sm text-gray-600 mt-2">
                     Notice Period: {listing.noticePeriodDays} days
+                  </div>
+                )}
+                {listing.isTemporary && (
+                  <div className="text-sm text-violet-700 mt-2" title={TEMPORARY_RENTAL_HELP_TEXT}>
+                    Temporary rental only
                   </div>
                 )}
               </div>

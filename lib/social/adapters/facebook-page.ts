@@ -153,20 +153,30 @@ async function remove(remotePostId: string): Promise<boolean> {
 /**
  * Views for a Page post.
  *
- * `post_impressions` is what Facebook's own post UI now labels "views", and
- * `post_impressions_unique` (people reached) is the fallback for the accounts
- * and API versions where the first is not served. They are different
- * quantities, so the unique figure is deliberately SECOND — reached is always
- * the smaller number, and quietly reporting it as views would under-count the
- * post rather than over-count it if the order were reversed.
+ * `post_media_view` is the CURRENT metric. Meta retired the whole
+ * `post_impressions` family — `post_impressions_unique` on 2025-06-15 and
+ * `post_impressions` itself on 2025-11-15 — and the API's answer for a retired
+ * metric is a flat `(#100) The value must be a valid insights metric`, not a
+ * deprecation warning. Verified against our own live Page on 2026-09-11: both
+ * old names returned #100 for listing 34's post, so every Facebook figure read
+ * as unknown. Meta's mapping:
+ *
+ *   post_impressions        → post_media_view
+ *   post_impressions_unique → post_total_media_view_unique
+ *
+ * `post_total_media_view_unique` stays SECOND because it counts PEOPLE, not
+ * views, and is therefore always the smaller number — a degraded reading
+ * should under-count rather than over-count. The retired names are not kept as
+ * further fallbacks: they cannot succeed on any current version, so they would
+ * only add a guaranteed-failed HTTP call to every refresh.
  */
 async function metrics(remotePostId: string): Promise<MetricsResult> {
   if (!isFacebookPageConfigured()) {
     return { ok: false, error: 'Facebook Page not configured', permanent: true };
   }
   const res = await graphInsightValue(remotePostId, [
-    'post_impressions',
-    'post_impressions_unique',
+    'post_media_view',
+    'post_total_media_view_unique',
   ]);
   if ('value' in res) return { ok: true, views: res.value };
   return { ok: false, error: res.error.message, permanent: res.permanent };

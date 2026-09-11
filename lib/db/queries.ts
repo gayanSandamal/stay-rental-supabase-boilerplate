@@ -233,7 +233,8 @@ export async function getActiveListings(filters?: {
   
   // Lease Terms
   maxNoticePeriod?: number;
-  
+  isTemporary?: boolean;
+
   // Verification
   verifiedOnly?: boolean;
   visitedOnly?: boolean;
@@ -355,7 +356,9 @@ export async function getActiveListings(filters?: {
     filters?.maxNoticePeriod
       ? lte(listings.noticePeriodDays, filters.maxNoticePeriod)
       : undefined,
-    
+    // Filter facet only — never add isTemporary to orderBy/ranking (AD-2).
+    filters?.isTemporary ? eq(listings.isTemporary, true) : undefined,
+
     // Verification
     filters?.verifiedOnly ? eq(listings.verified, true) : undefined,
     filters?.visitedOnly ? eq(listings.visited, true) : undefined,

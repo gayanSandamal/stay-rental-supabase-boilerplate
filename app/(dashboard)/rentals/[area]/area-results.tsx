@@ -2,6 +2,7 @@ import { getActiveListings, getUser } from '@/lib/db/queries';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { EnhancedListingsGrid } from '@/components/enhanced-listings-grid';
 import { resolvePublishers } from '@/lib/listings/publisher-info';
+import { resolveViewTotals } from '@/lib/listings/view-totals';
 import { trackImpressions } from '@/lib/analytics/impressions';
 import { jsonLdHtml, itemList } from '@/lib/seo/jsonld';
 import type { EligibleArea } from '@/lib/seo/area-eligibility';
@@ -56,6 +57,19 @@ export async function AreaResults({ area }: { area: EligibleArea }) {
     }),
   }));
 
+  /*
+   * Total views for the whole page in two more queries, never one per card.
+   * Sequential after the publisher pass for the same reason it is sequential:
+   * `max: 1` pool, transaction pooler (CLAUDE.md, a3ac4f9). Returns an empty
+   * map when `showPublicViewCounts` is off, and a listing with no entry
+   * renders no count.
+   */
+  const viewTotals = await resolveViewTotals(listings.map((l) => l.id));
+  const listingsWithViews = listingsWithPublisher.map((listing) => ({
+    ...listing,
+    viewTotal: viewTotals.get(listing.id),
+  }));
+
   return (
     <>
       <script
@@ -85,7 +99,7 @@ export async function AreaResults({ area }: { area: EligibleArea }) {
           ? `${AREA_PAGE_LIMIT}+ rentals available in ${where}`
           : `${listings.length} ${listings.length === 1 ? 'rental' : 'rentals'} available in ${where}`}
       </p>
-      <EnhancedListingsGrid initialListings={listingsWithPublisher} showPublisher={true} />
+      <EnhancedListingsGrid initialListings={listingsWithViews} showPublisher={true} />
     </>
   );
 }
