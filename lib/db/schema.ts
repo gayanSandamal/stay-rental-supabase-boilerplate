@@ -852,6 +852,30 @@ export const listingSocialPosts = pgTable('listing_social_posts', {
   /** When a human confirmed they deleted it by hand. NULL while outstanding. */
   manualTakedownAt: timestamp('manual_takedown_at'),
   manualTakedownBy: integer('manual_takedown_by').references(() => users.id),
+  /**
+   * Views the PLATFORM reports for this post (migration 0062), refreshed by
+   * `refreshSocialMetrics` off the publish cron.
+   *
+   * NULL is load-bearing and is NOT zero. It means "we have no reading" — the
+   * post is a dry run, the metric needs a scope the connection was not granted,
+   * the insights call failed, or it simply has not been read yet. A public
+   * surface must render NULL as unknown; printing 0 would tell a landlord their
+   * advert was seen by nobody on the strength of our own missing permission.
+   */
+  viewCount: integer('view_count'),
+  /**
+   * When we last ASKED the platform — not when we last got an answer. A failed
+   * read stamps it too, which is what stops the sweeper retrying a missing
+   * OAuth scope every five minutes forever (cf. `report_last_period_end`).
+   * `metricsError` is how you tell the two apart.
+   */
+  metricsFetchedAt: timestamp('metrics_fetched_at'),
+  /**
+   * Why the last read failed, verbatim from the platform. Kept so a stale or
+   * absent number can be explained in the back office instead of looking like
+   * a post nobody saw. Cleared on the next success.
+   */
+  metricsError: text('metrics_error'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

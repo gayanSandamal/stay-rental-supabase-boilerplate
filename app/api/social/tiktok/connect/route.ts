@@ -60,8 +60,16 @@ export async function GET(_request: NextRequest) {
    * Requesting it anyway is not free: app review requires every requested scope
    * to be demonstrated in the submitted demo video, and one that the code never
    * calls cannot be. TikTok's own guidance is that unneeded scopes delay review.
+   *
+   * `video.list` IS exercised, by `metrics()` — it is the only way to read a
+   * post's `view_count`, which the public listing page prints. It is a separate
+   * grant from `video.publish`, so AN ACCOUNT CONNECTED BEFORE THIS LINE
+   * EXISTED DOES NOT HAVE IT: its reads fail with `scope_not_authorized` until
+   * an admin visits Back Office → Social and clicks Connect TikTok again. The
+   * TikTok figure stays unknown (never 0) in the meantime, and the adapter
+   * marks that failure permanent so the sweeper stops asking.
    */
-  authorize.searchParams.set('scope', 'user.info.basic,video.publish');
+  authorize.searchParams.set('scope', 'user.info.basic,video.publish,video.list');
   authorize.searchParams.set('response_type', 'code');
   authorize.searchParams.set('redirect_uri', `${baseUrl()}/api/social/tiktok/callback`);
   authorize.searchParams.set('state', state);

@@ -64,6 +64,7 @@ const MIGRATIONS = [
   '0059_import_social_and_listing_index.sql',
   '0060_import_owner_consent.sql',
   '0061_import_manual_consent.sql',
+  '0062_social_post_metrics.sql',
 ];
 
 function splitStatements(sql: string): string[] {

@@ -502,6 +502,56 @@ top and made the limit look worse than it is:
   is composed here and pasted by hand. An inbound reply carrying `FB-<id>` only
   notifies ops; it must never swallow the message, which IS the submission.
 
+## Public view counts (2026-09-11)
+
+The listing page prints, to everyone, how many people have seen a listing: its
+own page views plus the views Facebook, Instagram and TikTok report for its
+posts. Migration 0062; flag `showPublicViewCounts`, ON by default (it is the
+visible half of the free reach a landlord gets, and the flag is the kill switch,
+not the launch switch).
+
+- **UNKNOWN IS NOT ZERO, and this is the only rule that matters here.**
+  `listing_social_posts.view_count` is nullable and NULL means *we have no
+  reading* — a dry run, a post whose insights have not been computed yet, a
+  TikTok account connected before `video.list` was requested, an expired Page
+  token. A platform with no live post is **omitted entirely**; a platform with
+  no reading renders **"—"**. A landlord who reads "Facebook views: 0"
+  concludes their advert was ignored, when the truth is usually our own missing
+  permission — the same class of lie as a `posted` badge on a dry run.
+  `tests/unit/public-view-counts.test.ts` fails if `?? 0` reappears anywhere on
+  that path.
+- **The page never calls a platform.** `refreshSocialMetrics`
+  (`lib/social/metrics.ts`) reads the numbers on the publish cron and stores
+  them; the page reads only our own database. Rate limits are per app, not per
+  visitor, so one popular listing calling Graph on render would exhaust the
+  quota for every other listing. `METRICS_STALE_MINUTES` is 180 — social counts
+  move over days, and the cron ticks every five minutes.
+- **`metrics_fetched_at` records when we last ASKED, not when we last got an
+  answer.** A failed read stamps it too (and leaves `view_count` alone, keeping
+  the last good reading); `metrics_error` is how the two are told apart. Without
+  the stamp a missing OAuth scope is retried every five minutes forever — and
+  because it is a timestamp rather than a dead flag, the row heals by itself
+  once an admin reconnects.
+- **Only `status = 'posted'` rows count.** A pulled post is not on the account
+  any more, so its views are not a current fact about the listing.
+- **TikTok view counts need the `video.list` scope, which `video.publish` does
+  not grant.** The connect route now requests it, so **an account connected
+  before 2026-09-11 cannot answer** — its reads fail `scope_not_authorized`
+  until an admin clicks Connect TikTok again in Back Office → Social. The
+  adapter marks that failure `permanent` so the sweeper backs off, and the
+  figure stays "—" rather than 0. Also note `remotePostId` is sometimes a
+  `publish_id` (when `publish()` stopped polling before TikTok settled), which
+  `video/query` cannot match: an empty result is no reading, not zero.
+- **Facebook Groups are absent from `MEASURABLE_PLATFORMS` permanently** — no
+  API since 2024-04-22, so a group post has no id to query. The group adapter
+  deliberately has **no** `metrics` method; absence is how the page knows to
+  omit the line instead of inventing a number.
+- Meta renames insight metrics on version boundaries, so `graphInsightValue`
+  tries a chain (`post_impressions` → `post_impressions_unique`; `views` →
+  `impressions` → `reach`). The order is not arbitrary: the fallbacks measure
+  *people*, not views, and are always the smaller number — putting them second
+  means a degraded reading under-counts rather than over-counts.
+
 ## Performance: where the time actually goes (2026-09-02)
 
 Navigation was slow for three reasons that multiplied, and none of them was slow
@@ -552,3 +602,13 @@ production** running the same queries.
 - New admin action? Add an `audit_action` enum value and log it.
 - Preserve secure, generic auth messaging (no account enumeration) on sign-in/forgot-password flows.
 - Sri Lanka context is the point: prices are LKR, locations are Sri Lankan cities/districts, and resilience fields (power/water/fiber) are first-class, not afterthoughts.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

@@ -85,12 +85,25 @@ export async function GET(request: NextRequest) {
       console.error('[cron/publish-social] results notify failed', err);
     }
 
+    // Refresh the view counts the public listing page prints. Own try/catch,
+    // like every other step here: a reading is a nice-to-have and must never
+    // fail the publish sweep. It runs on an empty-queue tick too — that is the
+    // point, since the posts needing a re-read are the ones published hours ago.
+    let metrics: { read: number; unknown: number } | undefined;
+    try {
+      const { refreshSocialMetrics } = await import('@/lib/social/metrics');
+      metrics = await refreshSocialMetrics();
+    } catch (err) {
+      console.error('[cron/publish-social] metrics refresh failed', err);
+    }
+
     return NextResponse.json({
       ok: true,
       ...counts,
       prompted,
       notified,
       orphansPulled,
+      metrics,
       credentials,
     });
   } catch (err: any) {

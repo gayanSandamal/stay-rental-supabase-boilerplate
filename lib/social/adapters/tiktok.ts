@@ -29,7 +29,7 @@ import {
   socialConfig,
 } from '../config';
 import { DRY_RUN_ID_PREFIX } from '../types';
-import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
+import type { MetricsResult, PublishResult, SocialAdapter, SocialPostInput } from '../types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -320,12 +320,58 @@ async function remove(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Views for a published post.
+ *
+ * TWO THINGS MAKE THIS UNRELIABLE BY DESIGN, and both must read as "unknown"
+ * rather than zero:
+ *
+ *  1. `video.list` IS A SEPARATE SCOPE. `video.publish` does not grant reads,
+ *     so a TikTok account connected before this feature existed cannot answer
+ *     at all — the call returns `scope_not_authorized` until an admin clicks
+ *     Connect TikTok again and re-consents. That is a `permanent` failure: no
+ *     amount of retrying fixes a grant, and the sweeper must stop asking.
+ *  2. `remotePostId` IS NOT ALWAYS A VIDEO ID. When `publish()` stops polling
+ *     before TikTok settles, it stores the `publish_id` instead — deliberately,
+ *     as the only handle it has. `video/query` matches on video ids, so such a
+ *     row returns an EMPTY list. Empty is no reading, not zero views.
+ */
+async function metrics(remotePostId: string): Promise<MetricsResult> {
+  const tokens = await currentToken();
+  if (!tokens) return { ok: false, error: 'TikTok not connected', permanent: true };
+
+  const res = await tiktokPost<{ data?: { videos?: Array<{ view_count?: number }> } }>(
+    '/video/query/?fields=view_count',
+    tokens.accessToken,
+    { filters: { video_ids: [remotePostId] } }
+  );
+
+  if (!res.ok) {
+    // A missing scope and a revoked grant both need a human to reconnect.
+    const permanent = /scope|unauthorized|invalid_grant|access_token/i.test(res.error);
+    return { ok: false, error: res.error, permanent };
+  }
+
+  const views = res.data.data?.videos?.[0]?.view_count;
+  if (typeof views !== 'number' || !Number.isFinite(views)) {
+    return {
+      ok: false,
+      error: 'TikTok returned no view_count for this post id',
+      // Not permanent: a post still processing when we stopped polling can
+      // start matching later, once its real video id exists.
+      permanent: false,
+    };
+  }
+  return { ok: true, views };
+}
+
 export const tiktokAdapter: SocialAdapter = {
   platform: 'tiktok',
   isConfigured: isTikTokConfigured,
   supportsRemove: false,
   publish,
   remove,
+  metrics,
 };
 
 /**
