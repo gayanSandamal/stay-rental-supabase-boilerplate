@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingContactNumbers, userContactNumbers, businessAccountMembers, users, whatsappIntakes } from '@/lib/db/schema';
-import { normalizeLocation } from '@/lib/intake/parser/gazetteer';
+import { normalizeLocation, DISTRICTS } from '@/lib/intake/parser/gazetteer';
 import { getUser } from '@/lib/db/queries';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { logListingAction } from '@/lib/db/audit-logger';
@@ -392,6 +392,17 @@ export async function PUT(
     };
 
     const editLocation = normalizeLocation(body.city, body.district);
+    // A landlord/admin explicitly picking a district from the closed 25-option
+    // select (not free text) wins over the town-name-derived one — see the
+    // matching comment in app/api/listings/route.ts. Without this, a listing
+    // whose city collides with a same-named town in the wrong district (e.g.
+    // "Munhena" exists in both Kalutara and Badulla) can never be corrected
+    // through the edit form: normalizeLocation always re-derives the same
+    // wrong district from the unchanged city on every save.
+    const explicitDistrict =
+      typeof body.district === 'string' && (DISTRICTS as readonly string[]).includes(body.district)
+        ? body.district
+        : null;
 
     // Prepare update data (only allow editing of listing content, not status/approval fields)
     const updates: any = {
@@ -401,7 +412,7 @@ export async function PUT(
       // Same canonicalisation as create: an edit must not be able to reintroduce
       // a spelling the `eq`-matched city filter can never find.
       city: editLocation.city || 'Colombo',
-      district: editLocation.district,
+      district: explicitDistrict ?? editLocation.district,
       latitude: toNumberOrNull(body.latitude),
       longitude: toNumberOrNull(body.longitude),
       propertyType: toStringOrNull(body.propertyType),
