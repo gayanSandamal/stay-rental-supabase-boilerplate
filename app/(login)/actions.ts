@@ -102,6 +102,19 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
   }
 
   if (authError) {
+    // Credentials were correct — Supabase only returns this code once the
+    // password has already checked out — so naming the real cause here does
+    // not leak anything an "Invalid email or password" message wouldn't
+    // already confirm. Without this, a renter who hasn't clicked the
+    // verification link yet sees a wrong-password error on a correct
+    // password and has no way to know they need to check their inbox.
+    if (authError.code === 'email_not_confirmed') {
+      return {
+        error: 'Please verify your email before signing in. Check your inbox for the verification link we sent when you signed up.',
+        email,
+        password
+      };
+    }
     return {
       error: 'Invalid email or password. Please try again.',
       email,
