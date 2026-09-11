@@ -40,8 +40,22 @@ export interface SocialSweepCounts {
  * Queue a listing for every enabled platform.
  *
  * Idempotent by construction: the unique (listing_id, platform) index turns a
- * second consent, a replayed webhook or a re-publish into a no-op rather than a
- * duplicate post.
+ * second consent or a replayed webhook into a no-op rather than a duplicate
+ * post — for a row that is still `queued`, `running` or already `posted`,
+ * the WHERE below leaves it untouched.
+ *
+ * A RE-publish (a listing that left `active` and came back — un-archived,
+ * marked available again after `rented`, or reapproved) is different: its
+ * rows already exist as `pulled`/`skipped`/`failed` from last time, and a
+ * bare ON CONFLICT DO NOTHING left them there forever, silently dropping the
+ * reshare with nothing failing loudly. The DO UPDATE revives exactly those
+ * terminal rows back to `queued` for the sweeper to pick up again.
+ *
+ * `needsManualTakedown` gates it: Instagram and TikTok have no delete API, so
+ * a `pulled` row with that flag still set means the OLD post is still live
+ * out there. Requeuing it before a human confirms the manual takedown (see
+ * `markManuallyRemovedAction`) would put a second copy on the account. Once
+ * confirmed, the flag clears and the next reactivation queues it normally.
  *
  * Only ever called for a listing that is already `active` — enqueueing a
  * pending listing would post a URL that 404s.
@@ -55,7 +69,25 @@ export async function enqueueSocialPosts(listingId: number): Promise<number> {
   const rows = await db
     .insert(listingSocialPosts)
     .values(platforms.map((platform) => ({ listingId, platform })))
-    .onConflictDoNothing()
+    .onConflictDoUpdate({
+      target: [listingSocialPosts.listingId, listingSocialPosts.platform],
+      set: {
+        status: 'queued',
+        attempts: 0,
+        leaseUntil: null,
+        error: null,
+        remotePostId: null,
+        remotePermalink: null,
+        postedAt: null,
+        pulledAt: null,
+        pulledBy: null,
+        updatedAt: new Date(),
+      },
+      setWhere: and(
+        inArray(listingSocialPosts.status, ['pulled', 'skipped', 'failed']),
+        eq(listingSocialPosts.needsManualTakedown, false)
+      ),
+    })
     .returning({ id: listingSocialPosts.id });
 
   return rows.length;
