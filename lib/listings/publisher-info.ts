@@ -24,6 +24,14 @@ export type PublisherInfo = {
   publisherType: 'individual' | 'business';
   teamMemberName: string | null;
   businessAccountName: string | null;
+  /**
+   * Landlord trust signals, and they mean different things — see
+   * components/verification-badges.tsx. Both are false on the BUSINESS path on
+   * purpose: the name shown there is the business account's, so a badge about
+   * the underlying landlord would be attached to the wrong subject.
+   */
+  kycVerified: boolean;
+  whatsappVerified: boolean;
 };
 
 type PublishableListing = {
@@ -57,7 +65,10 @@ export async function resolvePublishers<T extends PublishableListing>(
 
   let accountsById = new Map<number, string>();
   let creatorsById = new Map<number, { name: string | null; email: string }>();
-  let landlordNamesById = new Map<number, string>();
+  let landlordsById = new Map<
+    number,
+    { name: string; kycVerified: boolean; whatsappVerified: boolean }
+  >();
 
   try {
     if (businessAccountIds.length > 0) {
@@ -78,12 +89,28 @@ export async function resolvePublishers<T extends PublishableListing>(
 
     if (landlordIds.length > 0) {
       const rows = await db
-        .select({ landlordId: landlords.id, name: users.name, email: users.email })
+        .select({
+          landlordId: landlords.id,
+          name: users.name,
+          email: users.email,
+          kycVerified: landlords.kycVerified,
+          waPhoneVerifiedAt: users.waPhoneVerifiedAt,
+        })
         .from(landlords)
         .innerJoin(users, eq(landlords.userId, users.id))
         .where(inArray(landlords.id, landlordIds));
-      landlordNamesById = new Map(
-        rows.map((r) => [r.landlordId, publisherDisplayName({ name: r.name, email: r.email })])
+      landlordsById = new Map(
+        rows.map((r) => [
+          r.landlordId,
+          {
+            name: publisherDisplayName({ name: r.name, email: r.email }),
+            kycVerified: r.kycVerified,
+            // The TIMESTAMP is the proof, not wa_phone itself: the Facebook
+            // importer stores numbers an owner typed into their own ad, which
+            // nobody has proven (migration 0057, CLAUDE.md).
+            whatsappVerified: r.waPhoneVerifiedAt !== null,
+          },
+        ])
       );
     }
   } catch (error) {
@@ -104,15 +131,20 @@ export async function resolvePublishers<T extends PublishableListing>(
         publisherType: 'business',
         teamMemberName: creator ? publisherDisplayName(creator) : null,
         businessAccountName: accountName,
+        kycVerified: false,
+        whatsappVerified: false,
       });
       continue;
     }
 
+    const landlord = landlordsById.get(listing.landlordId);
     resolved.set(listing.id, {
-      publisherName: landlordNamesById.get(listing.landlordId) ?? fallbackName(listing),
+      publisherName: landlord?.name ?? fallbackName(listing),
       publisherType: 'individual',
       teamMemberName: null,
       businessAccountName: null,
+      kycVerified: landlord?.kycVerified ?? false,
+      whatsappVerified: landlord?.whatsappVerified ?? false,
     });
   }
 

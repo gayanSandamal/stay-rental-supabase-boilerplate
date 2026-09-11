@@ -59,6 +59,9 @@ export async function GET(request: NextRequest) {
         publisherName: 'Unknown',
         publisherType: 'individual' as const,
         teamMemberName: null,
+        // A publisher we could not resolve never claims a verification.
+        kycVerified: false,
+        whatsappVerified: false,
       }),
     }));
 

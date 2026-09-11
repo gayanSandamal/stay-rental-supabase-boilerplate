@@ -1,4 +1,5 @@
 import { Building2, User, Calendar } from 'lucide-react';
+import { VerificationBadges } from './verification-badges';
 
 interface PublisherInfoProps {
   publisherName: string;
@@ -11,6 +12,9 @@ interface PublisherInfoProps {
   showDate?: boolean;
   landlordPlanTier?: string | null;
   landlordPlanExpiresAt?: string | Date | null;
+  /** Distinct claims — see components/verification-badges.tsx. */
+  kycVerified?: boolean | null;
+  whatsappVerified?: boolean | null;
 }
 
 export function PublisherInfo({
@@ -23,6 +27,8 @@ export function PublisherInfo({
   showDate = true,
   landlordPlanTier,
   landlordPlanExpiresAt,
+  kycVerified,
+  whatsappVerified,
 }: PublisherInfoProps) {
   const isAgency = landlordPlanTier === 'agency' && (!landlordPlanExpiresAt || new Date(landlordPlanExpiresAt) > new Date());
   const iconSize = size === 'lg' ? 'h-5 w-5' : size === 'md' ? 'h-4 w-4' : 'h-3 w-3';
@@ -31,7 +37,7 @@ export function PublisherInfo({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center flex-wrap gap-2">
         {publisherType === 'business' ? (
           <Building2 className={`${iconSize} text-teal-800`} />
         ) : (
@@ -40,6 +46,7 @@ export function PublisherInfo({
         <span className={`${textSize} font-medium text-gray-700`}>
           {publisherName}
         </span>
+        <VerificationBadges kycVerified={kycVerified} whatsappVerified={whatsappVerified} />
         {isAgency && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-semibold">
             <Building2 className="h-2.5 w-2.5" /> Agency
