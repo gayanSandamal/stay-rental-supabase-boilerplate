@@ -428,7 +428,8 @@ export async function PUT(
       parkingSpaces: toNumberOrNull(body.parkingSpaces),
       petsAllowed: Boolean(body.petsAllowed),
       noticePeriodDays: toNumberOrNull(body.noticePeriodDays) ?? 30,
-      photos: body.photos && Array.isArray(body.photos) && body.photos.length > 0 
+      isTemporary: Boolean(body.isTemporary),
+      photos: body.photos && Array.isArray(body.photos) && body.photos.length > 0
         ? JSON.stringify(body.photos) 
         : null,
       updatedAt: new Date(),
@@ -449,7 +450,7 @@ export async function PUT(
       'utilitiesIncluded', 'serviceCharge', 'powerBackup', 'waterSource', 'waterTankSize',
       'hasFiber', 'fiberISPs', 'acUnits', 'fans', 'ventilation', 'isGated', 'hasGuard',
       'hasCCTV', 'hasBurglarBars', 'parking', 'parkingSpaces', 'petsAllowed',
-      'noticePeriodDays',
+      'noticePeriodDays', 'isTemporary',
     ] as const;
 
     const norm = (v: unknown) =>

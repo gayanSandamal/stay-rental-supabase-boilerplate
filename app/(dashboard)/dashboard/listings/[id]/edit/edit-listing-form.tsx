@@ -77,6 +77,7 @@ export function EditListingForm({ listing }: EditListingFormProps) {
     parkingSpaces: listing.parkingSpaces || undefined,
     petsAllowed: listing.petsAllowed || false,
     noticePeriodDays: listing.noticePeriodDays || 30,
+    isTemporary: listing.isTemporary || false,
     photos: photos || [],
     contactNumbers: contactNumberIds,
     exclusive: listing.exclusive || false,
