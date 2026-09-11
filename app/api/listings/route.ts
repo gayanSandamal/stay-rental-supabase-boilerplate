@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { listings, listingContactNumbers, userContactNumbers, users } from '@/lib/db/schema';
-import { normalizeLocation } from '@/lib/intake/parser/gazetteer';
+import { normalizeLocation, DISTRICTS } from '@/lib/intake/parser/gazetteer';
 import { getUser, getActiveListingCountForLandlord } from '@/lib/db/queries';
 import { landlords } from '@/lib/db/schema';
 import { getLandlordPlanTier, getListingLimit } from '@/lib/landlord-plans';
@@ -78,6 +78,17 @@ export async function POST(request: NextRequest) {
 
     // Resolved up front because the address requirement depends on it.
     const listingLocation = normalizeLocation(city, district);
+    // A landlord explicitly picking a district from the closed 25-option
+    // select (not free text) wins over the town-name-derived one. Town names
+    // collide across districts in the ~16k-place catalogue (e.g. "Munhena"
+    // exists in both Kalutara and Badulla) and normalizeLocation has no way to
+    // pick the right one from a name alone — but a human choosing from a
+    // closed list of real districts carries no typo risk, unlike the free text
+    // normalizeLocation also has to handle from intake/import parsing.
+    const explicitDistrict =
+      typeof district === 'string' && (DISTRICTS as readonly string[]).includes(district)
+        ? district
+        : null;
 
     // Validate required fields. A recognised town stands in for a street
     // address — landlords often will not publish one, and refusing the listing
@@ -205,7 +216,7 @@ export async function POST(request: NextRequest) {
         // free-typed "colombo 7" would be permanently unfindable. Canonicalise
         // known towns and derive their district; a genuine small town is kept.
         city: listingLocation.city || 'Colombo',
-        district: listingLocation.district,
+        district: explicitDistrict ?? listingLocation.district,
         latitude: toNumberOrNull(latitude),
         longitude: toNumberOrNull(longitude),
         propertyType: toStringOrNull(propertyType),
