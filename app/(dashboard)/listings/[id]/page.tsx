@@ -439,7 +439,7 @@ export default async function ListingDetailPage({
                     Type: {listing.propertyType || 'N/A'}
                   </span>
                 </div>
-                {listing.bedrooms && (
+                {!!listing.bedrooms && (
                   <div className="flex items-center">
                     <Bed className="h-5 w-5 mr-2 text-gray-600" />
                     <span className="text-gray-700">
@@ -447,7 +447,7 @@ export default async function ListingDetailPage({
                     </span>
                   </div>
                 )}
-                {listing.bathrooms && (
+                {!!listing.bathrooms && (
                   <div className="flex items-center">
                     <Bath className="h-5 w-5 mr-2 text-gray-600" />
                     <span className="text-gray-700">
@@ -455,7 +455,7 @@ export default async function ListingDetailPage({
                     </span>
                   </div>
                 )}
-                {listing.areaSqft && (
+                {!!listing.areaSqft && (
                   <div className="flex items-center">
                     <span className="text-gray-700">
                       Area: {listing.areaSqft} sq ft
@@ -493,7 +493,7 @@ export default async function ListingDetailPage({
                     <Droplet className="h-5 w-5 mr-2 text-cyan-500" />
                     <span className="text-gray-700">
                       Water Source: {listing.waterSource}
-                      {listing.waterTankSize && ` (${listing.waterTankSize}L tank)`}
+                      {!!listing.waterTankSize && ` (${listing.waterTankSize}L tank)`}
                     </span>
                   </div>
                 )}
@@ -506,12 +506,12 @@ export default async function ListingDetailPage({
                     </span>
                   </div>
                 )}
-                {listing.acUnits && (
+                {!!listing.acUnits && (
                   <div className="text-gray-700">
                     AC Units: {listing.acUnits}
                   </div>
                 )}
-                {listing.fans && (
+                {!!listing.fans && (
                   <div className="text-gray-700">Fans: {listing.fans}</div>
                 )}
                 {listing.ventilation && (
@@ -598,7 +598,7 @@ export default async function ListingDetailPage({
                   LKR {Number(listing.rentPerMonth).toLocaleString()}
                   <span className="text-lg font-normal text-gray-600">/month</span>
                 </div>
-                {listing.depositMonths && (
+                {!!listing.depositMonths && (
                   <div className="text-gray-600 mb-2">
                     Deposit: {listing.depositMonths} months (
                     {(
@@ -612,13 +612,13 @@ export default async function ListingDetailPage({
                     ✓ Utilities included
                   </div>
                 )}
-                {listing.serviceCharge && (
+                {!!listing.serviceCharge && (
                   <div className="text-sm text-gray-600">
                     Service Charge: LKR{' '}
                     {Number(listing.serviceCharge).toLocaleString()}/month
                   </div>
                 )}
-                {listing.noticePeriodDays && (
+                {!!listing.noticePeriodDays && (
                   <div className="text-sm text-gray-600 mt-2">
                     Notice Period: {listing.noticePeriodDays} days
                   </div>

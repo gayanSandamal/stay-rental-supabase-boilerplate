@@ -146,10 +146,12 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
               </div>
 
               <div className="flex items-center gap-4 text-sm text-slate-700 mb-4">
-                {listing.bedrooms && (
+                {/* `!!` is load-bearing: JSX renders the NUMBER 0, so a bare
+                    `{listing.x && …}` prints a stray "0" for any zero value. */}
+                {!!listing.bedrooms && (
                   <span className="flex items-center gap-1"><Bed className="h-4 w-4 text-slate-400" /> {listing.bedrooms} bed</span>
                 )}
-                {listing.bathrooms && (
+                {!!listing.bathrooms && (
                   <span className="flex items-center gap-1"><Bath className="h-4 w-4 text-slate-400" /> {listing.bathrooms} bath</span>
                 )}
                 <ViewCount total={listing.viewTotal} />
@@ -274,10 +276,10 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
           </div>
 
           <div className="flex items-center gap-3 text-sm text-slate-700 mb-4">
-            {listing.bedrooms && (
+            {!!listing.bedrooms && (
               <span className="flex items-center gap-1 text-xs"><Bed className="h-3.5 w-3.5 text-slate-400" /> {listing.bedrooms} bed</span>
             )}
-            {listing.bathrooms && (
+            {!!listing.bathrooms && (
               <span className="flex items-center gap-1 text-xs"><Bath className="h-3.5 w-3.5 text-slate-400" /> {listing.bathrooms} bath</span>
             )}
             <ViewCount total={listing.viewTotal} compact />
@@ -333,7 +335,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 LKR {Number(listing.rentPerMonth).toLocaleString()}
                 <span className="text-xs font-normal text-slate-500 ml-1">/mo</span>
               </div>
-              {listing.depositMonths && (
+              {!!listing.depositMonths && (
                 <div className="text-xs text-slate-500">Deposit: {listing.depositMonths} mo</div>
               )}
             </div>

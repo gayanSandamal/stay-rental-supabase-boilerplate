@@ -252,7 +252,7 @@ export default async function ListingEditPage({
                     <Bed className="h-5 w-5 mr-2" />
                     {listing.bedrooms} Bedroom{listing.bedrooms > 1 ? 's' : ''}
                   </div>
-                  {listing.bathrooms && (
+                  {!!listing.bathrooms && (
                     <div className="flex items-center">
                       <Bath className="h-5 w-5 mr-2" />
                       {listing.bathrooms} Bathroom{listing.bathrooms > 1 ? 's' : ''}
