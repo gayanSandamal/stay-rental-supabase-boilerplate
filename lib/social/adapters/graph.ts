@@ -5,6 +5,27 @@
 
 import { GRAPH_API_BASE, SOCIAL_HTTP_TIMEOUT_MS, socialConfig } from '../config';
 
+/**
+ * Insights reads pin their OWN Graph version, deliberately newer than
+ * GRAPH_API_BASE.
+ *
+ * `(#100) The value must be a valid insights metric` does not only mean "that
+ * metric is retired" — it also fires for a metric the REQUESTED VERSION has
+ * never heard of. Meta retired the `post_impressions` family and introduced the
+ * replacements on a version boundary (`impressions`/`video_views` gave way to
+ * `views` in v22.0), so on v21.0 both the old names and the new ones are
+ * invalid and every Facebook figure reads unknown forever. Observed on listing
+ * 34: `post_media_view` still returned #100 on 2026-09-11 while the code was
+ * already asking for the "current" name.
+ *
+ * Scoped to insights on purpose. GRAPH_API_BASE is shared with the live
+ * WhatsApp intake pipeline and with social PUBLISHING, both of which work today
+ * — a version bump there is a much larger blast radius than a read that is
+ * already failing.
+ */
+export const GRAPH_INSIGHTS_API_BASE =
+  process.env.SOCIAL_INSIGHTS_GRAPH_API_BASE ?? 'https://graph.facebook.com/v26.0';
+
 export interface GraphError {
   message: string;
   /** Graph's numeric code. 190 = token invalid/expired, 4/17/32/613 = throttled. */
@@ -50,9 +71,10 @@ export async function graphPost<T = Record<string, unknown>>(
 export async function graphGet<T = Record<string, unknown>>(
   path: string,
   query: Record<string, string> = {},
-  accessToken?: string
+  accessToken?: string,
+  apiBase?: string
 ): Promise<GraphResponse<T>> {
-  return graphCall<T>('GET', path, query, accessToken);
+  return graphCall<T>('GET', path, query, accessToken, apiBase);
 }
 
 export async function graphDelete<T = Record<string, unknown>>(
@@ -65,12 +87,13 @@ async function graphCall<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
   params: Record<string, string>,
-  accessToken?: string
+  accessToken?: string,
+  apiBase?: string
 ): Promise<GraphResponse<T>> {
   const token = accessToken || socialConfig.facebookPageAccessToken;
   if (!token) return { ok: false, error: { message: 'No Page access token configured' } };
 
-  const url = new URL(`${GRAPH_API_BASE}/${path.replace(/^\/+/, '')}`);
+  const url = new URL(`${apiBase ?? GRAPH_API_BASE}/${path.replace(/^\/+/, '')}`);
   const payload = new URLSearchParams({ ...params, access_token: token });
 
   try {
@@ -131,7 +154,7 @@ export async function graphInsightValue(
   for (const metric of metricNames) {
     const res = await graphGet<{
       data?: Array<{ name?: string; values?: Array<{ value?: unknown }> }>;
-    }>(`${nodeId}/insights`, { metric });
+    }>(`${nodeId}/insights`, { metric }, undefined, GRAPH_INSIGHTS_API_BASE);
 
     if (!res.ok) {
       last = res.error;

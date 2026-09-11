@@ -164,11 +164,20 @@ async function remove(remotePostId: string): Promise<boolean> {
  *   post_impressions        → post_media_view
  *   post_impressions_unique → post_total_media_view_unique
  *
- * `post_total_media_view_unique` stays SECOND because it counts PEOPLE, not
- * views, and is therefore always the smaller number — a degraded reading
- * should under-count rather than over-count. The retired names are not kept as
- * further fallbacks: they cannot succeed on any current version, so they would
- * only add a guaranteed-failed HTTP call to every refresh.
+ * `views` is the second candidate: Meta's own Page Insights announcement names
+ * it as what `impressions` became, and the two naming families landed on
+ * different surfaces, so which one answers for a Page post is not knowable from
+ * the docs alone. The chain asks and keeps the first real answer.
+ *
+ * The unique variant stays LAST because it counts PEOPLE, not views, and is
+ * therefore always the smaller number — a degraded reading should under-count
+ * rather than over-count. Retired names are not kept as further fallbacks: they
+ * cannot succeed on any current version, so they would only add a
+ * guaranteed-failed HTTP call to every refresh.
+ *
+ * All of this is asked on GRAPH_INSIGHTS_API_BASE, not the older shared
+ * GRAPH_API_BASE — a metric the requested version has never heard of returns
+ * the same #100 as a retired one. See the note in graph.ts.
  */
 async function metrics(remotePostId: string): Promise<MetricsResult> {
   if (!isFacebookPageConfigured()) {
@@ -176,6 +185,7 @@ async function metrics(remotePostId: string): Promise<MetricsResult> {
   }
   const res = await graphInsightValue(remotePostId, [
     'post_media_view',
+    'views',
     'post_total_media_view_unique',
   ]);
   if ('value' in res) return { ok: true, views: res.value };
