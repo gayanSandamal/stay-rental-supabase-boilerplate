@@ -5,7 +5,15 @@ import {
   VERIFIED_LISTING_LABEL,
   VERIFIED_LANDLORD_LABEL,
   WHATSAPP_VERIFIED_LABEL,
+  VERIFIED_NUMBER_LABEL,
 } from '@/components/verification-badges';
+
+const ALL_LABELS = [
+  VERIFIED_LISTING_LABEL,
+  VERIFIED_LANDLORD_LABEL,
+  WHATSAPP_VERIFIED_LABEL,
+  VERIFIED_NUMBER_LABEL,
+];
 
 /**
  * Three different things on this site can be "verified" and a renter deciding
@@ -22,14 +30,13 @@ function code(relativePath: string): string {
 
 describe('badge labels', () => {
   it('are all distinct', () => {
-    const labels = [VERIFIED_LISTING_LABEL, VERIFIED_LANDLORD_LABEL, WHATSAPP_VERIFIED_LABEL];
-    expect(new Set(labels).size).toBe(labels.length);
+    expect(new Set(ALL_LABELS).size).toBe(ALL_LABELS.length);
   });
 
   it('never render the bare word "Verified"', () => {
-    // The collision this file exists to prevent: a property badge and an
-    // identity badge that look identical on the same card.
-    for (const label of [VERIFIED_LISTING_LABEL, VERIFIED_LANDLORD_LABEL, WHATSAPP_VERIFIED_LABEL]) {
+    // The collision this file exists to prevent: a property badge, an identity
+    // badge and a phone-number badge that look identical on the same page.
+    for (const label of ALL_LABELS) {
       expect(label.trim().toLowerCase()).not.toBe('verified');
     }
   });
@@ -39,11 +46,26 @@ describe('badge labels', () => {
     expect(WHATSAPP_VERIFIED_LABEL.toLowerCase()).not.toContain('landlord');
   });
 
-  it('are used by the card instead of a hardcoded string', () => {
+  it('are used by the rendering surfaces instead of a hardcoded string', () => {
     const card = code('components/listing-card.tsx');
     expect(card).toContain('VERIFIED_LISTING_LABEL');
-    // A re-hardcoded "> Verified <" would silently reintroduce the collision.
-    expect(card).not.toMatch(/>\s*Verified\s*</);
+
+    const detail = code('app/(dashboard)/listings/[id]/page.tsx');
+    expect(detail).toContain('VERIFIED_NUMBER_LABEL');
+
+    // A re-hardcoded "> Verified <" on either surface would silently
+    // reintroduce the collision the labels exist to remove.
+    for (const [name, source] of [['card', card], ['detail', detail]] as const) {
+      expect(source, name).not.toMatch(/>\s*Verified\s*</);
+    }
+  });
+
+  it('names the owner beside the contact number, not just the digits', () => {
+    // The contact block is where a visitor decides to call a stranger about a
+    // deposit; the number alone does not say who answers.
+    const detail = code('app/(dashboard)/listings/[id]/page.tsx');
+    const contactBlock = detail.slice(detail.indexOf('Contact {publisherType'));
+    expect(contactBlock).toContain('{publisherName}');
   });
 });
 

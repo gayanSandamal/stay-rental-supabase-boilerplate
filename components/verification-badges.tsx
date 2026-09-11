@@ -11,6 +11,9 @@ import { ShieldCheck, MessageCircle } from 'lucide-react';
  *   WHATSAPP_VERIFIED_LABEL — users.waPhoneVerifiedAt, Meta proved possession
  *                             of the contact number. Automatic and by far the
  *                             most common; it is NOT an identity check.
+ *   VERIFIED_NUMBER_LABEL   — contactNumbers.verified, THIS number was proven,
+ *                             which is narrower again: a landlord can be
+ *                             verified while a second number they added is not.
  *
  * A renter deciding whether to hand over a deposit has to be able to tell which
  * claim is being made, and the three were previously indistinguishable badges
@@ -22,6 +25,7 @@ import { ShieldCheck, MessageCircle } from 'lucide-react';
 export const VERIFIED_LISTING_LABEL = 'Verified listing';
 export const VERIFIED_LANDLORD_LABEL = 'Verified landlord';
 export const WHATSAPP_VERIFIED_LABEL = 'WhatsApp verified';
+export const VERIFIED_NUMBER_LABEL = 'Verified number';
 
 export const VERIFIED_LANDLORD_TITLE =
   'This landlord’s identity and ownership documents were checked by Easy Rent.';
