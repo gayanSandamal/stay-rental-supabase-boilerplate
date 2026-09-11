@@ -32,6 +32,34 @@ function getListingImage(listing: any): string | null {
   return null;
 }
 
+/**
+ * Total views for this listing — website page views plus the views the social
+ * platforms report for its posts.
+ *
+ * Rendered only when the server handed us a number. `viewTotal` is attached by
+ * `resolveViewTotals`, which returns nothing at all when
+ * `showPublicViewCounts` is off — so the flag decision lives on the server and
+ * this card stays a dumb renderer. A card that was never given a count simply
+ * has no line, which is also the honest state for a listing nobody has opened:
+ * we show "0 views" only when the count really is zero, never as a stand-in for
+ * "not loaded on this surface".
+ *
+ * The figure is a floor — see lib/listings/view-totals.ts. Deduplicated per
+ * viewer per day, so a landlord reloading their own card does not move it.
+ */
+function ViewCount({ total, compact = false }: { total: unknown; compact?: boolean }) {
+  if (typeof total !== 'number' || !Number.isFinite(total)) return null;
+  return (
+    <span
+      className={`flex items-center gap-1 ${compact ? 'text-xs' : ''}`}
+      title="Views on Easy Rent plus our Facebook, Instagram and TikTok posts"
+    >
+      <Eye className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} text-slate-400`} />{' '}
+      {total.toLocaleString('en-US')} {total === 1 ? 'view' : 'views'}
+    </span>
+  );
+}
+
 export function ListingCard({ listing, viewMode = 'grid', showPublisher = false }: ListingCardProps) {
   const imageUrl = getListingImage(listing);
 
@@ -118,6 +146,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 {listing.bathrooms && (
                   <span className="flex items-center gap-1"><Bath className="h-4 w-4 text-slate-400" /> {listing.bathrooms} bath</span>
                 )}
+                <ViewCount total={listing.viewTotal} />
               </div>
 
               <div className="flex flex-wrap gap-1.5 mb-4">
@@ -237,6 +266,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
             {listing.bathrooms && (
               <span className="flex items-center gap-1 text-xs"><Bath className="h-3.5 w-3.5 text-slate-400" /> {listing.bathrooms} bath</span>
             )}
+            <ViewCount total={listing.viewTotal} compact />
           </div>
 
           {/* Feature tags */}

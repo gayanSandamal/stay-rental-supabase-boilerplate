@@ -2,6 +2,7 @@ import { getActiveListings, getUser } from '@/lib/db/queries';
 import { trackImpressions } from '@/lib/analytics/impressions';
 import { isUserPremium, newListingHideHours } from '@/lib/subscription';
 import { ListingCard } from './listing-card';
+import { resolveViewTotals } from '@/lib/listings/view-totals';
 import { ScrollReveal } from './scroll-reveal';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
@@ -19,6 +20,10 @@ export async function FeaturedListings() {
   // Ranking already: Featured > Boost > Plan > Urgent > verified > newest. Take top 6.
   const display = allListings.slice(0, 6);
   if (display.length === 0) return null;
+
+  // The six on screen, not the thousand fetched — same reasoning as the
+  // impression count below, and two set-based queries rather than six lookups.
+  const viewTotals = await resolveViewTotals(display.map((l) => l.id));
 
   // The SIX that are rendered, not the thousand that were fetched. This strip
   // is where a Featured purchase earns its money, so counting the whole query
@@ -62,7 +67,10 @@ export async function FeaturedListings() {
 
         <ScrollReveal stagger className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {display.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard
+              key={listing.id}
+              listing={{ ...listing, viewTotal: viewTotals.get(listing.id) }}
+            />
           ))}
         </ScrollReveal>
       </div>
