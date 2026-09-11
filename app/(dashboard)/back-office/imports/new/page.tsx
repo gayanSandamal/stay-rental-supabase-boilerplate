@@ -12,8 +12,10 @@ export const maxDuration = 60;
 const ERRORS: Record<string, string> = {
   bad_url:
     'That is not a Facebook post URL we can open. Paste the link to a single post — the address bar of the post itself, not a profile or a group home page.',
+  no_url:
+    'A link to the original post is needed, even when you paste the text. It is what anyone reviewing the listing later opens to check it against the advert.',
   resolve_failed:
-    'Something went wrong reaching Facebook. Try again, or paste the post text into the next screen instead.',
+    'Something went wrong reaching Facebook. Try again — or paste the post text in as well, which skips Facebook entirely.',
 };
 
 export default async function NewImportPage({
@@ -49,32 +51,44 @@ export default async function NewImportPage({
       )}
 
       <div className="max-w-2xl space-y-4">
+        {/*
+          One line, above the form, because it changes what the operator does in
+          the next three seconds. The old version of this screen explained the
+          same thing in a hundred words UNDER the form — read once, scrolled
+          past forever, and by then the slow path had already been taken.
+        */}
+        <p className="text-sm text-slate-600">
+          Paste the post&rsquo;s <span className="font-medium text-slate-900">text</span> as
+          well as its link and the draft is ready at once. Link alone means waiting on
+          Facebook, which usually refuses.
+        </p>
+
         <ImportUrlForm />
 
         {/*
-          Said up front rather than discovered as a failure. An operator who
-          expects the URL to do everything reads the empty review screen as a
-          bug; one who knows Facebook refuses group posts reads it as the
-          normal case and starts pasting.
+          The reasoning, one tap away rather than in the way. An operator meets
+          this screen daily; the explanation is worth reading once and is worth
+          finding again when a colleague asks why the URL did nothing.
         */}
-        <div className="flex gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-          <div className="space-y-2">
+        <details className="group rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-600">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2.5 font-medium text-slate-700 hover:text-slate-900">
+            <Info className="h-4 w-4 shrink-0 text-slate-400" />
+            Why Facebook usually hands over nothing
+          </summary>
+          <div className="space-y-2 border-t border-slate-200 px-3 py-3">
             <p>
-              <span className="font-medium text-slate-900">
-                Facebook will usually not hand over the post.
-              </span>{' '}
-              It removed the groups API in April 2024, and reading another page&rsquo;s
-              posts needs a review process we have not been through. Expect a public
-              preview at best, and nothing at all for group posts.
+              Facebook removed the groups API in April 2024, and reading another
+              page&rsquo;s posts needs a review process we have not been through. Expect
+              a public preview at best, and nothing at all for group posts — so the
+              text box above is the real input, not a fallback.
             </p>
             <p>
-              That is fine — the next screen always lets you paste the post text and
-              upload its photos. The URL is kept either way, so anyone can check the
-              listing against the original later.
+              Photos are added on the next screen: upload them, or paste the image
+              URLs copied out of the post. The link you give is kept either way, so
+              anyone can check the listing against the original later.
             </p>
           </div>
-        </div>
+        </details>
       </div>
     </section>
   );

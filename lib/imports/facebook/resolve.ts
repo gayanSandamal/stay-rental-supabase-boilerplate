@@ -107,3 +107,41 @@ async function tryGraph(
     note: null,
   };
 }
+
+/**
+ * The fast path: the operator already has the post text, so nothing is asked of
+ * Facebook at all.
+ *
+ * WHY THIS EXISTS. `resolvePost` spends several seconds discovering what the
+ * module header already states — Graph only answers for our own Page, and a
+ * group post returns a login wall. For the common case that round trip is a
+ * wait whose only possible outcome is the `manual` branch below, and the
+ * operator then pastes the text on the review screen and pays for a SECOND
+ * round trip to re-read it. Starting from the paste collapses both into one.
+ *
+ * THE URL IS STILL VETTED. `parseFacebookUrl` runs exactly as it does on the
+ * fetching path: it is the provenance record every imported listing carries,
+ * and a URL that would not be safe to dereference is not one we want stored
+ * and shown to a reviewer as the original advert either. Skipping the fetch is
+ * not a reason to skip the allowlist.
+ *
+ * The cost is the cover photo OpenGraph would sometimes have given us. That is
+ * at most one image — a live multi-photo post yields exactly one `og:image` —
+ * and the operator is uploading the album by hand regardless. `note` is null
+ * because there is nothing to explain: this text is the whole post, not a
+ * truncated preview of it.
+ */
+export function resolveFromPastedText(input: string, text: string): ResolvedPost {
+  const parsed = parseFacebookUrl(input);
+  if (!parsed) throw new UnsupportedUrlError();
+
+  return {
+    canonicalUrl: parsed.canonicalUrl,
+    platform: parsed.kind === 'group_post' ? 'facebook_group' : 'facebook_page',
+    resolvedVia: 'manual',
+    text,
+    imageUrls: [],
+    authorName: null,
+    note: null,
+  };
+}

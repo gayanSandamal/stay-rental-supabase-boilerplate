@@ -159,3 +159,35 @@ export function graphPostId(parsed: ParsedFacebookUrl): string | null {
   if (!/^\d+$/.test(parsed.postId)) return null;
   return `${parsed.pageId}_${parsed.postId}`;
 }
+
+/**
+ * The first Facebook post URL inside a blob of text, or null.
+ *
+ * Sharing a post from the Facebook app does not put a bare URL on the
+ * clipboard — it puts the post's opening line, a newline and then the link, and
+ * on a phone that whole thing lands in whichever box the operator tapped
+ * first. Splitting it by hand on a touch keyboard is the slowest step in the
+ * import, so the URL is lifted out of the paste instead.
+ *
+ * CANNOT WIDEN WHAT WE WILL FETCH. Every candidate is put through
+ * `parseFacebookUrl`, so this only ever finds URLs that were already allowed;
+ * a paste containing `http://169.254.169.254/` yields null exactly as if it
+ * had been typed into the URL box. The raw match is returned rather than the
+ * canonical form so the caller re-vets it — the allowlist is the gate either
+ * way, and there is no path where this function's output is trusted on its own.
+ */
+export function firstFacebookUrlIn(text: string | null | undefined): string | null {
+  if (!text) return null;
+
+  // Stops at whitespace and at the bracket/quote characters that wrap a link in
+  // prose. Trailing sentence punctuation is trimmed after the fact, because a
+  // URL may legitimately end in one of those characters mid-string.
+  const matches = text.match(/https?:\/\/[^\s<>"'`)\]}]+/gi);
+  if (!matches) return null;
+
+  for (const match of matches) {
+    const cleaned = match.replace(/[.,;:!?]+$/, '');
+    if (parseFacebookUrl(cleaned)) return cleaned;
+  }
+  return null;
+}
