@@ -520,6 +520,16 @@ not the launch switch).
   permission — the same class of lie as a `posted` badge on a dry run.
   `tests/unit/public-view-counts.test.ts` fails if `?? 0` reappears anywhere on
   that path.
+- **The website figure is DEDUPLICATED at read time; `count(*)` on
+  `listing_views` is a page-load counter.** That table stores one row per load
+  deliberately — the write route says so, and the landlord analytics need the
+  raw count to report views and people side by side — so a public "views"
+  number must be `count(distinct visitor_hash)` plus a raw count of the
+  pre-0046 rows that have no hash to dedupe on. Getting this wrong is not
+  subtle to the landlord: they reload their own listing, watch the number
+  climb, and stop believing every other figure on the page (reported and fixed
+  2026-09-11; listing 34 read 10 for 6 viewer-days). Per-day is the only
+  granularity available, because the hash rotates at midnight by design.
 - **The page never calls a platform.** `refreshSocialMetrics`
   (`lib/social/metrics.ts`) reads the numbers on the publish cron and stores
   them; the page reads only our own database. Rate limits are per app, not per

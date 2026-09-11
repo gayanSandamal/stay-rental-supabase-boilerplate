@@ -108,6 +108,27 @@ describe('the public read', () => {
   it('queries sequentially, not concurrently', () => {
     expect(breakdown).not.toContain('Promise.all');
   });
+
+  /*
+   * Reported 2026-09-11: the website figure climbed on every reload, because
+   * this read used `count(*)` — and `listing_views` holds one row per page
+   * load BY DESIGN (the write route says so; the landlord analytics need the
+   * raw count to report views and people side by side). So the deduplication
+   * belongs here, and `count(*)` on this table is a page-load counter that
+   * includes the landlord's own refreshes.
+   */
+  it('deduplicates by visitor-day instead of counting page loads', () => {
+    expect(breakdown).toContain('count(distinct');
+    expect(breakdown).toContain('listingViews.visitorHash');
+    // The raw row count is the defect; it must not come back.
+    expect(breakdown).not.toMatch(/drizzleCount\(listingViews\.id\)/);
+  });
+
+  it('still counts pre-0046 rows, which carry no hash to dedupe on', () => {
+    // count(distinct ...) skips NULLs in Postgres, so legacy rows would vanish
+    // from the total without this term — an undercount, not a dedup.
+    expect(breakdown).toMatch(/count\(\*\) filter \(where .*is null\)/);
+  });
 });
 
 describe('the rendered block', () => {
