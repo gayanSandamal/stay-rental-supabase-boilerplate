@@ -1396,7 +1396,11 @@ export interface SocialViewCount {
 }
 
 export interface ListingViewBreakdown {
-  /** Views of the listing page itself, all time. */
+  /**
+   * Views of the listing page itself, all time, DEDUPLICATED — one per viewer
+   * per day, so reloading the page does not inflate it. Not the raw row count:
+   * see the query below for why the two differ and why both exist.
+   */
   website: number;
   /**
    * One entry per platform where this listing is CURRENTLY live, in
@@ -1425,8 +1429,33 @@ export interface ListingViewBreakdown {
  */
 export const getListingViewBreakdown = cache(
   async (listingId: number): Promise<ListingViewBreakdown> => {
+    /*
+     * DEDUPLICATED, not `count(*)`.
+     *
+     * `listing_views` stores one row per page load on purpose — the write path
+     * says so explicitly, and the landlord analytics depend on it to report
+     * "120 views from 34 people" with views and people side by side. So the
+     * dedup has to happen HERE, at read time, and a `count(*)` on this table
+     * is a count of page loads: the landlord's own refreshes included, which
+     * is exactly the "my view count goes up when I reload" defect.
+     *
+     * `visitor_hash` is sha256(ip + ua + salt + yyyy-mm-dd), so the calendar
+     * day is already baked into the hash — `count(distinct visitor_hash)` is
+     * therefore per-viewer-per-day with no date term needed here. Per-day is
+     * also the only honest granularity available: the hash rotates at midnight
+     * by design (privacy), so a genuine return visit tomorrow counts again and
+     * nothing can follow a person across days.
+     *
+     * Rows written before migration 0046 have no hash and cannot be
+     * deduplicated, so they contribute their raw count — the best available
+     * reading for them. `count(distinct ...)` skips NULLs in Postgres, so the
+     * two terms never double-count the same row.
+     */
     const [websiteRow] = await db
-      .select({ total: drizzleCount(listingViews.id) })
+      .select({
+        total: sql<number>`count(distinct ${listingViews.visitorHash})
+          + count(*) filter (where ${listingViews.visitorHash} is null)`,
+      })
       .from(listingViews)
       .where(eq(listingViews.listingId, listingId));
 
