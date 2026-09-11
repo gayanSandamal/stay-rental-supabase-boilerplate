@@ -28,22 +28,31 @@ describe('re-read fills empty fields instead of overwriting', () => {
 describe('share-on-social', () => {
   const publish = code('lib/imports/publish.ts');
 
-  it('records consent as whatsapp, because the owner really was asked', () => {
+  it('records consent as whatsapp or ops, driven by how it was actually obtained', () => {
     /*
      * This assertion INVERTED at migration 0060, and the inversion is the point.
      *
-     * It used to require `ops`, which was the honest label while the importer
-     * published first and told the owner afterwards: an operator had ticked a
-     * box about a stranger's property and nobody had asked its owner anything.
-     * The importer is now opt-in — the consent template names Facebook,
-     * Instagram and TikTok, and `assertImportConsent` proves the yes arrived
-     * before any listing row exists — so `whatsapp` is what actually happened.
+     * It used to require `ops` unconditionally, which was the honest label
+     * while the importer published first and told the owner afterwards: an
+     * operator had ticked a box about a stranger's property and nobody had
+     * asked its owner anything. The importer is now opt-in — the consent
+     * template names Facebook, Instagram and TikTok, and `assertImportConsent`
+     * proves a yes arrived before any listing row exists — so `whatsapp` is
+     * what actually happened for a real template reply.
      *
-     * `web` remains wrong for a different reason: that is a landlord ticking a
+     * 0061 reopened the `ops` branch for a NEW, honest reason: an operator
+     * who attested consent themselves (manual, no template) never had that
+     * asked-and-answered exchange, so `whatsapp` would be recorded for
+     * something the template never asked. `askedByTemplate` is what decides
+     * between the two — never a bare literal that always claims one or the
+     * other.
+     *
+     * `web` remains wrong for a third reason: that is a landlord ticking a
      * box in our own UI about their own property.
      */
-    expect(publish).toContain("socialConsentSource: 'whatsapp' as const");
-    expect(publish).not.toContain("socialConsentSource: 'ops' as const");
+    expect(publish).toContain("'whatsapp' as const");
+    expect(publish).toContain("'ops' as const");
+    expect(publish).toMatch(/socialConsentSource:\s*askedByTemplate/);
   });
 
   it('only records consent when the box was ticked', () => {
@@ -53,11 +62,14 @@ describe('share-on-social', () => {
     expect(guard).toBeGreaterThanOrEqual(0);
   });
 
-  it('audits that the owner was asked, which since 0060 they were', () => {
-    // Flipped with the assertion above: the audit trail has to say whether a
-    // human was actually asked, and under opt-in the answer is finally yes.
+  it('audits whether the owner was actually asked, not a hardcoded yes', () => {
+    // Flipped with the assertion above at 0060: the audit trail has to say
+    // whether a human was actually asked. 0061 made even that conditional —
+    // `ownerAsked` must track the same `askedByTemplate` decision as
+    // `socialConsentSource`, so the two can never disagree about whether the
+    // template actually reached the owner.
     expect(publish).toContain("logListingAction('listing_social_consent_granted'");
-    expect(publish).toContain('ownerAsked: true');
+    expect(publish).toMatch(/ownerAsked:\s*askedByTemplate/);
   });
 
   it('audits regardless of whether moderation holds the listing', () => {

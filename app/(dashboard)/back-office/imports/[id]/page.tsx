@@ -97,6 +97,26 @@ const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = 
     title: 'Could not send the consent request',
     detail: 'Nothing was published. Try again; if it repeats, check the server logs.',
   },
+  published: {
+    ok: true,
+    title: 'Published',
+    detail: 'Recorded as consent you attested you obtained directly, not a WhatsApp reply.',
+  },
+  manual_consent_off: {
+    ok: false,
+    title: 'Manual consent is switched off',
+    detail: 'Turn on "Manual consent for Facebook imports" in Back Office → Settings first.',
+  },
+  manual_consent_unattested: {
+    ok: false,
+    title: 'Confirm you actually have consent',
+    detail: 'Tick the box confirming you got the owner’s permission before this can publish.',
+  },
+  publish_failed: {
+    ok: false,
+    title: 'Consent was recorded, but publishing failed',
+    detail: 'Nothing is lost — press the button again to retry; it will not ask twice.',
+  },
 };
 
 export default async function ImportReviewPage({
@@ -111,6 +131,7 @@ export default async function ImportReviewPage({
     asked?: string;
     added?: string;
     refused?: string;
+    published?: string;
   }>;
 }) {
   await requireBackOfficeAccess();
@@ -129,7 +150,8 @@ export default async function ImportReviewPage({
   const query = await searchParams;
   const resultKey = query.asked
     ? `asked-${query.asked}`
-    : query.error ?? (query.saved ? 'saved' : query.extracted ? 'extracted' : null);
+    : query.error ??
+      (query.saved ? 'saved' : query.extracted ? 'extracted' : query.published ? 'published' : null);
   /*
    * `addPhotoUrlsAction` has always redirected with these counts, and this page
    * has never read them — so `ingestPastedImageUrls`'s promise that "the screen
@@ -228,13 +250,20 @@ export default async function ImportReviewPage({
 
       {consentUndeliverable && (
         <section className="mb-4 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-          <p className="font-semibold">Nothing here can be published yet</p>
+          <p className="font-semibold">
+            {flags.allowManualImportConsent
+              ? 'The "Ask the owner" button cannot reach them yet'
+              : 'Nothing here can be published yet'}
+          </p>
           <p>
             No approved WhatsApp consent template is registered, so asking the owner
-            only composes and logs a message — no consent can arrive, and the importer
-            publishes nothing without it. Register the template and set{' '}
-            <code>WHATSAPP_CONSENT_TEMPLATE</code> before asking anyone. The invite
+            only composes and logs a message — no consent can arrive that way, and the
+            importer publishes nothing without consent. Register the template and set{' '}
+            <code>WHATSAPP_CONSENT_TEMPLATE</code> to fix the button above. The invite
             comment above still works today.
+            {flags.allowManualImportConsent
+              ? ' Or, since manual consent is switched on, use "I already have consent" below once you’ve confirmed it with the owner directly.'
+              : ' An admin can also turn on "Manual consent for Facebook imports" in Back Office → Settings, to publish on your own attestation instead of waiting on this template.'}
           </p>
         </section>
       )}
@@ -272,6 +301,7 @@ export default async function ImportReviewPage({
         importId={record.id}
         saleAd={saleAd}
         shareOnSocial={record.shareOnSocial}
+        allowManualConsent={flags.allowManualImportConsent}
         status={record.status}
         resolvedVia={record.resolvedVia}
         sourcePlatform={record.sourcePlatform}

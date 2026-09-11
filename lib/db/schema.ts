@@ -733,6 +733,16 @@ export const postImports = pgTable('post_imports', {
   consentGrantedAt: timestamp('consent_granted_at'),
   consentDeclinedAt: timestamp('consent_declined_at'),
   /**
+   * How consentGrantedAt was obtained (migration 0061). 'whatsapp' = the owner
+   * answered the approved template themselves. 'manual' = an operator attested
+   * they got permission by phone or WhatsApp chat, gated behind
+   * allowManualImportConsent — for when WHATSAPP_CONSENT_TEMPLATE isn't
+   * registered yet, or an operator simply prefers to call. NULL = granted
+   * before this column existed, which was always the WhatsApp path.
+   * publishImport() reads this to label socialConsentSource honestly.
+   */
+  consentSource: varchar('consent_source', { length: 20 }),
+  /**
    * sha256 of the preview token in the consent message's URL button, never the
    * token itself — same rule as landlord_access_tokens. It resolves to a
    * read-only render of what we are ASKING to publish, so unlike an access link

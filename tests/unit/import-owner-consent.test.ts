@@ -62,8 +62,29 @@ describe('the consent gate', () => {
 
   it('the operator screen asks rather than publishes', () => {
     const actions = code('app/(dashboard)/back-office/imports/actions.ts');
-    expect(actions).toContain('requestImportConsent');
-    expect(actions).not.toContain('await publishImport(');
+    const start = actions.indexOf('export async function publishImportAction');
+    const end = actions.indexOf('export async function', start + 1);
+    const fn = actions.slice(start, end === -1 ? undefined : end);
+    expect(fn).toContain('requestImportConsent');
+    expect(fn).not.toContain('await publishImport(');
+  });
+
+  /*
+   * publishManualConsentAction (0061) is the one deliberate exception: an
+   * operator attesting they got consent themselves, not through the
+   * template. It must stay explicitly opt-in — gated behind the
+   * allowManualImportConsent flag AND a checked attestation box — never a
+   * silent alternate route to the same button.
+   */
+  it('manual consent is a separate, explicitly-gated publish path', () => {
+    const actions = code('app/(dashboard)/back-office/imports/actions.ts');
+    const start = actions.indexOf('export async function publishManualConsentAction');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = actions.indexOf('export async function', start + 1);
+    const fn = actions.slice(start, end === -1 ? undefined : end);
+    expect(fn).toContain('allowManualImportConsent');
+    expect(fn).toContain('manualConsentAttested');
+    expect(fn).toContain('await publishImport(');
   });
 
   it('refuses to ask the same owner twice', () => {
@@ -176,10 +197,18 @@ describe('answering the question', () => {
     }
   });
 
-  it('records consent as whatsapp, because the owner really was asked', () => {
+  /*
+   * 0061 made this conditional: 'whatsapp' when the owner actually answered
+   * the template, 'ops' when an operator attested manual consent instead
+   * (allowManualImportConsent) — never a single hardcoded label for every
+   * publish, and never unconditionally 'ops' the way the pre-0060 opt-out
+   * flow read it (an operator alone deciding, nobody asked).
+   */
+  it('records consent as whatsapp or ops, driven by how it was actually obtained', () => {
     const publish = code('lib/imports/publish.ts');
-    expect(publish).toContain("socialConsentSource: 'whatsapp'");
-    expect(publish).not.toContain("socialConsentSource: 'ops'");
+    expect(publish).toContain("'whatsapp' as const");
+    expect(publish).toContain("'ops' as const");
+    expect(publish).toMatch(/socialConsentSource:\s*askedByTemplate/);
   });
 
   /*
@@ -274,6 +303,105 @@ describe('migration 0060', () => {
     // Recording "they agreed" for someone who was never asked is the one thing
     // this column must never say.
     expect(sql).not.toMatch(/UPDATE\s+post_imports/i);
+  });
+});
+
+/**
+ * A second, ops-only way to satisfy assertImportConsent: an operator attests
+ * they got the owner's permission themselves (a call, a WhatsApp chat outside
+ * the template flow), for when WHATSAPP_CONSENT_TEMPLATE is not registered yet
+ * — reported live, 2026-09-11 — or an operator simply prefers to call.
+ *
+ * THE GATE ITSELF DOES NOT CHANGE. assertImportConsent still only ever checks
+ * consentGrantedAt. This adds a second way to set that column, gated behind
+ * `allowManualImportConsent` and an explicit attestation checkbox — never a
+ * silent bypass.
+ */
+describe('migration 0061', () => {
+  const sql = readFileSync(
+    join(process.cwd(), 'lib/db/migrations/0061_import_manual_consent.sql'),
+    'utf-8'
+  );
+
+  it('is registered with the runner, or it would never execute', () => {
+    const runner = readFileSync(join(process.cwd(), 'lib/db/run-all-migrations.ts'), 'utf-8');
+    expect(runner).toContain("'0061_import_manual_consent.sql'");
+  });
+
+  it('contains no DO block, which the statement splitter mis-parses', () => {
+    expect(sql).not.toMatch(/DO \$\$/);
+  });
+
+  it('is safe to replay forever', () => {
+    for (const stmt of sql.split(';').map((s) => s.trim()).filter(Boolean)) {
+      if (!/^(ALTER|CREATE)/i.test(stmt)) continue;
+      expect(stmt).toMatch(/IF NOT EXISTS/i);
+    }
+    expect(sql).not.toMatch(/\bDROP\b|\bTRUNCATE\b|\bDELETE\s+FROM\b/i);
+  });
+
+  it('adds consent_source to schema.ts too, not just the SQL', () => {
+    // The dual migration system's #1 footgun: a column real in the database
+    // but absent from schema.ts, or vice versa. db:check-drift is the real
+    // safety net for this in production; this at least keeps the two files
+    // from drifting apart unnoticed in review.
+    const schema = readFileSync(join(process.cwd(), 'lib/db/schema.ts'), 'utf-8');
+    expect(schema).toContain("consentSource: varchar('consent_source'");
+  });
+});
+
+describe('manual consent (0061)', () => {
+  const consent = code('lib/imports/consent.ts');
+  const actions = code('app/(dashboard)/back-office/imports/actions.ts');
+  const publish = code('lib/imports/publish.ts');
+
+  it('defaults off, like every other import-related flag', () => {
+    const flags = code('lib/feature-flags.ts');
+    expect(flags).toMatch(/allowManualImportConsent:\s*false/);
+  });
+
+  it('is idempotent on consentGrantedAt, same as the WhatsApp grant', () => {
+    const fn = consent.slice(consent.indexOf('export async function grantManualImportConsent'));
+    const guard = fn.slice(0, fn.indexOf('.returning()'));
+    expect(guard).toContain('isNull(postImports.consentGrantedAt)');
+    expect(guard).toContain('isNull(postImports.consentDeclinedAt)');
+  });
+
+  it('stamps consentSource so publishImport can tell the two paths apart', () => {
+    const grantedByWhatsapp = consent.slice(
+      consent.indexOf('export async function grantImportConsent'),
+      consent.indexOf('export async function grantManualImportConsent')
+    );
+    const grantedManually = consent.slice(
+      consent.indexOf('export async function grantManualImportConsent')
+    );
+    expect(grantedByWhatsapp).toContain("consentSource: 'whatsapp'");
+    expect(grantedManually).toContain("consentSource: 'manual'");
+  });
+
+  it('the action checks the flag AND the attestation before touching anything', () => {
+    const fn = actions.slice(actions.indexOf('export async function publishManualConsentAction'));
+    const flagCheck = fn.indexOf('allowManualImportConsent');
+    const attestationCheck = fn.indexOf('manualConsentAttested');
+    const firstMutation = fn.indexOf('db\n    .update');
+    expect(flagCheck).toBeGreaterThanOrEqual(0);
+    expect(attestationCheck).toBeGreaterThanOrEqual(0);
+    expect(flagCheck).toBeLessThan(firstMutation);
+    expect(attestationCheck).toBeLessThan(firstMutation);
+  });
+
+  it('calls the SAME publishImport the WhatsApp-yes webhook calls', () => {
+    // Not a reimplementation — the two publish paths must never be able to
+    // drift apart in what "published" means.
+    const fn = actions.slice(actions.indexOf('export async function publishManualConsentAction'));
+    expect(fn).toContain('grantManualImportConsent(');
+    expect(fn).toContain('await publishImport(');
+  });
+
+  it('does not add a second assertImportConsent call site', () => {
+    // The one-chokepoint property this whole file is named after: still
+    // exactly one call, still only inside publishImport.
+    expect(publish.match(/assertImportConsent\(/g) ?? []).toHaveLength(1);
   });
 });
 

@@ -93,6 +93,15 @@ export const featureFlagDefaults = {
   // default. Gates the back-office screens and every import action.
   enableFacebookImport: false,
 
+  // Let ops/admin attest they got the owner's consent themselves (a phone
+  // call, a WhatsApp chat) and publish an imported listing directly, instead
+  // of waiting on the approved WhatsApp consent template — useful while
+  // WHATSAPP_CONSENT_TEMPLATE isn't registered yet, or whenever calling is
+  // just faster than a template reply. OFF by default: assertImportConsent
+  // stays the one gate either way, this only adds a second, audited way to
+  // satisfy it. See lib/imports/consent.ts.
+  allowManualImportConsent: false,
+
   // Message the owner after an imported listing publishes. Separate from the
   // flag above so the marketplace can be seeded WITHOUT cold-messaging a few
   // hundred people — the import is reversible, a WhatsApp to a stranger is not.
@@ -348,6 +357,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'Facebook post import',
     description:
       'Let ops and admin create a listing by pasting a Facebook group or page post URL. The system pulls what Facebook will give it (usually just the public preview — group posts cannot be read automatically at all), an operator reviews and completes it, and publishing creates a landlord account for the post\u2019s owner. OFF hides the Imports screen entirely.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  allowManualImportConsent: {
+    label: 'Manual consent for Facebook imports',
+    description:
+      'Let ops/admin publish an imported listing after attesting they got the owner’s consent themselves — by phone or WhatsApp chat — instead of waiting on the approved WhatsApp consent template. Useful while WHATSAPP_CONSENT_TEMPLATE is not yet registered. assertImportConsent is still the one gate either way; this only adds a second, audited way to satisfy it — it never bypasses the check.',
     group: 'Platform',
     appWide: true,
     public: false,
