@@ -172,7 +172,19 @@ export async function graphInsightValue(
     // zero views, it is no reading — a brand-new post whose insights have not
     // been computed yet reads exactly like this.
     if (typeof raw === 'number' && Number.isFinite(raw)) return { value: raw };
-    last = { message: `Graph returned no value for ${metric}` };
+    /*
+     * The payload goes into the message on purpose.
+     *
+     * "No value" covers two very different situations that are impossible to
+     * tell apart from the outside: a metric Graph knows but has not computed,
+     * and one whose answer simply is not a bare number (several return a
+     * breakdown object, and some need an explicit `period`). The access token
+     * is a Vercel *sensitive* variable, so it cannot be exported to probe this
+     * by hand — recording the shape here makes the next sweeper pass the probe
+     * instead, which is what `metrics_error` is for.
+     */
+    const shape = JSON.stringify(res.data.data?.[0] ?? res.data) ?? 'undefined';
+    last = { message: `No value for ${metric}: ${shape.slice(0, 240)}` };
   }
   return { error: last, permanent: false };
 }
