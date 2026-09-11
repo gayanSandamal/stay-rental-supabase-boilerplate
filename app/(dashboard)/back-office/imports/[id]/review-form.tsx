@@ -6,6 +6,7 @@ import {
   Copy,
   ImagePlus,
   Loader2,
+  PhoneCall,
   RefreshCw,
   Save,
   Send,
@@ -22,6 +23,7 @@ import {
   addPhotoUrlsAction,
   discardImportAction,
   publishImportAction,
+  publishManualConsentAction,
   reExtractAction,
   updateDraftAction,
 } from '../actions';
@@ -66,6 +68,7 @@ export function ReviewForm({
   phoneCandidates,
   saleAd,
   shareOnSocial,
+  allowManualConsent,
 }: {
   importId: number;
   status: string;
@@ -79,9 +82,11 @@ export function ReviewForm({
   phoneCandidates: string[];
   saleAd: boolean;
   shareOnSocial: boolean;
+  allowManualConsent: boolean;
 }) {
   const [pending, start] = useTransition();
   const [photoUrls, setPhotoUrls] = useState<string[]>(photos);
+  const [manualConsentAttested, setManualConsentAttested] = useState(false);
   const [phone, setPhone] = useState(ownerPhone ?? '');
   /*
    * The pasted post text is CONTROLLED and mirrored into the editor form below.
@@ -516,13 +521,50 @@ export function ReviewForm({
                 asked for; it declines to use permission the owner gave.
               */}
               <span className="block text-xs text-slate-500">
-                Queued when the listing goes live. The permission request already asks
-                for this, so the owner&rsquo;s yes covers it. Phone numbers are never
-                included in a post.
+                {allowManualConsent
+                  ? 'Queued when the listing goes live. If the owner answers our WhatsApp template, their yes already covers this. If you get consent yourself instead — a call, a chat — only check this box when the owner actually agreed to social sharing too; the template names Facebook, Instagram and TikTok explicitly, and a phone call might not have. Phone numbers are never included in a post.'
+                  : 'Queued when the listing goes live. The permission request already asks for this, so the owner’s yes covers it. Phone numbers are never included in a post.'}
               </span>
             </span>
           </label>
         </fieldset>
+
+        {/*
+          Ops-only alternative to the WhatsApp ask, gated behind
+          allowManualImportConsent. The checkbox is an attestation, not a
+          formality: publishManualConsentAction refuses to run without it,
+          server-side, regardless of what this client sends. It stays
+          unchecked on every render (no defaultChecked) so re-opening this
+          screen — or a "Fill empty fields" remount — never carries a stale
+          yes forward.
+        */}
+        {allowManualConsent && !locked && (
+          <fieldset className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+            <legend className="mb-1 px-1 text-sm font-semibold text-amber-900">
+              Already have the owner&rsquo;s consent?
+            </legend>
+            <p className="text-xs text-amber-800">
+              For when the WhatsApp consent template isn&rsquo;t registered yet, or
+              calling is just faster. This publishes immediately on your word instead of
+              waiting on a template reply — it is recorded as your attestation, not the
+              owner&rsquo;s own WhatsApp yes, and is fully audited.
+            </p>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-amber-900">
+              <input
+                type="checkbox"
+                name="manualConsentAttested"
+                checked={manualConsentAttested}
+                onChange={(e) => setManualConsentAttested(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                I confirm I have spoken to <strong>{ownerName || 'the owner'}</strong>{' '}
+                directly and they agreed to list this property on Easy Rent
+                {shareOnSocial ? ', and to share it on our social channels' : ''}.
+              </span>
+            </label>
+          </fieldset>
+        )}
 
         {!locked && (
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
@@ -538,6 +580,23 @@ export function ReviewForm({
               )}
               Ask the owner for consent
             </Button>
+
+            {allowManualConsent && (
+              <Button
+                type="submit"
+                variant="outline"
+                formAction={(fd) => start(() => publishManualConsentAction(fd))}
+                disabled={missing.length > 0 || !manualConsentAttested || pending}
+                className="border-amber-400 text-amber-900 hover:bg-amber-50"
+              >
+                {pending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <PhoneCall className="mr-1.5 h-4 w-4" />
+                )}
+                Publish — I already have consent
+              </Button>
+            )}
 
             <Button
               type="submit"

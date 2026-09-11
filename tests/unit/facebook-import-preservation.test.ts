@@ -224,6 +224,7 @@ describe('Property 2: Authorization, Concealment, Caching, and Independent Notif
       'createImportAction',
       'discardImportAction',
       'publishImportAction',
+      'publishManualConsentAction',
       'reExtractAction',
       'updateDraftAction',
     ]);

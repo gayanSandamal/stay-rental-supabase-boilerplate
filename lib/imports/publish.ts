@@ -88,6 +88,13 @@ export async function publishImport(
    */
   assertImportConsent(record);
 
+  // Whether the owner actually answered the approved consent template
+  // themselves, vs. an operator attesting they got permission by phone or
+  // WhatsApp chat (0061, gated behind allowManualImportConsent). Drives the
+  // social-consent labeling below and the audit trail further down — both
+  // must say `ops`/false for a consent the template never asked for.
+  const askedByTemplate = record.consentSource !== 'manual';
+
   const parsed = parsePayload(record.parsedPayload);
   if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
     throw new ImportPublishError(
@@ -197,14 +204,22 @@ export async function publishImport(
        * and TikTok, so the owner's yes covered them and `assertImportConsent`
        * above has already proven it arrived. It read `ops` under the old
        * opt-out flow, which was the honest label then — the operator decided
-       * alone. Do not put `ops` back while the ask precedes the publish.
+       * alone.
+       *
+       * `consentSource === 'manual'` (0061) is that same situation again: the
+       * template was never sent, so an operator attesting the owner said yes
+       * is the honest `ops` label, not `whatsapp` — do not put `whatsapp` here
+       * for a consent the template never asked for.
        *
        * Nothing else is needed to make it post: `offerSocialSharing` routes any
        * listing with socialConsentAt to enqueueIfAlreadyConsented once it is
        * live, from both the immediate path and the moderation sweeper.
        */
       ...(record.shareOnSocial
-        ? { socialConsentAt: now, socialConsentSource: 'whatsapp' as const }
+        ? {
+            socialConsentAt: now,
+            socialConsentSource: askedByTemplate ? ('whatsapp' as const) : ('ops' as const),
+          }
         : {}),
     })
     .returning();
@@ -254,8 +269,11 @@ export async function publishImport(
         source: 'ops',
         importId: record.id,
         // Named plainly so the record says whether a human was actually
-        // asked, rather than leaving it inferred from a source string.
-        ownerAsked: true,
+        // asked, rather than leaving it inferred from a source string. False
+        // on the manual-consent path: the operator attested permission, but
+        // our consent template — which is what names Facebook/Instagram/
+        // TikTok — was never actually sent to the owner.
+        ownerAsked: askedByTemplate,
       });
       if (!moderationArmed) {
         // Already live, so there is no sweeper pass to wait for. When the

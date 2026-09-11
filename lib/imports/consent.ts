@@ -234,7 +234,7 @@ export async function resolveConsentToken(token: string): Promise<PostImport | n
 export async function grantImportConsent(importId: number): Promise<PostImport | null> {
   const [updated] = await db
     .update(postImports)
-    .set({ consentGrantedAt: new Date(), updatedAt: new Date() })
+    .set({ consentGrantedAt: new Date(), consentSource: 'whatsapp', updatedAt: new Date() })
     .where(
       and(
         eq(postImports.id, importId),
@@ -250,6 +250,52 @@ export async function grantImportConsent(importId: number): Promise<PostImport |
     entityType: 'post_import',
     entityId: importId,
     metadata: { step: 'consent_granted', channel: 'whatsapp' },
+  }).catch(() => {});
+
+  return updated;
+}
+
+/**
+ * An operator attests they got the owner's consent themselves — a phone call,
+ * a WhatsApp chat outside the template flow — and publishing may proceed
+ * without the approved consent template. Gated behind `allowManualImportConsent`
+ * (checked by the caller, not here — same split as every other flag check in
+ * this codebase) for when the template is not yet registered with Meta, or an
+ * operator simply prefers to call.
+ *
+ * `assertImportConsent` in publishImport() does not change: it still only ever
+ * checks `consentGrantedAt`. This is a second, audited way to set that same
+ * column — never a bypass of the check itself — which is why `consentSource`
+ * exists: `publishImport()` reads it back to label `socialConsentSource` and
+ * the audit trail honestly, since the owner was never actually asked by OUR
+ * template on this path.
+ *
+ * Idempotent on `consentGrantedAt`, same as `grantImportConsent` — a double
+ * click must not produce two listings.
+ */
+export async function grantManualImportConsent(
+  importId: number,
+  opsUserId: number
+): Promise<PostImport | null> {
+  const [updated] = await db
+    .update(postImports)
+    .set({ consentGrantedAt: new Date(), consentSource: 'manual', updatedAt: new Date() })
+    .where(
+      and(
+        eq(postImports.id, importId),
+        isNull(postImports.consentGrantedAt),
+        isNull(postImports.consentDeclinedAt)
+      )
+    )
+    .returning();
+  if (!updated) return null;
+
+  await logAudit({
+    action: 'post_import_published',
+    entityType: 'post_import',
+    entityId: importId,
+    userId: opsUserId,
+    metadata: { step: 'consent_granted', channel: 'manual' },
   }).catch(() => {});
 
   return updated;

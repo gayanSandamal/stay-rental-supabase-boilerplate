@@ -15,8 +15,8 @@ import {
   ingestPastedImageUrls,
   ingestRemoteImages,
 } from '@/lib/imports/extract';
-import { ImportPublishError, parsePayload } from '@/lib/imports/publish';
-import { requestImportConsent } from '@/lib/imports/consent';
+import { ImportPublishError, parsePayload, publishImport } from '@/lib/imports/publish';
+import { grantManualImportConsent, requestImportConsent } from '@/lib/imports/consent';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 const BASE_PATH = '/back-office/imports';
@@ -350,6 +350,101 @@ export async function publishImportAction(formData: FormData): Promise<void> {
   revalidatePath(BASE_PATH);
   revalidatePath(`${BASE_PATH}/${id}`);
   redirect(`${BASE_PATH}/${id}?asked=${consent.outcome}`);
+}
+
+/**
+ * Publish on an operator's OWN attestation that the owner already agreed —
+ * by phone, or a WhatsApp chat outside the template flow — instead of
+ * waiting on the approved consent template. Gated behind
+ * `allowManualImportConsent`, checked here too: hiding the button on the
+ * review screen is not access control.
+ *
+ * `assertImportConsent` inside `publishImport` does not change — it is still
+ * the one gate, still only checking `consentGrantedAt`. This grants that
+ * same column through a second, audited path (`grantManualImportConsent`)
+ * and then calls the exact same `publishImport` the WhatsApp-yes webhook
+ * path calls, so the two can never drift apart in what "published" means.
+ */
+export async function publishManualConsentAction(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+  const id = Number(formData.get('importId'));
+  if (!Number.isFinite(id) || id <= 0) redirect(BASE_PATH);
+
+  const flags = await loadFeatureFlags();
+  if (!flags.allowManualImportConsent) {
+    redirect(`${BASE_PATH}/${id}?error=manual_consent_off`);
+  }
+  // The checkbox on the form, not a rubber stamp: an operator must
+  // affirmatively confirm they actually have permission before this can run.
+  if (formData.get('manualConsentAttested') !== 'on') {
+    redirect(`${BASE_PATH}/${id}?error=manual_consent_unattested`);
+  }
+
+  const existing = await db.query.postImports.findFirst({
+    where: eq(postImports.id, id),
+  });
+  if (!existing) redirect(BASE_PATH);
+
+  // SAVES FIRST, same reason publishImportAction gives: a button that
+  // quietly discards the edits on screen is a trap.
+  const parsed = mergeParsedFromForm(parsePayload(existing.parsedPayload), formData);
+  const photoUrls = formData
+    .getAll('photoUrls')
+    .map((v) => String(v))
+    .filter(Boolean);
+  const ownerPhone = normalizePhone(String(formData.get('ownerPhone') ?? ''));
+  const ownerName = String(formData.get('ownerName') ?? '').trim() || null;
+
+  const [saved] = await db
+    .update(postImports)
+    .set({
+      rawText: keepRawText(formData, existing.rawText),
+      parsedPayload: JSON.stringify(parsed),
+      photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
+      ownerPhone,
+      ownerName,
+      shareOnSocial: formData.get('shareOnSocial') === 'on',
+      updatedAt: new Date(),
+    })
+    .where(eq(postImports.id, id))
+    .returning();
+
+  if (!saved.ownerPhone) {
+    redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
+    redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+
+  let record = await grantManualImportConsent(id, user.id);
+  if (!record) {
+    // Consent already existed — a retry after a publish failure below, or the
+    // owner separately answered a real WhatsApp ask before this button was
+    // clicked. Either way, re-read the current row and let publishImport's
+    // own status/consent checks decide what happens next, rather than
+    // treating "already granted" as a dead end this button can't recover
+    // from.
+    record = (await db.query.postImports.findFirst({ where: eq(postImports.id, id) })) ?? null;
+  }
+  if (!record) redirect(BASE_PATH);
+
+  try {
+    await publishImport(record, user.id);
+  } catch (err) {
+    if (err instanceof ImportPublishError && err.message.includes('already been published')) {
+      redirect(`${BASE_PATH}/${id}?published=1`);
+    }
+    // The attestation stands even though publishing failed — same rule the
+    // WhatsApp-yes webhook path follows: it was freely given and must not be
+    // silently discarded. grantManualImportConsent is idempotent, so a second
+    // click retries the publish without re-attesting.
+    console.error('[imports] manual-consent publish failed', err);
+    redirect(`${BASE_PATH}/${id}?error=publish_failed`);
+  }
+
+  revalidatePath(BASE_PATH);
+  revalidatePath(`${BASE_PATH}/${id}`);
+  redirect(`${BASE_PATH}/${id}?published=1`);
 }
 
 export async function discardImportAction(formData: FormData): Promise<void> {
