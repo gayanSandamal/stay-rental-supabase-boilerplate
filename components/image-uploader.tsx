@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
@@ -95,52 +95,61 @@ export function ImageUploader({
     return data.files.map((f: { url: string }) => f.url);
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    
-    if (files.length === 0) return;
+  /** Shared by the file picker and clipboard paste — same validation, same upload path. */
+  const handleFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
 
-    if (images.length + files.length > maxImages) {
-      setError(`You can only upload a maximum of ${maxImages} images`);
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-
-    try {
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) {
-          throw new Error(`${file.name} is not an image file`);
-        }
-        if (file.size > maxSizeInMB * 1024 * 1024) {
-          throw new Error(`${file.name} is larger than ${maxSizeInMB}MB`);
-        }
+      if (images.length + files.length > maxImages) {
+        setError(`You can only upload a maximum of ${maxImages} images`);
+        return;
       }
 
-      let uploadedUrls: string[];
+      setUploading(true);
+      setError(null);
 
       try {
-        uploadedUrls = await uploadToServer(files);
-      } catch {
-        // Fallback to client-side base64 if server upload fails
-        uploadedUrls = [];
         for (const file of files) {
-          const url = await compressImage(file);
-          uploadedUrls.push(url);
+          if (!file.type.startsWith('image/')) {
+            throw new Error(`${file.name} is not an image file`);
+          }
+          if (file.size > maxSizeInMB * 1024 * 1024) {
+            throw new Error(`${file.name} is larger than ${maxSizeInMB}MB`);
+          }
         }
-      }
 
-      const newImages = [...images, ...uploadedUrls];
-      setImages(newImages);
-      onChange?.(newImages);
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload images');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        let uploadedUrls: string[];
+
+        try {
+          uploadedUrls = await uploadToServer(files);
+        } catch {
+          // Fallback to client-side base64 if server upload fails
+          uploadedUrls = [];
+          for (const file of files) {
+            const url = await compressImage(file);
+            uploadedUrls.push(url);
+          }
+        }
+
+        setImages((prev) => {
+          const next = [...prev, ...uploadedUrls];
+          onChange?.(next);
+          return next;
+        });
+      } catch (err: any) {
+        setError(err.message || 'Failed to upload images');
+      } finally {
+        setUploading(false);
       }
+    },
+    [images.length, maxImages, maxSizeInMB, onChange]
+  );
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    await handleFiles(files);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -151,6 +160,43 @@ export function ImageUploader({
   };
 
   const canAddMore = images.length < maxImages;
+
+  /*
+   * Paste a copied image anywhere on the page while this uploader is mounted.
+   *
+   * Facebook's own right-click menu offers "Copy image" far more prominently
+   * than "Copy image address" — the URL-paste path elsewhere on this screen
+   * requires the less obvious option. `clipboardData.items` only carries image
+   * entries when the clipboard actually holds image bytes (a screenshot, a
+   * "Copy image"), never for copied text, so this can listen at the document
+   * level without stealing paste from any other field on the page — pasting
+   * text into the "Post text" or "Add photos by URL" boxes is unaffected.
+   */
+  useEffect(() => {
+    if (disabled || !canAddMore) return;
+
+    function onPaste(event: ClipboardEvent) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      const files: File[] = [];
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length === 0) return;
+
+      // Only now claim the paste — a clipboard holding both text and an image
+      // (rare, but some tools do this) still lets the image through.
+      event.preventDefault();
+      handleFiles(files);
+    }
+
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [disabled, canAddMore, handleFiles]);
 
   return (
     <div className="space-y-4">
@@ -187,6 +233,7 @@ export function ImageUploader({
           </Button>
           <p className="text-xs text-gray-500 mt-1">
             Max {maxImages} images, up to {maxSizeInMB}MB each. Images will be automatically optimized.
+            {' '}Or copy an image and press <kbd className="rounded border border-gray-300 bg-gray-50 px-1 py-0.5 font-sans text-[10px]">Ctrl+V</kbd> / <kbd className="rounded border border-gray-300 bg-gray-50 px-1 py-0.5 font-sans text-[10px]">⌘V</kbd> to paste it here.
           </p>
         </div>
       )}

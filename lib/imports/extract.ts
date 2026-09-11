@@ -128,8 +128,19 @@ export async function extractFromText(text: string): Promise<ExtractedDraft> {
  */
 export async function ingestRemoteImages(urls: string[]): Promise<string[]> {
   const stored: string[] = [];
+  const startedAt = Date.now();
 
   for (const url of urls.slice(0, INGEST_HARD_LIMIT)) {
+    // fetchOriginal() bounds each download to 15s, but nothing bounded the
+    // LOOP -- INGEST_HARD_LIMIT is an abuse ceiling, not a latency one, so a
+    // post resolving to several slow/unresponsive CDN URLs burned 15s * N
+    // sequentially with the operator staring at a frozen "Fetching..." button
+    // the whole time (reported live, minutes-long freeze). Once the budget is
+    // spent, keep whatever was stored and stop -- a partial album beats a
+    // multi-minute wait for nothing, matching this function's own rule that a
+    // failed URL is dropped, not fatal.
+    if (Date.now() - startedAt > INGEST_BUDGET_MS) break;
+
     const original = await fetchOriginal(url).catch(() => null);
     if (!original) continue;
     const publicUrl = await storeImportedImage(original.buffer, original.contentType);
@@ -138,6 +149,9 @@ export async function ingestRemoteImages(urls: string[]): Promise<string[]> {
 
   return stored;
 }
+
+/** Wall-clock budget for one import's photo ingestion loop. See the comment above. */
+const INGEST_BUDGET_MS = 45_000;
 
 /**
  * Ingest image URLs an OPERATOR pasted, refusing anything off Facebook's CDN.

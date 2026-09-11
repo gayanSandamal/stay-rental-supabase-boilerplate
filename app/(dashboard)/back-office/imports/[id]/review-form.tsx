@@ -390,8 +390,9 @@ export function ReviewForm({
           <legend className="mb-2 text-sm font-semibold text-slate-900">Photos</legend>
           <ImageUploader value={photoUrls} onChange={setPhotoUrls} disabled={locked} />
           <p className="text-xs text-slate-500">
-            Facebook only ever hands over the cover photo. Add the rest by dropping the
-            files above, or by pasting their URLs below.
+            Facebook only ever hands over the cover photo. Add the rest by uploading them
+            above, copying an image from the post and pressing Ctrl+V / ⌘V, or pasting
+            their URLs below.
           </p>
 
           {/*
