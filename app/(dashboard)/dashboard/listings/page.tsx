@@ -58,6 +58,9 @@ export default async function ListingsPage(props: {
       publisherType: 'individual' as const,
       teamMemberName: null,
       businessAccountName: null,
+      // A publisher we could not resolve never claims a verification.
+      kycVerified: false,
+      whatsappVerified: false,
     }),
   }));
 

@@ -3,6 +3,10 @@ import Image from 'next/image';
 import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2, CalendarClock } from 'lucide-react';
 import { PublisherInfo } from './publisher-info';
 import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
+import {
+  VerificationBadges,
+  VERIFIED_LISTING_LABEL,
+} from './verification-badges';
 
 interface ListingCardProps {
   listing: any;
@@ -84,8 +88,9 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   <Home className="h-12 w-12 text-teal-300" />
                 </div>
               )}
-              {(listing.verified || listing.visited || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
+              {(listing.verified || listing.visited || listing.kycVerified || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
                 <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                  <VerificationBadges kycVerified={listing.kycVerified} variant="overlay" />
                   {isAgencyLandlord(listing) && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold shadow">
                       <Building2 className="h-2.5 w-2.5" /> Agency
@@ -108,7 +113,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                   )}
                   {listing.verified && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow">
-                      <ShieldCheck className="h-2.5 w-2.5" /> Verified
+                      <ShieldCheck className="h-2.5 w-2.5" /> {VERIFIED_LISTING_LABEL}
                     </span>
                   )}
                   {listing.visited && (
@@ -185,6 +190,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                     showDate
                     landlordPlanTier={listing.landlordPlanTier}
                     landlordPlanExpiresAt={listing.landlordPlanExpiresAt}
+                    kycVerified={listing.kycVerified}
+                    whatsappVerified={listing.whatsappVerified}
                   />
                 </div>
               )}
@@ -219,8 +226,9 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
 
           {/* Trust and visibility badges */}
-          {(listing.verified || listing.visited || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
+          {(listing.verified || listing.visited || listing.kycVerified || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
             <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+              <VerificationBadges kycVerified={listing.kycVerified} variant="overlay" />
               {isAgencyLandlord(listing) && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
                   <Building2 className="h-2.5 w-2.5" /> Agency
@@ -243,7 +251,7 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
               )}
               {listing.verified && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold shadow-lg">
-                  <ShieldCheck className="h-2.5 w-2.5" /> Verified
+                  <ShieldCheck className="h-2.5 w-2.5" /> {VERIFIED_LISTING_LABEL}
                 </span>
               )}
               {listing.visited && (
@@ -312,6 +320,8 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 showDate
                 landlordPlanTier={listing.landlordPlanTier}
                 landlordPlanExpiresAt={listing.landlordPlanExpiresAt}
+                kycVerified={listing.kycVerified}
+                whatsappVerified={listing.whatsappVerified}
               />
             </div>
           )}

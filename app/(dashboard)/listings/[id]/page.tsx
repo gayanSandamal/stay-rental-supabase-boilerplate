@@ -1,6 +1,7 @@
 import { publisherDisplayName } from '@/lib/publisher-name';
 import { getListingById, getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
+import { VerificationBadges } from '@/components/verification-badges';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -167,6 +168,11 @@ export default async function ListingDetailPage({
   // Fetch publisher information
   let publisherName = 'Unknown';
   let publisherType: 'individual' | 'business' = 'individual';
+  // Both stay false on the business path: the name shown there belongs to the
+  // business account, so a badge about the landlord behind it would be
+  // attached to the wrong subject (same rule as resolvePublishers).
+  let publisherKycVerified = false;
+  let publisherWhatsappVerified = false;
 
   if (listing.businessAccountId) {
     try {
@@ -195,6 +201,9 @@ export default async function ListingDetailPage({
       
       if (landlordInfo?.user) {
         publisherName = publisherDisplayName(landlordInfo.user);
+        publisherKycVerified = landlordInfo.kycVerified;
+        // The timestamp is the proof, not wa_phone itself — migration 0057.
+        publisherWhatsappVerified = landlordInfo.user.waPhoneVerifiedAt !== null;
       }
     } catch (error) {
       console.error('Error fetching landlord info:', error);
@@ -367,19 +376,23 @@ export default async function ListingDetailPage({
               <CardTitle>Publisher Information</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center">
+              <div className="flex items-center flex-wrap gap-4 text-sm text-gray-600">
+                <div className="flex items-center flex-wrap gap-2">
                   {publisherType === 'business' ? (
                     <>
-                      <Building2 className="h-5 w-5 mr-2 text-teal-700" />
+                      <Building2 className="h-5 w-5 text-teal-700" />
                       <span className="font-medium">{publisherName}</span>
                     </>
                   ) : (
                     <>
-                      <User className="h-5 w-5 mr-2 text-gray-600" />
+                      <User className="h-5 w-5 text-gray-600" />
                       <span className="font-medium">{publisherName}</span>
                     </>
                   )}
+                  <VerificationBadges
+                    kycVerified={publisherKycVerified}
+                    whatsappVerified={publisherWhatsappVerified}
+                  />
                 </div>
                 <div className="flex items-center text-gray-500">
                   <Calendar className="h-4 w-4 mr-1" />

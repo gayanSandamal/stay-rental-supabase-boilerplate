@@ -75,6 +75,9 @@ export async function ListingsResults({
       publisherName: 'Unknown',
       publisherType: 'individual' as const,
       teamMemberName: null,
+      // A publisher we could not resolve never claims a verification.
+      kycVerified: false,
+      whatsappVerified: false,
     }),
   }));
 
