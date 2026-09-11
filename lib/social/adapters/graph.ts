@@ -109,3 +109,47 @@ async function graphCall<T>(
     };
   }
 }
+
+/**
+ * Read the first of `metricNames` that Graph will actually answer for a node.
+ *
+ * The fallback chain is not defensive padding — Meta retires insight metrics on
+ * a version boundary and the replacement is named differently per surface
+ * (`post_impressions` on a Page post became `views` on Instagram media, and
+ * `impressions` was removed outright for media created after July 2024). A
+ * single hardcoded metric name therefore breaks silently on a Graph version
+ * bump, months after the deploy that "worked".
+ *
+ * Returns null when none of them answered, so the caller stores "unknown"
+ * rather than zero.
+ */
+export async function graphInsightValue(
+  nodeId: string,
+  metricNames: string[]
+): Promise<{ value: number } | { error: GraphError; permanent: boolean }> {
+  let last: GraphError = { message: 'No metric requested' };
+  for (const metric of metricNames) {
+    const res = await graphGet<{
+      data?: Array<{ name?: string; values?: Array<{ value?: unknown }> }>;
+    }>(`${nodeId}/insights`, { metric });
+
+    if (!res.ok) {
+      last = res.error;
+      // A token or permission failure is the same for every metric in the list;
+      // trying the rest just repeats it against a live rate limit.
+      if (isTokenError(res.error) || isPermissionError(res.error)) {
+        return { error: res.error, permanent: true };
+      }
+      if (isRateLimitError(res.error)) return { error: res.error, permanent: false };
+      continue;
+    }
+
+    const raw = res.data.data?.[0]?.values?.[0]?.value;
+    // Graph answers a known-but-empty metric with an absent value. That is not
+    // zero views, it is no reading — a brand-new post whose insights have not
+    // been computed yet reads exactly like this.
+    if (typeof raw === 'number' && Number.isFinite(raw)) return { value: raw };
+    last = { message: `Graph returned no value for ${metric}` };
+  }
+  return { error: last, permanent: false };
+}

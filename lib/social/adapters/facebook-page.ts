@@ -12,10 +12,11 @@
 
 import { isFacebookPageConfigured, socialConfig } from '../config';
 import { DRY_RUN_ID_PREFIX } from '../types';
-import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
+import type { MetricsResult, PublishResult, SocialAdapter, SocialPostInput } from '../types';
 import {
   graphDelete,
   graphGet,
+  graphInsightValue,
   graphPost,
   isPermissionError,
   isRateLimitError,
@@ -149,10 +150,33 @@ async function remove(remotePostId: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Views for a Page post.
+ *
+ * `post_impressions` is what Facebook's own post UI now labels "views", and
+ * `post_impressions_unique` (people reached) is the fallback for the accounts
+ * and API versions where the first is not served. They are different
+ * quantities, so the unique figure is deliberately SECOND — reached is always
+ * the smaller number, and quietly reporting it as views would under-count the
+ * post rather than over-count it if the order were reversed.
+ */
+async function metrics(remotePostId: string): Promise<MetricsResult> {
+  if (!isFacebookPageConfigured()) {
+    return { ok: false, error: 'Facebook Page not configured', permanent: true };
+  }
+  const res = await graphInsightValue(remotePostId, [
+    'post_impressions',
+    'post_impressions_unique',
+  ]);
+  if ('value' in res) return { ok: true, views: res.value };
+  return { ok: false, error: res.error.message, permanent: res.permanent };
+}
+
 export const facebookPageAdapter: SocialAdapter = {
   platform: 'facebook_page',
   isConfigured: isFacebookPageConfigured,
   supportsRemove: true,
   publish,
   remove,
+  metrics,
 };

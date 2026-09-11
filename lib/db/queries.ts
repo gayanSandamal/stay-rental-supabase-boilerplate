@@ -17,11 +17,13 @@ import {
   listingViews,
   listingContactEvents,
   listingImpressions,
+  listingSocialPosts,
   marketRentSnapshots,
 } from './schema';
 import { createClient } from '@/lib/supabase/server';
 import { businessAccountMembers } from './schema';
 import { withDeadline } from '@/lib/observability/phase-timer';
+import { MEASURABLE_PLATFORMS, type SocialPlatform } from '@/lib/social/types';
 import {
   TREND_TOLERANCE_DAYS,
   TREND_WINDOWS_WEEKS,
@@ -1380,3 +1382,80 @@ export async function getListingsByCreator(userId: number) {
     throw error;
   }
 }
+
+
+/** One platform's line on the public view-count block. */
+export interface SocialViewCount {
+  platform: SocialPlatform;
+  /**
+   * NULL means WE DO NOT KNOW — never read yet, an insights call that failed,
+   * a TikTok account missing the `video.list` grant. It does NOT mean nobody
+   * saw the post, and a reader must never render it as 0. See lib/social/metrics.
+   */
+  views: number | null;
+}
+
+export interface ListingViewBreakdown {
+  /** Views of the listing page itself, all time. */
+  website: number;
+  /**
+   * One entry per platform where this listing is CURRENTLY live, in
+   * MEASURABLE_PLATFORMS order. A platform we never posted to has no entry at
+   * all — the difference between "nobody saw it" and "it was never there"
+   * matters, and only one of those is a number.
+   */
+  social: SocialViewCount[];
+}
+
+/**
+ * The public view-count block on a listing page.
+ *
+ * Request-memoized like `getListingById` for the same reason: the page body and
+ * a Suspense child can both ask, and each unmemoized call is another round trip
+ * on a `max: 1` pool.
+ *
+ * Two queries, sequential — never `Promise.all`. Pipelining two statements onto
+ * one PgBouncer-backed connection wedges the request (CLAUDE.md; commit
+ * a3ac4f9), and this is a public page on the hottest route in the app.
+ *
+ * Counts only `status = 'posted'` rows: a post that has been pulled is not on
+ * the account any more, so its views are not a current fact about the listing.
+ * Dry-run rows carry a reading of NULL because nothing was ever sent, and the
+ * NULL travels all the way to the page as "—".
+ */
+export const getListingViewBreakdown = cache(
+  async (listingId: number): Promise<ListingViewBreakdown> => {
+    const [websiteRow] = await db
+      .select({ total: drizzleCount(listingViews.id) })
+      .from(listingViews)
+      .where(eq(listingViews.listingId, listingId));
+
+    const socialRows = await db
+      .select({
+        platform: listingSocialPosts.platform,
+        viewCount: listingSocialPosts.viewCount,
+      })
+      .from(listingSocialPosts)
+      .where(
+        and(
+          eq(listingSocialPosts.listingId, listingId),
+          eq(listingSocialPosts.status, 'posted'),
+          inArray(listingSocialPosts.platform, MEASURABLE_PLATFORMS)
+        )
+      );
+
+    const byPlatform = new Map(socialRows.map((row) => [row.platform, row.viewCount]));
+
+    return {
+      website: Number(websiteRow?.total ?? 0),
+      // Ordered by MEASURABLE_PLATFORMS rather than by whatever the rows came
+      // back in, so the block does not reshuffle itself between renders.
+      social: MEASURABLE_PLATFORMS.filter((platform) => byPlatform.has(platform)).map(
+        (platform) => ({
+          platform,
+          views: byPlatform.get(platform) ?? null,
+        })
+      ),
+    };
+  }
+);

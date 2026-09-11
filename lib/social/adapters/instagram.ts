@@ -15,8 +15,15 @@
 
 import { isInstagramConfigured, socialConfig } from '../config';
 import { DRY_RUN_ID_PREFIX } from '../types';
-import type { PublishResult, SocialAdapter, SocialPostInput } from '../types';
-import { graphGet, graphPost, isPermissionError, isRateLimitError, isTokenError } from './graph';
+import type { MetricsResult, PublishResult, SocialAdapter, SocialPostInput } from '../types';
+import {
+  graphGet,
+  graphInsightValue,
+  graphPost,
+  isPermissionError,
+  isRateLimitError,
+  isTokenError,
+} from './graph';
 
 /** Instagram's carousel ceiling. */
 const MAX_CAROUSEL = 10;
@@ -167,10 +174,29 @@ async function remove(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Views for a piece of Instagram media.
+ *
+ * `views` is the current name and the only one that works for media created
+ * after 2 July 2024; `impressions` is kept behind it purely for carousels
+ * published before that date, which are the only rows that can still answer it.
+ * `reach` is last because it is a different quantity (people, not views) and is
+ * a worse answer than the two above — but a real one, and better than a blank.
+ */
+async function metrics(remotePostId: string): Promise<MetricsResult> {
+  if (!isInstagramConfigured()) {
+    return { ok: false, error: 'Instagram not configured', permanent: true };
+  }
+  const res = await graphInsightValue(remotePostId, ['views', 'impressions', 'reach']);
+  if ('value' in res) return { ok: true, views: res.value };
+  return { ok: false, error: res.error.message, permanent: res.permanent };
+}
+
 export const instagramAdapter: SocialAdapter = {
   platform: 'instagram',
   isConfigured: isInstagramConfigured,
   supportsRemove: false,
   publish,
   remove,
+  metrics,
 };

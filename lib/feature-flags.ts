@@ -148,6 +148,13 @@ export const featureFlagDefaults = {
   // controls whether ops get a paste-ready draft to post by hand.
   socialDraftFacebookGroup: true,
 
+  // Print "Website views / Facebook views / …" on the public listing page, to
+  // everyone. ON by default — it is the visible half of the reach a landlord
+  // gets for free, and hiding it helps nobody. Off is a one-click kill switch
+  // in Back Office → Settings for the day a listing's own low number reads as
+  // discouraging, with no deploy needed.
+  showPublicViewCounts: true,
+
   // Record a tapped Call / WhatsApp button on a listing (migration 0045). The
   // closest thing this marketplace has to a lead, and the number landlords ask
   // about instead of views. OFF stops new events being recorded; the analytics
@@ -544,6 +551,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: '— draft for Facebook Group',
     description:
       'Sub-switch: Facebook Groups cannot be posted to programmatically (Meta removed the Groups API in April 2024). This queues a paste-ready caption in Back Office → Social for a human to post instead.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  showPublicViewCounts: {
+    label: 'Public view counts on listings',
+    description:
+      "Show everyone how many views a listing has had — its page views, plus the views Facebook, Instagram and TikTok report for its posts. A platform we never posted to is omitted rather than shown as zero, and a post whose number we cannot read shows a dash: unknown is never displayed as 0.",
     group: 'Platform',
     appWide: true,
     public: false,

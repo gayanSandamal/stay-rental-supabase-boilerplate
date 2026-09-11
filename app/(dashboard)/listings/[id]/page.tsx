@@ -23,6 +23,11 @@ import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
 import { ListingViewTracker } from '@/components/listing-view-tracker';
 import { ContactLink } from '@/components/contact-click-tracker';
+import {
+  ListingViewCounts,
+  ListingViewCountsSkeleton,
+} from '@/components/listing-view-counts';
+import { Suspense } from 'react';
 import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -553,6 +558,19 @@ export default async function ListingDetailPage({
               </CardContent>
             </Card>
           )}
+
+          {/*
+            How many people have seen this listing — here and on our social
+            accounts. Below a Suspense boundary so neither its queries nor its
+            flag lookup sit on the critical path of the listing itself
+            (CLAUDE.md: dynamic work belongs below a boundary). The
+            `showPublicViewCounts` gate lives INSIDE the component for the same
+            reason, and because a gate that reads the flag snapshot has to be
+            somewhere that can await `loadFeatureFlags()` first.
+          */}
+          <Suspense fallback={<ListingViewCountsSkeleton />}>
+            <ListingViewCounts listingId={listing.id} />
+          </Suspense>
         </div>
 
         <div className="lg:col-span-1">

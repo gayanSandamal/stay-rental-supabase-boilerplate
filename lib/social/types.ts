@@ -15,6 +15,21 @@ export const SOCIAL_PLATFORMS: SocialPlatform[] = [
   'facebook_group',
 ];
 
+/**
+ * The platforms whose view count can be read back at all.
+ *
+ * Facebook Groups are absent and always will be: Meta removed the Groups API
+ * on 2024-04-22, so a group post is pasted by a human and has no id we could
+ * ever query. It lives here rather than beside the sweeper because the public
+ * listing page needs the same list, and importing it from a module that
+ * reaches the adapters would drag every platform SDK path into that page.
+ */
+export const MEASURABLE_PLATFORMS: SocialPlatform[] = [
+  'facebook_page',
+  'instagram',
+  'tiktok',
+];
+
 /** Everything an adapter needs. No DB access from inside an adapter. */
 export interface SocialPostInput {
   listingId: number;
@@ -59,6 +74,19 @@ export type PublishResult =
       rateLimited?: boolean;
     };
 
+/**
+ * A views reading for one post.
+ *
+ * `ok: false` is not an error to retry aggressively — it is the honest
+ * "we don't know", and the caller stores NULL rather than 0. `permanent` marks
+ * the kind that will never resolve on its own (a missing OAuth scope, a metric
+ * the platform has retired), so the sweeper can stop asking every few minutes
+ * for something only a human reconnecting the account can fix.
+ */
+export type MetricsResult =
+  | { ok: true; views: number }
+  | { ok: false; error: string; permanent?: boolean };
+
 export interface SocialAdapter {
   readonly platform: SocialPlatform;
   /**
@@ -74,6 +102,13 @@ export interface SocialAdapter {
   readonly supportsRemove: boolean;
   publish(input: SocialPostInput): Promise<PublishResult>;
   remove(remotePostId: string): Promise<boolean>;
+  /**
+   * How many views the platform reports for a post. Optional: Facebook Groups
+   * have no API at all, so the absence of this method is the honest way to say
+   * "this network can never be measured" — the listing page then omits the
+   * line entirely instead of printing a zero it invented.
+   */
+  metrics?(remotePostId: string): Promise<MetricsResult>;
 }
 
 /**
