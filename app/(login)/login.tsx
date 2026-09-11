@@ -60,7 +60,7 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
                 autoComplete="email"
                 defaultValue={state.email}
                 required
-                maxLength={50}
+                maxLength={255}
                 className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-teal-600 focus:border-teal-600 focus:z-10 sm:text-sm"
                 placeholder="Enter your email"
               />
@@ -96,6 +96,27 @@ function LoginForm({ mode = 'signin', redirect = '', priceId = '', inviteId = ''
               </div>
             )}
           </div>
+
+          {mode === 'signup' && (
+            <div>
+              <Label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                Confirm password
+              </Label>
+              <div className="mt-1">
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  maxLength={100}
+                  className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-teal-600 focus:border-teal-600 focus:z-10 sm:text-sm"
+                  placeholder="Re-enter your password"
+                />
+              </div>
+            </div>
+          )}
 
           {state?.error && (
             <div className="text-red-500 text-sm">{state.error}</div>

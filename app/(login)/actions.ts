@@ -6,6 +6,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { users, type NewUser, type User } from '@/lib/db/schema';
 import { redirect, unstable_rethrow } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/db/queries';
 import {
@@ -13,6 +14,7 @@ import {
   validatedActionWithUser
 } from '@/lib/auth/middleware';
 import { addContactToResend } from '@/lib/email';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 const AUTH_TIMEOUT_MS = 15_000;
@@ -26,6 +28,32 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   ]);
 }
 
+/**
+ * Neutralizes a redirect target down to just its path.
+ *
+ * `redirect` arrives on `formData` from an unauthenticated visitor's own query
+ * string (see login.tsx), so it can never be trusted as-is. `startsWith('/')`
+ * alone does NOT rule out `//evil.com` — a Location header starting with `//`
+ * is protocol-relative, and browsers resolve it off-site. Resolving through
+ * `URL` and keeping only pathname+search discards any host a crafted value
+ * tried to smuggle in, whatever shape it took.
+ */
+function safeRedirectPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/')) return null;
+  const url = new URL(raw, baseUrl);
+  return url.pathname + url.search;
+}
+
+/** Server actions get no `Request` — pull the client IP straight from headers. */
+async function clientIp(): Promise<string> {
+  const hdrs = await headers();
+  const forwarded = hdrs.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return hdrs.get('x-real-ip') || '127.0.0.1';
+}
+
+const AUTH_RATE_LIMIT_MSG = 'Too many attempts. Please wait a minute and try again.';
+
 const signInSchema = z.object({
   email: z.string().email().min(3).max(255),
   password: z.string().min(8).max(100)
@@ -33,6 +61,11 @@ const signInSchema = z.object({
 
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
+
+  const { allowed } = checkRateLimit(await clientIp(), 'POST', '/sign-in');
+  if (!allowed) {
+    return { error: AUTH_RATE_LIMIT_MSG, email, password };
+  }
 
   let supabase;
   try {
@@ -103,8 +136,8 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
     ).catch(() => {});
   }
 
-  const redirectTo = formData.get('redirect') as string | null;
-  if (redirectTo && redirectTo.startsWith('/')) {
+  const redirectTo = safeRedirectPath(formData.get('redirect') as string | null);
+  if (redirectTo) {
     redirect(redirectTo);
   } else if (foundUser?.role === 'ops' || foundUser?.role === 'admin') {
     redirect('/dashboard');
@@ -141,11 +174,25 @@ const RESERVED_EMAIL_MSG = 'This email address is not available';
 const signUpSchema = z.object({
   email: z.string().email().refine(notReservedEmail, RESERVED_EMAIL_MSG),
   password: z.string().min(8),
+  confirmPassword: z.string().min(8),
   role: z.enum(['tenant', 'landlord']).optional(),
 });
 
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
-  const { email, password, role = 'tenant' } = data;
+  const { email, password, confirmPassword, role = 'tenant' } = data;
+
+  if (password !== confirmPassword) {
+    return {
+      error: 'Passwords do not match.',
+      email,
+      password
+    };
+  }
+
+  const { allowed } = checkRateLimit(await clientIp(), 'POST', '/sign-up');
+  if (!allowed) {
+    return { error: AUTH_RATE_LIMIT_MSG, email, password };
+  }
 
   let supabase;
   try {
@@ -329,15 +376,8 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     createdUser.subscriptionTier || 'free',
   ).catch(() => {});
 
-  const redirectTo = formData.get('redirect') as string | null;
-  const basePath =
-    redirectTo && redirectTo.startsWith('/')
-      ? redirectTo
-      : '/sign-in';
-  const url = new URL(
-    basePath,
-    process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-  );
+  const redirectTo = safeRedirectPath(formData.get('redirect') as string | null);
+  const url = new URL(redirectTo ?? '/sign-in', baseUrl);
   url.searchParams.set('signed_up', '1');
   redirect(url.pathname + url.search);
 });
