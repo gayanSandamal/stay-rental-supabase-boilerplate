@@ -49,3 +49,14 @@ e2e/.report/
 
 # Claude local settings
 .claude/settings.local.json
+
+# graphify — the derived knowledge graph is regenerated locally and stays out
+# of git; .claude/settings.json IS committed (below, tracked) so the strict
+# PreToolUse hook applies to every clone, not just this machine.
+graphify-out/
+.claude/*.graphify-bak
+
+# Any local env dump (e.g. `vercel env pull .env.vercel-check`) — these hold
+# real production secrets and must never be committed.
+.env*
+!.env.example
