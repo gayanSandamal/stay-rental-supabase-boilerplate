@@ -9,7 +9,12 @@ import { logAudit } from '@/lib/db/audit-logger';
 import { getUser } from '@/lib/db/queries';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { normalizePhone } from '@/lib/auth/phone-verification';
-import { resolvePost, UnsupportedUrlError } from '@/lib/imports/facebook/resolve';
+import {
+  resolveFromPastedText,
+  resolvePost,
+  UnsupportedUrlError,
+} from '@/lib/imports/facebook/resolve';
+import { firstFacebookUrlIn } from '@/lib/imports/facebook/url';
 import {
   extractFromText,
   ingestPastedImageUrls,
@@ -61,24 +66,56 @@ function preferMobile(candidates: string[]): string | null {
 }
 
 /**
- * Paste a URL → a draft to review.
+ * Paste a post → a draft to review.
  *
- * Resolution failure is NOT an error path: Facebook refuses group posts
- * outright, so a draft with no text and an explanatory note is the expected
- * outcome and the review screen is built around it. Only a URL we would refuse
- * to fetch at all sends the operator back with an error.
+ * TWO PATHS, and the pasted one is the fast one. If the operator brought the
+ * post text, nothing is asked of Facebook at all: the draft is parsed from
+ * their paste and the review screen arrives filled in. If they brought only a
+ * URL we try Facebook, which is slow and usually refuses.
+ *
+ * That ordering is the whole point. Facebook removed the groups API in April
+ * 2024 and gates third-party page reads behind App Review, so for most adverts
+ * `resolvePost` spends several seconds to return nothing — and the operator
+ * then pastes the text on the review screen and pays for a SECOND round trip to
+ * re-read it. Accepting the paste here collapses the common import from two
+ * waits into one instant save.
+ *
+ * Resolution failure is still NOT an error path: a draft with no text and an
+ * explanatory note is the expected outcome of the fetching path and the review
+ * screen is built around it. Only a URL we would refuse to fetch at all — or
+ * none at all — sends the operator back with an error.
  */
 export async function createImportAction(formData: FormData): Promise<void> {
   const user = await requireStaff();
-  const url = String(formData.get('sourceUrl') ?? '').trim();
+  const typedUrl = String(formData.get('sourceUrl') ?? '').trim();
+  const pastedText = String(formData.get('rawText') ?? '').trim();
+
+  /*
+   * Sharing a post from the Facebook app does not put a bare URL on the
+   * clipboard — it puts the post's opening line, a blank line and then the
+   * link. On a phone that whole thing lands in whichever box was tapped first,
+   * so the URL is lifted back out rather than made the operator's problem.
+   * This cannot widen what we will fetch: firstFacebookUrlIn runs every
+   * candidate through parseFacebookUrl, the same allowlist the typed box gets.
+   */
+  const url = typedUrl || firstFacebookUrlIn(pastedText) || '';
+  if (!url) redirect(`${BASE_PATH}/new?error=no_url`);
 
   let resolved;
-  try {
-    resolved = await resolvePost(url);
-  } catch (err) {
-    if (err instanceof UnsupportedUrlError) redirect(`${BASE_PATH}/new?error=bad_url`);
-    console.error('[imports] resolve failed', err);
-    redirect(`${BASE_PATH}/new?error=resolve_failed`);
+  if (pastedText) {
+    try {
+      resolved = resolveFromPastedText(url, pastedText);
+    } catch {
+      redirect(`${BASE_PATH}/new?error=bad_url`);
+    }
+  } else {
+    try {
+      resolved = await resolvePost(url);
+    } catch (err) {
+      if (err instanceof UnsupportedUrlError) redirect(`${BASE_PATH}/new?error=bad_url`);
+      console.error('[imports] resolve failed', err);
+      redirect(`${BASE_PATH}/new?error=resolve_failed`);
+    }
   }
 
   const { parsed, phoneCandidates, ownerName: extractedName } = resolved.text
@@ -114,7 +151,13 @@ export async function createImportAction(formData: FormData): Promise<void> {
     entityType: 'post_import',
     entityId: record.id,
     userId: user.id,
-    metadata: { sourceUrl: resolved.canonicalUrl, resolvedVia: resolved.resolvedVia },
+    // `pasted` and not just resolvedVia: the fast path and a Facebook login
+    // wall both record 'manual', and only this tells the two apart afterwards.
+    metadata: {
+      sourceUrl: resolved.canonicalUrl,
+      resolvedVia: resolved.resolvedVia,
+      pasted: Boolean(pastedText),
+    },
   });
 
   revalidatePath(BASE_PATH);
