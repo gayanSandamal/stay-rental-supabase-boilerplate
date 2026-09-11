@@ -50,6 +50,7 @@ export interface ReviewParsed {
   bedrooms: number | null;
   bathrooms: number | null;
   rentPerMonth: number | null;
+  depositMonths: number | null;
 }
 
 export function ReviewForm({
@@ -311,6 +312,13 @@ export function ReviewForm({
             value={required.rentPerMonth}
             onValueChange={setField('rentPerMonth')}
             required
+          />
+          <Field
+            label="Deposit (months)"
+            name="depositMonths"
+            type="number"
+            defaultValue={parsed.depositMonths}
+            placeholder="e.g. 3"
           />
           <Field label="Address" name="address" defaultValue={parsed.address} />
 

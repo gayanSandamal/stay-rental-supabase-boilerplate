@@ -48,6 +48,7 @@ function mergeParsed(rule: ParsedIntake, llm: ParsedIntake): ParsedIntake {
     bedrooms: rule.bedrooms ?? llm.bedrooms,
     bathrooms: rule.bathrooms ?? llm.bathrooms,
     rentPerMonth: rule.rentPerMonth ?? llm.rentPerMonth,
+    depositMonths: rule.depositMonths ?? llm.depositMonths,
     description: rule.description ?? llm.description,
     missingFields: [],
     suspicious: rule.suspicious || llm.suspicious,
