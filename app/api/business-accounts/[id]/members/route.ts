@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const user = await getUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'ops')) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -21,6 +21,22 @@ export async function POST(
     // is NaN, which reaches Drizzle and fails as a 500 rather than a 400.
     if (isNaN(businessAccountId) || businessAccountId <= 0) {
       return NextResponse.json({ error: 'Invalid business account ID' }, { status: 400 });
+    }
+
+    // Global admin/ops, OR an active owner/admin member of THIS account —
+    // a plain 'member' cannot invite. Closes STATUS.md's "member.role
+    // carries no differentiated permissions" gap for team management.
+    if (user.role !== 'admin' && user.role !== 'ops') {
+      const membership = await db.query.businessAccountMembers.findFirst({
+        where: and(
+          eq(businessAccountMembers.businessAccountId, businessAccountId),
+          eq(businessAccountMembers.userId, user.id),
+          eq(businessAccountMembers.isActive, true)
+        ),
+      });
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
     }
 
     const body = await request.json();

@@ -191,6 +191,38 @@ export const featureFlagDefaults = {
   // with it unset the job runs and logs but delivers nothing.
   enableLandlordReports: false,
 
+  // --- Broker pivot (2026-09-12), see
+  // _bmad-output/planning-artifacts/broker-pivot/. Gate 1 (>=2 brokers,
+  // >=40 active listings in one city) was NOT met in production when these
+  // shipped (1 active listing) - built ahead of that evidence at the user's
+  // explicit instruction, so every user-facing surface stays OFF by default.
+
+  // Landlord/broker self-serve business-account creation and team
+  // management. Today provisioning is 100% back-office
+  // (app/api/business-accounts/**); this flag turns on the self-serve path
+  // without removing the admin/ops one.
+  enableSelfServeBusinessAccounts: false,
+
+  // "One property, every agent on it" (FORGE.md Concept 2). Shows sibling
+  // agent attachments on a listing's public page once the same property has
+  // more than one. Mechanically inert with today's supply (nothing to show)
+  // - the flag exists so it can be turned on the moment Gate 1 passes
+  // without a deploy.
+  enablePropertyGrouping: false,
+
+  // Renter-submitted requirement broadcast to brokers (FORGE.md Concept 3 -
+  // explicitly the thinnest evidence base of the three: no SL data exists on
+  // lead value or broker willingness to pay). Ships as an instrumented
+  // experiment, not a claimed-working feature.
+  enableLeadRouting: false,
+
+  // Demand instrumentation - the Phase 3 blocker RESEARCH.md and the plan
+  // both name: "the product cannot answer what renters typed, or which
+  // queries returned zero results." Same cost class as trackSearchImpressions
+  // (one row per genuine new search, page 1 only - never per scroll page),
+  // so it defaults ON unlike the three flags above it.
+  trackSearchQueries: true,
+
   // Numeric / config flags
   listingExpirationDays: 30,
   // Instagram's carousel ceiling. Also bounds how many images the proxy has to
@@ -559,6 +591,38 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'Public view counts on listings',
     description:
       "Show everyone how many views a listing has had — its page views, plus the views Facebook, Instagram and TikTok report for its posts. A platform we never posted to is omitted rather than shown as zero, and a post whose number we cannot read shows a dash: unknown is never displayed as 0.",
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableSelfServeBusinessAccounts: {
+    label: 'Self-serve business accounts (broker pivot)',
+    description:
+      'Lets a landlord create and manage their own business account (for a brokerage) without going through Back Office. Provisioning was 100% back-office-only before this.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enablePropertyGrouping: {
+    label: 'Property grouping — one property, every agent (broker pivot)',
+    description:
+      'Shows sibling agent attachments on a listing page when the same property has more than one. Gated behind Gate 1 (>=2 brokers, >=40 active listings in one city) per _bmad-output/planning-artifacts/broker-pivot/FORGE.md — do not enable in production before that.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableLeadRouting: {
+    label: 'Broker lead routing (broker pivot)',
+    description:
+      'Lets a renter submit a requirement that brokers can browse and claim. The least-validated of the three broker-pivot concepts — no SL data exists on lead value or broker willingness to pay. Ships as an instrumented experiment.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  trackSearchQueries: {
+    label: 'Log search queries (demand instrumentation)',
+    description:
+      'Records one row per genuine new search (never per scroll page) with its result count, so zero-result searches - the single highest-signal input for which supply to onboard - become visible. Same cost class as trackSearchImpressions.',
     group: 'Platform',
     appWide: true,
     public: false,

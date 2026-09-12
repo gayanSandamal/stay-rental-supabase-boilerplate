@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Home, List, Settings, Menu, Shield, Bell, BarChart3 } from 'lucide-react';
+import { Home, List, Settings, Menu, Shield, Bell, BarChart3, Building2 } from 'lucide-react';
 
 export default function DashboardLayout({
   children
@@ -18,6 +18,10 @@ export default function DashboardLayout({
     { href: '/dashboard', icon: Home, label: 'Overview' },
     { href: '/dashboard/listings', icon: List, label: 'Listings' },
     { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
+    // Broker pivot (gated behind enableSelfServeBusinessAccounts) — always
+    // shown; the page itself renders a short explainer when the flag is off,
+    // same pattern as every other flag-gated dashboard surface.
+    { href: '/dashboard/business-account', icon: Building2, label: 'Business Account' },
     { href: '/dashboard/saved-searches', icon: Bell, label: 'Saved Alerts' },
     { href: '/dashboard/general', icon: Settings, label: 'Settings' },
     { href: '/dashboard/security', icon: Shield, label: 'Security' },

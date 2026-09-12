@@ -404,6 +404,20 @@ export async function POST(request: NextRequest) {
       businessAccountId: listingData.businessAccountId ?? null,
     });
 
+    // Property grouping (broker pivot, gated) — attach this listing to its
+    // fuzzy-matched property so a later sibling on the same address can be
+    // surfaced together. Never blocks or fails listing creation; see
+    // lib/properties/fingerprint.ts.
+    if (isFeatureEnabled('enablePropertyGrouping')) {
+      const { attachListingToProperty } = await import('@/lib/properties/fingerprint');
+      await attachListingToProperty({
+        id: newListing.id,
+        address: newListing.address,
+        city: newListing.city,
+        bedrooms: newListing.bedrooms,
+      });
+    }
+
     // A listing created straight into `active` (ops, or auto-publish with
     // moderation disarmed) never passes through a publish transition, so it
     // would otherwise never act on the consent just given.

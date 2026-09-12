@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
-import { businessAccounts } from '@/lib/db/schema';
+import { businessAccounts, businessAccountMembers, users } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
 import { eq } from 'drizzle-orm';
+import { isFeatureEnabled } from '@/lib/feature-flags';
+import { loadFeatureFlags } from '@/lib/feature-flags-store';
 
 export async function POST(request: NextRequest) {
   try {
+    await loadFeatureFlags();
     const user = await getUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'ops')) {
+    const isAdminOrOps = user && (user.role === 'admin' || user.role === 'ops');
+    const selfServeAllowed = isFeatureEnabled('enableSelfServeBusinessAccounts');
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdminOrOps && !selfServeAllowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,6 +28,22 @@ export async function POST(request: NextRequest) {
         { error: 'Name and email are required' },
         { status: 400 }
       );
+    }
+
+    // Self-serve creator becomes the account's owner. businessAccountMembers
+    // enforces one account per user (userId is unique), so this also fails
+    // cleanly for someone who already belongs to one — no separate check
+    // needed, the insert below reports it.
+    if (!isAdminOrOps) {
+      const existingMembership = await db.query.businessAccountMembers.findFirst({
+        where: eq(businessAccountMembers.userId, user.id),
+      });
+      if (existingMembership) {
+        return NextResponse.json(
+          { error: 'You already belong to a business account' },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if email already exists
@@ -44,6 +69,28 @@ export async function POST(request: NextRequest) {
         status: 'active',
       })
       .returning();
+
+    // Self-serve creation makes the creator the owner immediately — an
+    // admin-created account (isAdminOrOps path) does NOT auto-add the admin
+    // as a member, matching the existing back-office flow where ops invites
+    // members separately.
+    if (!isAdminOrOps) {
+      await db.insert(businessAccountMembers).values({
+        businessAccountId: newAccount.id,
+        userId: user.id,
+        role: 'owner',
+        isActive: true,
+      });
+      // Auto-upgrade tenant to landlord, same rule as first-listing creation
+      // in app/api/listings/route.ts — a business account with no landlord
+      // capability behind it can't do anything useful.
+      if (user.role === 'tenant') {
+        await db
+          .update(users)
+          .set({ role: 'landlord', updatedAt: new Date() })
+          .where(eq(users.id, user.id));
+      }
+    }
 
     return NextResponse.json(
       { success: true, businessAccount: newAccount },

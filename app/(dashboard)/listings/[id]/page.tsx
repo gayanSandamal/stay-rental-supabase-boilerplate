@@ -25,6 +25,7 @@ import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
 import { ListingViewTracker } from '@/components/listing-view-tracker';
 import { ContactLink } from '@/components/contact-click-tracker';
+import { SiblingAgents } from '@/components/sibling-agents';
 import {
   ListingViewCounts,
   ListingViewCountsSkeleton,
@@ -632,6 +633,7 @@ export default async function ListingDetailPage({
 
               {/* Contact Owner / Publisher - visible to all visitors */}
               {listing.status === 'active' && (
+                <>
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <Phone className="h-4 w-4 text-teal-700" />
@@ -758,6 +760,12 @@ export default async function ListingDetailPage({
                     );
                   })()}
                 </div>
+
+                {/* Property grouping (broker pivot, gated) — nothing renders
+                    unless enablePropertyGrouping is on AND this property has
+                    more than one attached agent. */}
+                <SiblingAgents listingId={listing.id} />
+                </>
               )}
               {listing.status !== 'active' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

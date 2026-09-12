@@ -5,6 +5,7 @@ import { resolvePublishers } from '@/lib/listings/publisher-info';
 import { resolveViewTotals } from '@/lib/listings/view-totals';
 import { trackImpressions } from '@/lib/analytics/impressions';
 import { parseListingFilters } from '@/lib/listings/filter-params';
+import { logSearchQuery } from '@/lib/analytics/search-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,14 @@ export async function GET(request: NextRequest) {
     // Check if there are more listings
     const hasMore = listings.length > limit;
     const listingsToReturn = hasMore ? listings.slice(0, limit) : listings;
+
+    // Demand instrumentation (broker pivot Phase 3's named blocker) — only
+    // page 1 is a genuine new search; pages 2+ are scroll continuations of
+    // one already-logged query, not a signal of new demand.
+    if (page === 1) {
+      const resultCount = hasMore ? listings.length - 1 : listings.length;
+      logSearchQuery({ searchParams, resultCount, request });
+    }
 
     // Only what this page actually returns — the extra row fetched to detect
     // `hasMore` is never rendered and must not be counted as seen.

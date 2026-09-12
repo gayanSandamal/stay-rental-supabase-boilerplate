@@ -79,14 +79,17 @@ describe('publisher verification data', () => {
     expect(source).toContain('waPhoneVerifiedAt !== null');
   });
 
-  it('never claims landlord verification on the business path', () => {
-    // The displayed name there belongs to the business account, so a landlord
-    // badge would be attached to the wrong subject.
+  it('reads the BUSINESS ACCOUNT\'s own KYC on the business path, never a landlord\'s', () => {
+    // The displayed name there belongs to the business account, so a
+    // landlord's kycVerified would be attached to the wrong subject (0064
+    // gave business_accounts its own kyc_verified column for exactly this).
+    // whatsappVerified still has no business-level equivalent and stays false.
     const businessBlock = source.slice(
       source.indexOf("publisherType: 'business'"),
       source.indexOf('continue;')
     );
-    expect(businessBlock).toContain('kycVerified: false');
+    expect(businessBlock).toContain('accountsKycById.get(listing.businessAccountId!)');
+    expect(businessBlock).not.toContain('kycVerified: false');
     expect(businessBlock).toContain('whatsappVerified: false');
   });
 

@@ -10,13 +10,26 @@ export async function DELETE(
 ) {
   try {
     const user = await getUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'ops')) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resolvedParams = params instanceof Promise ? await params : params;
     const businessAccountId = Number(resolvedParams.id);
     const memberId = Number(resolvedParams.memberId);
+
+    if (user.role !== 'admin' && user.role !== 'ops') {
+      const membership = await db.query.businessAccountMembers.findFirst({
+        where: and(
+          eq(businessAccountMembers.businessAccountId, businessAccountId),
+          eq(businessAccountMembers.userId, user.id),
+          eq(businessAccountMembers.isActive, true)
+        ),
+      });
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+    }
 
     if (isNaN(businessAccountId) || businessAccountId <= 0) {
       return NextResponse.json(
