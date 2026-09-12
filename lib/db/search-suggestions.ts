@@ -18,6 +18,25 @@ export async function getSearchSuggestions(
   const trimmed = q.trim();
   if (trimmed.length < 2) return [];
 
+  // Social captions tell renters to "search EZR{id}" (referenceCode() in
+  // lib/social/caption.ts). It never appears in a title or location, so the
+  // location/FTS lookups below always miss it — resolve it directly instead.
+  const codeMatch = trimmed.match(/^EZR(\d+)$/i);
+  if (codeMatch) {
+    const rows = await db.execute<{ id: number; title: string }>(
+      sql`
+        SELECT id, title
+        FROM listings
+        WHERE id = ${Number(codeMatch[1])}
+          AND status = 'active'
+          AND (expires_at IS NULL OR expires_at >= NOW())
+        LIMIT 1
+      `
+    );
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+    return row ? [{ kind: 'listing', value: row.title, listingId: row.id }] : [];
+  }
+
   const pattern = `%${trimmed}%`;
   const results: SuggestionItem[] = [];
 
