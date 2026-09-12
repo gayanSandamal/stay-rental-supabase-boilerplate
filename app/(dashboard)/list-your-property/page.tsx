@@ -61,7 +61,7 @@ const benefits = [
     icon: Shield,
     title: 'Direct Tenant Contact',
     description:
-      'Your contact numbers are shown on your listing. Tenants call or WhatsApp you directly—no middleman, no delays.',
+      'Your contact numbers are shown on your listing. Tenants call or WhatsApp you directly, no delays.',
     tag: 'Direct Contact',
     gradient: 'from-emerald-600 to-teal-700',
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -211,7 +211,7 @@ function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
     },
     {
       q: 'Who talks to the tenants?',
-      a: 'You do, directly. Your verified phone number and WhatsApp appear on the listing — there is no middleman and we never sit between you and a tenant.',
+      a: 'You do, directly. Your verified phone number and WhatsApp appear on the listing — we never sit between you and a tenant, and we never take a commission.',
     },
     {
       q: 'I already posted on ikman or Facebook. Why list here too?',
@@ -320,7 +320,7 @@ export default async function ListYourPropertyPage() {
             )}
             <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto leading-relaxed mb-4">
               {founding
-                ? 'Checked before it goes live, and tenants contact you directly. No middlemen, no commissions.'
+                ? 'Checked before it goes live, and tenants contact you directly. No commission, ever.'
                 : 'Reach tenants looking for mid-to-long-term rentals in Sri Lanka. Hassle-free management.'}
             </p>
             <p className="text-base text-teal-200/90 max-w-xl mx-auto font-medium mb-10">
@@ -520,7 +520,7 @@ export default async function ListYourPropertyPage() {
                   <span className="gradient-text">Landlords</span>
                 </h2>
                 <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
-                  Four straightforward steps — no middlemen, no hidden fees, no fees at all.
+                  Four straightforward steps, no hidden fees, no fees at all.
                 </p>
               </div>
             </ScrollReveal>

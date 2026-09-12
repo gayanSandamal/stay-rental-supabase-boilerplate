@@ -129,11 +129,11 @@ export default async function AreaPage({
             </p>
           )}
           <p className="text-slate-600 max-w-3xl">
-            Mid-to-long-term rentals (1–12+ months) in {where}, listed by owners
-            and checked before they go live. Every contact number is verified and
-            you speak to the owner directly — no agents, no commission, free to
-            browse and free to contact. Filter by rent, deposit months, notice
-            period, power backup, water source and fibre availability.
+            Mid-to-long-term rentals (1–12+ months) in {where}, checked before they
+            go live. Every contact number is verified, and Easy Rent never takes a
+            commission — free to browse and free to contact. Filter by rent,
+            deposit months, notice period, power backup, water source and fibre
+            availability.
           </p>
         </header>
 

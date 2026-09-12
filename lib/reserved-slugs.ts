@@ -43,6 +43,9 @@ export const RESERVED_SLUGS = new Set([
   // asking about it. A landlord holding this slug would shadow every one.
   'preview',
   'privacy-policy',
+  // Broker pivot (2026-09-12) — public lead-submission form, gated behind
+  // enableLeadRouting.
+  'request',
   'reset-password',
   'sign-in',
   'sign-up',

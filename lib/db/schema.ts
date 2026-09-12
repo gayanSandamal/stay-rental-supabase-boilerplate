@@ -335,6 +335,90 @@ export const marketRentSnapshots = pgTable('market_rent_snapshots', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ---------------------------------------------------------------------------
+// Broker pivot (2026-09-12, gated — enablePropertyGrouping /
+// enableLeadRouting, both OFF by default): "one property, every agent on it".
+// ---------------------------------------------------------------------------
+
+// A property is a physical unit, distinct from any one agent's ad for it.
+// Deliberately no "owner"/"claimed by" column — FORGE.md's Concept 2
+// adjudication question is resolved as: the property record is neutral, and
+// listings are attachments (property_agents), not claims to be won. Identity
+// is a fuzzy fingerprint (lib/properties/fingerprint.ts), not an exact key,
+// because the exact-match dedup in app/api/listings/route.ts already proved
+// "12 Galle Rd" vs "No.12, Galle Road" don't collide as strings.
+export const properties = pgTable('properties', {
+  id: serial('id').primaryKey(),
+  fingerprint: varchar('fingerprint', { length: 64 }).notNull(),
+  city: varchar('city', { length: 100 }).notNull(),
+  district: varchar('district', { length: 100 }),
+  bedrooms: integer('bedrooms'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// One listing attaches to at most one property. Fee disclosure lives HERE,
+// per-attachment, never on the property itself — POSITIONING.md and
+// FORGE.md's Q3 are explicit that disclosure is a per-agent fact ("what THIS
+// agent charges"), not a property-level one, and mandatory-or-optional is a
+// real, unresolved tension: this table makes disclosure possible, it does not
+// decide policy.
+export const propertyAgents = pgTable('property_agents', {
+  id: serial('id').primaryKey(),
+  propertyId: integer('property_id')
+    .notNull()
+    .references(() => properties.id, { onDelete: 'cascade' }),
+  listingId: integer('listing_id')
+    .notNull()
+    .references(() => listings.id, { onDelete: 'cascade' })
+    .unique(),
+  feeDisclosed: boolean('fee_disclosed').notNull().default(false),
+  feePayer: varchar('fee_payer', { length: 20 }), // 'landlord' | 'tenant' | 'split' | null
+  feeAmount: integer('fee_amount'), // LKR, whole-month equivalents kept as free text in feeNotes
+  feeNotes: text('fee_notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Demand instrumentation — the Phase 3 blocker named in the plan: "the
+// product cannot answer what renters typed, or which queries returned zero
+// results." Logged once per genuine new search (page 1 of
+// /api/listings/paginated), never per scroll page, to keep this an
+// event log rather than a firehose.
+export const searchQueries = pgTable('search_queries', {
+  id: serial('id').primaryKey(),
+  queryParams: text('query_params').notNull(), // JSON — the full filter set
+  city: varchar('city', { length: 100 }),
+  bedrooms: integer('bedrooms'),
+  resultCount: integer('result_count').notNull(),
+  visitorHash: varchar('visitor_hash', { length: 64 }), // same shape as listing_views, nullable
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const brokerLeadStatusEnum = pgEnum('broker_lead_status', ['open', 'claimed', 'closed']);
+
+// A renter's stated requirement, broadcast to brokers rather than tied to one
+// listing. FORGE.md is explicit this concept has the thinnest evidence base
+// of the three — no SL data exists on lead value or broker willingness to
+// pay — so this ships behind enableLeadRouting (default OFF) as an
+// instrumented experiment, not a claimed-working feature.
+export const brokerLeads = pgTable('broker_leads', {
+  id: serial('id').primaryKey(),
+  city: varchar('city', { length: 100 }).notNull(),
+  district: varchar('district', { length: 100 }),
+  bedrooms: integer('bedrooms'),
+  budgetMin: integer('budget_min'),
+  budgetMax: integer('budget_max'),
+  notes: text('notes'),
+  contactPhone: varchar('contact_phone', { length: 20 }).notNull(),
+  contactName: varchar('contact_name', { length: 100 }),
+  status: brokerLeadStatusEnum('status').notNull().default('open'),
+  claimedByBusinessAccountId: integer('claimed_by_business_account_id').references(
+    () => businessAccounts.id
+  ),
+  claimedAt: timestamp('claimed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // Saved searches table (for tenants)
 export const savedSearches = pgTable('saved_searches', {
   id: serial('id').primaryKey(),
@@ -360,7 +444,16 @@ export const businessAccounts = pgTable('business_accounts', {
   status: businessAccountStatusEnum('status').notNull().default('active'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  createdBy: integer('created_by').references(() => users.id), // Platform admin who created it
+  createdBy: integer('created_by').references(() => users.id), // Platform admin who created it, OR the self-serve owner (0064)
+  // 0064 — the business account's OWN verification, separate from any
+  // landlord's. publisher-info.ts always rendered kycVerified:false on the
+  // business path because a landlord's KYC badge would attach to the wrong
+  // subject once the publisher name is the business's, not a person's. This
+  // is the correct subject: ops verifies the business itself (registration
+  // doc, or the same NIC/deed review landlords get), not a member's record.
+  kycVerified: boolean('kyc_verified').notNull().default(false),
+  kycVerifiedAt: timestamp('kyc_verified_at'),
+  kycVerifiedBy: integer('kyc_verified_by').references(() => users.id),
 });
 
 // Business Account Members table (team members)
@@ -991,6 +1084,28 @@ export const savedSearchesRelations = relations(savedSearches, ({ one }) => ({
   user: one(users, {
     fields: [savedSearches.userId],
     references: [users.id],
+  }),
+}));
+
+export const propertiesRelations = relations(properties, ({ many }) => ({
+  agents: many(propertyAgents),
+}));
+
+export const propertyAgentsRelations = relations(propertyAgents, ({ one }) => ({
+  property: one(properties, {
+    fields: [propertyAgents.propertyId],
+    references: [properties.id],
+  }),
+  listing: one(listings, {
+    fields: [propertyAgents.listingId],
+    references: [listings.id],
+  }),
+}));
+
+export const brokerLeadsRelations = relations(brokerLeads, ({ one }) => ({
+  claimedByBusinessAccount: one(businessAccounts, {
+    fields: [brokerLeads.claimedByBusinessAccountId],
+    references: [businessAccounts.id],
   }),
 }));
 

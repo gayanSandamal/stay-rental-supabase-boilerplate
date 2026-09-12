@@ -168,6 +168,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Only ops/admin may create a listing that isn't 'pending' — a
+    // self-service landlord (or broker) POSTing {"status":"active"} must
+    // not bypass review. The PUT handler already gates status changes this
+    // carefully (app/api/listings/[id]/route.ts); POST had no equivalent.
+    const isAdminOrOpsCreator = user.role === 'admin' || user.role === 'ops';
+    const initialStatus =
+      isAdminOrOpsCreator && typeof status === 'string' ? status : 'pending';
+
     // Auto-upgrade tenant role to landlord on first listing creation
     if (user.role === 'tenant') {
       await db
@@ -257,7 +265,7 @@ export async function POST(request: NextRequest) {
               moderationStatus: 'queued' as const,
             }
           : {}),
-        status: status || 'pending',
+        status: initialStatus,
         exclusive: (user.role === 'admin' || user.role === 'ops' || isUserPremium(user)) && Boolean(exclusive),
         // Consent recorded at creation. The listing is `pending` here, so
         // nothing is queued yet — the publish path picks this up via
@@ -395,6 +403,20 @@ export async function POST(request: NextRequest) {
       city: newListing.city,
       businessAccountId: listingData.businessAccountId ?? null,
     });
+
+    // Property grouping (broker pivot, gated) — attach this listing to its
+    // fuzzy-matched property so a later sibling on the same address can be
+    // surfaced together. Never blocks or fails listing creation; see
+    // lib/properties/fingerprint.ts.
+    if (isFeatureEnabled('enablePropertyGrouping')) {
+      const { attachListingToProperty } = await import('@/lib/properties/fingerprint');
+      await attachListingToProperty({
+        id: newListing.id,
+        address: newListing.address,
+        city: newListing.city,
+        bedrooms: newListing.bedrooms,
+      });
+    }
 
     // A listing created straight into `active` (ops, or auto-publish with
     // moderation disarmed) never passes through a publish transition, so it

@@ -26,9 +26,12 @@ export type PublisherInfo = {
   businessAccountName: string | null;
   /**
    * Landlord trust signals, and they mean different things — see
-   * components/verification-badges.tsx. Both are false on the BUSINESS path on
-   * purpose: the name shown there is the business account's, so a badge about
-   * the underlying landlord would be attached to the wrong subject.
+   * components/verification-badges.tsx. On the BUSINESS path, kycVerified now
+   * reads the business account's OWN kycVerified column (0064) rather than
+   * always false — a landlord's badge would still be the wrong subject there,
+   * but the business's own verification is the right one. whatsappVerified
+   * stays false on the business path: there is no business-level WhatsApp
+   * number verification concept, unlike an individual landlord's wa_phone.
    */
   kycVerified: boolean;
   whatsappVerified: boolean;
@@ -64,6 +67,7 @@ export async function resolvePublishers<T extends PublishableListing>(
   ];
 
   let accountsById = new Map<number, string>();
+  let accountsKycById = new Map<number, boolean>();
   let creatorsById = new Map<number, { name: string | null; email: string }>();
   let landlordsById = new Map<
     number,
@@ -73,10 +77,15 @@ export async function resolvePublishers<T extends PublishableListing>(
   try {
     if (businessAccountIds.length > 0) {
       const rows = await db
-        .select({ id: businessAccounts.id, name: businessAccounts.name })
+        .select({
+          id: businessAccounts.id,
+          name: businessAccounts.name,
+          kycVerified: businessAccounts.kycVerified,
+        })
         .from(businessAccounts)
         .where(inArray(businessAccounts.id, businessAccountIds));
       accountsById = new Map(rows.map((r) => [r.id, r.name]));
+      accountsKycById = new Map(rows.map((r) => [r.id, r.kycVerified]));
     }
 
     if (creatorIds.length > 0) {
@@ -131,7 +140,7 @@ export async function resolvePublishers<T extends PublishableListing>(
         publisherType: 'business',
         teamMemberName: creator ? publisherDisplayName(creator) : null,
         businessAccountName: accountName,
-        kycVerified: false,
+        kycVerified: accountsKycById.get(listing.businessAccountId!) ?? false,
         whatsappVerified: false,
       });
       continue;

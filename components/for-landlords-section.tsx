@@ -53,7 +53,7 @@ export function ForLandlordsSection() {
               </h3>
               <p className="text-slate-600 text-sm">
                 Your contact numbers are shown on listings. Tenants call or WhatsApp you
-                directly—no middleman.
+                directly.
               </p>
             </div>
             <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">

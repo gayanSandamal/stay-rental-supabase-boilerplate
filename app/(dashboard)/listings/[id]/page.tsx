@@ -25,6 +25,7 @@ import { SocialShare } from '@/components/social-share';
 import { SimilarListings } from '@/components/similar-listings';
 import { ListingViewTracker } from '@/components/listing-view-tracker';
 import { ContactLink } from '@/components/contact-click-tracker';
+import { SiblingAgents } from '@/components/sibling-agents';
 import {
   ListingViewCounts,
   ListingViewCountsSkeleton,
@@ -168,9 +169,13 @@ export default async function ListingDetailPage({
   // Fetch publisher information
   let publisherName = 'Unknown';
   let publisherType: 'individual' | 'business' = 'individual';
-  // Both stay false on the business path: the name shown there belongs to the
-  // business account, so a badge about the landlord behind it would be
-  // attached to the wrong subject (same rule as resolvePublishers).
+  // whatsappVerified stays false on the business path — there is no
+  // business-level WhatsApp verification concept. kycVerified now reads the
+  // BUSINESS ACCOUNT's own kyc_verified (0064) — a landlord's badge would
+  // still be the wrong subject here, the business's own is the right one.
+  // (Same rule as lib/listings/publisher-info.ts's resolvePublishers — this
+  // page has its own separate inline resolution rather than calling that
+  // one, so the fix had to be applied here too.)
   let publisherKycVerified = false;
   let publisherWhatsappVerified = false;
 
@@ -183,6 +188,7 @@ export default async function ListingDetailPage({
       if (businessAccount) {
         publisherType = 'business';
         publisherName = businessAccount.name;
+        publisherKycVerified = businessAccount.kycVerified;
       }
     } catch (error) {
       console.error('Error fetching business account:', error);
@@ -632,6 +638,7 @@ export default async function ListingDetailPage({
 
               {/* Contact Owner / Publisher - visible to all visitors */}
               {listing.status === 'active' && (
+                <>
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <Phone className="h-4 w-4 text-teal-700" />
@@ -758,6 +765,12 @@ export default async function ListingDetailPage({
                     );
                   })()}
                 </div>
+
+                {/* Property grouping (broker pivot, gated) — nothing renders
+                    unless enablePropertyGrouping is on AND this property has
+                    more than one attached agent. */}
+                <SiblingAgents listingId={listing.id} />
+                </>
               )}
               {listing.status !== 'active' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
