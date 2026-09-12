@@ -49,19 +49,14 @@ export function InviteTeamMemberForm({ businessAccountId }: { businessAccountId:
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (data: Record<string, any>) => {
-    const userResponse = await fetch(`/api/user?email=${encodeURIComponent(data.email)}`);
-    if (!userResponse.ok) {
-      throw new Error('User not found. They need an Easy Rent account first.');
-    }
-    const userData = await userResponse.json();
-    if (!userData.user) {
-      throw new Error('User not found. They need an Easy Rent account first.');
-    }
-
+    // Resolved server-side by email now, not via GET /api/user?email= —
+    // that route is admin/ops-only (it returns phone/subscription PII), so
+    // every self-serve invite 404'd for a caller who is neither. See
+    // app/api/business-accounts/[id]/members/route.ts.
     const response = await fetch(`/api/business-accounts/${businessAccountId}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: userData.user.id, role: data.role || 'member' }),
+      body: JSON.stringify({ email: data.email, role: data.role || 'member' }),
     });
     if (!response.ok) {
       const errorData = await response.json();

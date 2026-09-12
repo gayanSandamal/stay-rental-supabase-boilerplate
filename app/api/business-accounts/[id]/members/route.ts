@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, users, businessAccounts } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 export async function POST(
   request: NextRequest,
@@ -40,7 +41,31 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { userId, role = 'member' } = body;
+    const { role = 'member' } = body;
+    let { userId } = body;
+
+    // Self-serve callers send `email`, not `userId` — before this, the
+    // self-serve invite form called GET /api/user?email= to resolve it
+    // client-side, which is admin/ops-only (it returns phone/waPhone/
+    // subscription data) and made every self-serve invite fail with
+    // "User not found" for a caller who is neither. The lookup now happens
+    // HERE, server-side, with only existence exposed to the caller — never
+    // the target user's PII.
+    if (!userId && typeof body.email === 'string' && isFeatureEnabled('enableSelfServeBusinessAccounts')) {
+      // Same eq()+isNull(deletedAt) match as GET /api/user?email= — no
+      // lowercasing, matching that route's existing (pre-broker-pivot)
+      // behavior exactly rather than introducing new normalization.
+      const byEmail = await db.query.users.findFirst({
+        where: and(eq(users.email, body.email.trim()), isNull(users.deletedAt)),
+      });
+      if (!byEmail) {
+        return NextResponse.json(
+          { error: 'User not found. They need an Easy Rent account first.' },
+          { status: 404 }
+        );
+      }
+      userId = byEmail.id;
+    }
 
     if (!userId || typeof userId !== 'number' || !Number.isInteger(userId) || userId <= 0) {
       return NextResponse.json(

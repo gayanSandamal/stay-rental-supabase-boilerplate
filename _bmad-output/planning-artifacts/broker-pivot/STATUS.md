@@ -127,26 +127,79 @@ marketplace-facing pages hadn't used yet.
 
 ## Verification
 
-- **Migration**: `lib/db/migrations/0064_broker_pivot.sql`, registered in
-  `lib/db/run-all-migrations.ts`. Plain `IF NOT EXISTS` DDL throughout, no `DO` blocks
-  (per CLAUDE.md's `splitStatements()` warning) except the one enum's `CREATE TYPE`, which
-  needed no `DO` wrapper at all — `0032`'s note confirms `CREATE TYPE` is idempotent via
-  the runner's own "already exists" skip. **Not run against local or production Postgres**
-  in this pass — Docker wasn't running locally and starting the local Supabase stack was
-  judged not worth the time against a careful manual re-read plus the RLS-pattern
-  cross-check against `0026_enable_rls.sql`. **Before this deploys, `pnpm db:migrate-all`
-  must run against production, followed by `pnpm db:check-drift`, per CLAUDE.md — nothing
-  in the build pipeline does this automatically.**
-- **Naming collision check**: caught before migration was finalized — a `leads` table +
-  `lead_status` enum already existed (and were already dropped) from the upstream fork's
-  scaffold. Renamed to `broker_leads`/`broker_lead_status` to avoid any ambiguity.
-- **Tests**: full unit suite green — **1662/1662 passing**, 72 files (6 new tests in
-  `tests/unit/property-fingerprint.test.ts`, which caught a real normalization-order bug
-  before merge). Two pre-existing tests updated to match intentional behavior changes:
-  `tests/unit/reserved-slugs.test.ts` (added `/request`) and
-  `tests/unit/verification-badges.test.ts` (business-path KYC now reads the business
-  account's own field, not a hardcoded `false`).
-- **`npx tsc --noEmit`**: clean throughout, checked after every batch of changes.
-- No manual QA / browser verification was run against a live dev server this pass — every
-  new surface is a fresh page or API route with no prior state to compare against, and
-  Phase 1's original positioning changes were the only part previously spot-checked live.
+**Updated after a second pass**: the gaps flagged in the first pass ("migration never run
+against Postgres," "no manual QA") are closed. `open -a Docker`, `supabase start` (this
+repo's own isolated local stack, ports 5434x per `supabase/config.toml`
+`project_id = "stay-rental-supabase"` — never the BizAssist stack on 54321-54324), then:
+
+- **Migration actually run, twice.** `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54342/postgres
+  npx tsx lib/db/run-all-migrations.ts` applied all 64 files cleanly (17/17 statements OK
+  on 0064). **Replayed a second time to prove the idempotency claim, not just assert it**:
+  every statement in 0064 correctly no-ops (`⏭ Skipped` / `NOTICE: already exists,
+  skipping`) — safe under this runner's replay-every-file-every-time contract.
+- **`pnpm db:check-drift` run against the same instance**: `✅ No drift. 31 tables
+  checked.` — `schema.ts` matches the live database exactly, including every new
+  0064 table/column.
+- **A real bug found and fixed by this verification that unit tests could not have
+  caught**: `app/(dashboard)/listings/[id]/page.tsx` has its OWN separate, inline
+  publisher-resolution block — it does not call `resolvePublishers()` from
+  `lib/listings/publisher-info.ts`. The earlier pass fixed the business-KYC badge in
+  `publisher-info.ts` (used by search result cards) and believed that covered the
+  listing detail page too; it does not. The detail page still hardcoded
+  `kycVerified: false` on the business path until this pass, caught only by actually
+  opening a business-published listing in a browser and seeing no badge where one was
+  expected. Now fixed identically (`businessAccount.kycVerified`), verified rendering
+  "Verified landlord" next to "Priya's Property Group" in both places that variable
+  feeds (Publisher Information card and the Contact Publisher box).
+- **Self-serve business account flow — a second real bug found and fixed.** The invite
+  form (reused from the back-office original) called `GET /api/user?email=` to resolve
+  a user before inviting them — that endpoint is admin/ops-only (it returns
+  phone/subscription PII), so every self-serve invite by a plain landlord/owner 404'd
+  with "User not found," even for a real, existing user. Fixed by moving the email
+  lookup server-side into `POST /api/business-accounts/[id]/members` itself (exposing
+  only existence, never PII, to the caller) and simplifying the client form to submit
+  the email directly. Verified end-to-end: signed in as `landlord@test.com`, created
+  "Priya's Property Group," then successfully invited `ops@easyrent.com` as a member
+  and confirmed the row in `business_account_members`.
+- **Phase 2 (property grouping) verified end-to-end through the real API**, not a
+  synthetic unit call: two listings POSTed via `/api/listings` with address spellings
+  `"14 Lotus Road"` and `"No.14, Lotus Rd"` (same city, same bedroom count) both landed
+  in the same `properties` row (confirmed via `property_agents` join in
+  `psql`), and opening the first listing's public page rendered the amber "Also listed
+  by 1 other agent" panel with a working link to the second, exactly as designed in
+  `EXPERIENCE.md`'s Key Flows. Test rows removed afterward.
+- **Phase 1's `POST /api/listings` status gate independently reconfirmed**, unplanned:
+  while setting up the property-grouping test, a plain landlord's request for
+  `status: 'active'` landed `'pending'` as expected, and a landlord's attempt to create a
+  listing under a landlord id they don't own returned 403 — both pre-existing/first-pass
+  behaviors, both re-observed live under real auth.
+- **Phase 3 (leads) verified end-to-end**: `POST /api/leads` with the flag on persisted a
+  real row; `GET /api/leads` correctly 401'd unauthenticated and 404'd with the flag off;
+  signed in as a business-account member and used the actual `/dashboard/leads` UI to
+  claim a lead — the button transformed in place into the revealed phone number, the DB
+  row moved to `status='claimed'` with the correct `claimed_by_business_account_id`, and
+  the second lead stayed `open` for a different member.
+- **`next build` succeeds** with all new routes compiling (checked in the first pass,
+  reconfirmed unaffected by this pass's fixes via `tsc`).
+- **Naming collision check**: a `leads` table + `lead_status` enum already existed (and
+  were already dropped) from the upstream fork's scaffold. Renamed to
+  `broker_leads`/`broker_lead_status` to avoid any ambiguity — confirmed harmless either
+  way once the migration was actually run, but kept for clarity.
+- **Tests**: full unit suite green — **1662/1662 passing**, 72 files, reconfirmed after
+  every fix in this pass. `tests/unit/property-fingerprint.test.ts` (6 new tests) caught
+  a real normalization-order bug before the first merge. Two pre-existing tests updated
+  to match intentional behavior changes: `tests/unit/reserved-slugs.test.ts` (added
+  `/request`) and `tests/unit/verification-badges.test.ts` (business-path KYC in
+  `publisher-info.ts` now reads the business account's own field).
+- **`npx tsc --noEmit`**: clean throughout, checked after every batch of changes in both
+  passes.
+- **Still not done**: this migration has not been run against **production** — only
+  against the isolated local stack. `pnpm db:migrate-all` against production, followed by
+  `pnpm db:check-drift` against production, are still required before this deploys, per
+  CLAUDE.md. Local verification is strong evidence the migration is safe; it is not a
+  substitute for running it against the actual target database.
+- Test data created during verification (synthetic listings, the two test leads) was
+  removed from the local stack afterward; the test business account
+  ("Priya's Property Group," its two members, `kycVerified: true`) and the flag overrides
+  in the local `feature_flags` table were left in place — harmless, local-only, and not
+  part of this PR's diff (the local stack is not committed anywhere).

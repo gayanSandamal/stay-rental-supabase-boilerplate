@@ -169,9 +169,13 @@ export default async function ListingDetailPage({
   // Fetch publisher information
   let publisherName = 'Unknown';
   let publisherType: 'individual' | 'business' = 'individual';
-  // Both stay false on the business path: the name shown there belongs to the
-  // business account, so a badge about the landlord behind it would be
-  // attached to the wrong subject (same rule as resolvePublishers).
+  // whatsappVerified stays false on the business path — there is no
+  // business-level WhatsApp verification concept. kycVerified now reads the
+  // BUSINESS ACCOUNT's own kyc_verified (0064) — a landlord's badge would
+  // still be the wrong subject here, the business's own is the right one.
+  // (Same rule as lib/listings/publisher-info.ts's resolvePublishers — this
+  // page has its own separate inline resolution rather than calling that
+  // one, so the fix had to be applied here too.)
   let publisherKycVerified = false;
   let publisherWhatsappVerified = false;
 
@@ -184,6 +188,7 @@ export default async function ListingDetailPage({
       if (businessAccount) {
         publisherType = 'business';
         publisherName = businessAccount.name;
+        publisherKycVerified = businessAccount.kycVerified;
       }
     } catch (error) {
       console.error('Error fetching business account:', error);
