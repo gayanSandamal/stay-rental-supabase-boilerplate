@@ -1,7 +1,8 @@
 # Broker Pivot — Implementation Status
 
-**Date:** 2026-09-12 (updated — Phases 1–4 completed at the user's explicit instruction to
-proceed past the plan's own Gate 1)
+**Date:** 2026-09-12 (final update — Phases 1–4 built past the plan's own Gate 1 at the
+user's explicit instruction, end-to-end verified against a local isolated stack, and with
+migration 0064 applied to production after a second explicit confirmation)
 
 ## A note on the gate this overrides
 
@@ -193,11 +194,28 @@ repo's own isolated local stack, ports 5434x per `supabase/config.toml`
   `publisher-info.ts` now reads the business account's own field).
 - **`npx tsc --noEmit`**: clean throughout, checked after every batch of changes in both
   passes.
-- **Still not done**: this migration has not been run against **production** — only
-  against the isolated local stack. `pnpm db:migrate-all` against production, followed by
-  `pnpm db:check-drift` against production, are still required before this deploys, per
-  CLAUDE.md. Local verification is strong evidence the migration is safe; it is not a
-  substitute for running it against the actual target database.
+- **Migration 0064 applied to PRODUCTION** (2026-09-12, user explicitly confirmed
+  before this ran — see the note above about not crossing this line silently). Followed
+  the documented procedure exactly: `vercel link` + `vercel env pull --environment=production`
+  to a scratch file (never `.env.local`), extracted `DATABASE_URL` inline (confirmed
+  pointing at the port-6543 pooler per CLAUDE.md's requirement, never printed to chat/
+  logs), ran the SAME `lib/db/run-all-migrations.ts` runner already validated against the
+  local stack (not a different code path) — 17/17 statements `OK`, exit 0. Immediately
+  followed by `pnpm db:check-drift` against production: **"No drift. 31 tables checked,"**
+  identical to the local result. Independently re-confirmed via the Supabase MCP
+  (a second, unrelated tool) with a direct read: all 4 new tables present, the
+  `business_accounts.kyc_verified` column present, the `broker_lead_status` enum present.
+  Also confirmed **no override rows exist yet** in production's `feature_flags` table for
+  any of the three new flags — they sit at their code defaults (`false`, `false`, `false`;
+  `trackSearchQueries` at its default `true`), exactly as designed. The scratch file
+  holding the production password was deleted immediately after use.
+- **What this means concretely**: the schema is live in production. Nothing built this
+  pass is USER-VISIBLE yet — every new page/API 404s or redirects exactly as it did
+  locally with the flags off, and `getActiveListings`/every existing read path is
+  unaffected (additive-only migration, confirmed by the drift check finding zero
+  unexpected differences). Turning any of `enableSelfServeBusinessAccounts`,
+  `enablePropertyGrouping`, `enableLeadRouting` on for real users is still a separate,
+  later decision — not made by this PR.
 - Test data created during verification (synthetic listings, the two test leads) was
   removed from the local stack afterward; the test business account
   ("Priya's Property Group," its two members, `kycVerified: true`) and the flag overrides
