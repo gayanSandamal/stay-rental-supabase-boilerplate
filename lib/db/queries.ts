@@ -278,6 +278,15 @@ export async function getActiveListings(filters?: {
     // Search (FTS when search_vector exists from migration 0009, else LIKE fallback)
     filters?.search
       ? (() => {
+          // Social captions tell renters to "search EZR{id}" (referenceCode() in
+          // lib/social/caption.ts) since the code isn't clickable on Instagram/TikTok.
+          // That code never appears in title/address/description, so it must be
+          // resolved to the listing id directly rather than full-text searched.
+          const codeMatch = filters.search!.trim().match(/^EZR(\d+)$/i);
+          if (codeMatch) {
+            return eq(listings.id, Number(codeMatch[1]));
+          }
+
           const tokens = filters
             .search!.trim()
             .split(/\s+/)
