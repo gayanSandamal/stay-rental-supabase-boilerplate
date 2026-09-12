@@ -34,6 +34,10 @@
     {
       "path": "/api/cron/landlord-reports",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/expire-listings",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

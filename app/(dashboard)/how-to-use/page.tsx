@@ -109,7 +109,7 @@ const RENTER_STEPS: Step[] = [
   {
     title: 'Call or WhatsApp the owner yourself',
     description:
-      'The numbers on a listing belong to the owner and are verified over WhatsApp before they are shown. Tap Call or WhatsApp and arrange the viewing directly — no account, no agent in the middle, nothing to pay.',
+      'The numbers on a listing belong to the owner or their agent and are verified over WhatsApp before they are shown. Tap Call or WhatsApp and arrange the viewing directly — no account and nothing to pay.',
     icon: Phone,
     optional: false,
     illustration: ContactLandlordIllustration,

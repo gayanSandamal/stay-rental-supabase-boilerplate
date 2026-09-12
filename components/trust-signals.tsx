@@ -57,7 +57,7 @@ const STATS: Stat[] = [
     icon: Phone,
     text: 'Direct',
     label: 'Owner Contact',
-    sub: 'Phone & WhatsApp, no middlemen',
+    sub: 'Phone & WhatsApp, verified',
     color: 'text-teal-600',
     bg: 'bg-teal-50',
     border: 'border-teal-100',

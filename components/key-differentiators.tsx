@@ -59,7 +59,7 @@ const FEATURES = [
     icon: Clock,
     title: 'Direct Contact',
     description:
-      'Contact landlords directly via call or WhatsApp. No middlemen, no booking fees — just you and the property owner.',
+      'Contact landlords directly via call or WhatsApp. No booking fees, and every contact number is verified.',
     tag: 'Easy to Use',
     gradient: 'from-teal-700 to-teal-900',
     tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
