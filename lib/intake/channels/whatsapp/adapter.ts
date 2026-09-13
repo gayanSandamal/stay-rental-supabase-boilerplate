@@ -8,6 +8,42 @@ import { whatsappConfig, isIntakeConfigured } from './config';
 import { persistWhatsAppMedia } from './media';
 import { sendWhatsAppText } from './send';
 
+export interface WhatsAppDeliveryFailure {
+  messageId: string;
+  /** Last four digits only — this lands in runtime logs. */
+  recipientTail: string;
+  errors: Array<{ code: number | null; title: string; details: string | null }>;
+}
+
+/**
+ * Failed delivery statuses from a webhook envelope.
+ *
+ * A send that Meta ACCEPTS can still fail to deliver (unpaid marketing
+ * template, 131049 ecosystem limit, number not on WhatsApp), and that verdict
+ * only ever arrives here, seconds later. Dropping it leaves the back office
+ * reporting "Asked the owner" for a message nobody received.
+ */
+export function extractDeliveryFailures(payload: unknown): WhatsAppDeliveryFailure[] {
+  const out: WhatsAppDeliveryFailure[] = [];
+  for (const entry of (payload as any)?.entry ?? []) {
+    for (const change of entry?.changes ?? []) {
+      for (const status of change?.value?.statuses ?? []) {
+        if (status?.status !== 'failed') continue;
+        out.push({
+          messageId: String(status.id ?? ''),
+          recipientTail: String(status.recipient_id ?? '').slice(-4),
+          errors: (status.errors ?? []).map((e: any) => ({
+            code: typeof e?.code === 'number' ? e.code : null,
+            title: String(e?.title ?? e?.message ?? 'unknown'),
+            details: e?.error_data?.details ? String(e.error_data.details) : null,
+          })),
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * WhatsApp Business Cloud API adapter — the reference ChannelAdapter
  * implementation. All Meta-specific wire concerns live here; the pipeline
