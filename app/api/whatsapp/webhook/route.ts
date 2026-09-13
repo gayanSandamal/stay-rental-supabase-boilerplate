@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { loadLocations } from '@/lib/locations/store';
-import { whatsappAdapter } from '@/lib/intake/channels/whatsapp/adapter';
+import {
+  extractDeliveryFailures,
+  whatsappAdapter,
+} from '@/lib/intake/channels/whatsapp/adapter';
 import {
   markWhatsAppRead,
   sendWhatsAppButtons,
@@ -108,6 +111,15 @@ export async function POST(request: NextRequest) {
     payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  for (const failure of extractDeliveryFailures(payload)) {
+    const reason = failure.errors
+      .map((e) => `${e.code ?? '?'} ${e.title}${e.details ? ` (${e.details})` : ''}`)
+      .join('; ');
+    console.error(
+      `[whatsapp:delivery-failed] to=…${failure.recipientTail} message=${failure.messageId} ${reason || 'no error detail'}`
+    );
   }
 
   const rich = isFeatureEnabled('enableWhatsAppRichReplies');
