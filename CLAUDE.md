@@ -605,6 +605,17 @@ production** running the same queries.
   call.
 - Every route segment should have a `loading.tsx`. Without one, and without a prerendered
   shell, the router paints nothing on click.
+- **A 300s hang right after a deploy is a dead DB socket, not the new code.** On
+  2026-09-12 `/`, `/back-office` and `/back-office/settings` hung for 300s on the first
+  instance of a deploy while `/api/user` ran the same `SELECT` on `users` fine from another
+  instance; the identical build promoted to a fresh instance has served cleanly since, and
+  the symptom predates that code (2026-06-18, 2026-09-04). Fluid Compute suspends an
+  instance with postgres-js's socket still open, and `max: 1` lets one dead socket stall the
+  whole instance. `lib/db/hold-until-idle.ts` holds each invocation until the idle socket
+  has closed. Don't replace it with `attachDatabasePool` — it throws for postgres-js — or
+  with postgres-js's `debug` hook, which puts query parameters into error logs. Raising
+  `max` does not fix it either: postgres-js pipelines new queries onto busy connections,
+  dead one included.
 
 ## When making changes
 
