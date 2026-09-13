@@ -19,6 +19,7 @@
 import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { listingSocialPosts } from '@/lib/db/schema';
+import { redactAccessTokens } from './adapters/graph';
 import { adapterFor } from './registry';
 import { DRY_RUN_ID_PREFIX, MEASURABLE_PLATFORMS, type SocialPlatform } from './types';
 
@@ -109,14 +110,13 @@ export async function refreshSocialMetrics(): Promise<MetricsSweepCounts> {
      * alone keeps the last good reading on screen instead of blanking a real
      * number because one call timed out.
      */
+    const error = redactAccessTokens(result.error);
     await db
       .update(listingSocialPosts)
-      .set({ metricsFetchedAt: now, metricsError: result.error, updatedAt: now })
+      .set({ metricsFetchedAt: now, metricsError: error, updatedAt: now })
       .where(eq(listingSocialPosts.id, row.id));
     counts.unknown++;
-    console.warn(
-      `[social:metrics] ${row.platform} listing=${row.listingId} unreadable: ${result.error}`
-    );
+    console.warn(`[social:metrics] ${row.platform} listing=${row.listingId} unreadable: ${error}`);
   }
 
   return counts;
