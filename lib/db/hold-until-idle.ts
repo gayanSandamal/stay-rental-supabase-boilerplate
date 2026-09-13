@@ -18,8 +18,12 @@ import { getDeadline, waitUntil } from '@vercel/functions';
  * successfully from another instance at 17:28:49. Identical code promoted to a
  * fresh instance at 17:37 has served cleanly since, and the same symptom was
  * logged on 2026-06-18 and 2026-09-04, before any of that code existed.
- * `(node) TimeoutNegativeWarning` on nearly every route is the fingerprint of
- * the freezing: timers firing up to ~24 minutes late.
+ * `(node) TimeoutNegativeWarning` shows the freezing happens — something
+ * computes a delay from a clock that jumped while the instance was frozen —
+ * but it is NOT from postgres-js (its timers pass a fixed delay) and it does
+ * NOT go away with this fix: freezing an idle instance is normal and fine once
+ * its socket has closed. Its presence says nothing about whether this works.
+ * A 300s timeout on a DB-backed route is the symptom to watch for.
  *
  * WHY NOT `attachDatabasePool`. It is Vercel's fix for exactly this, and it
  * does exactly what this file does — arm a `waitUntil` for the pool's idle
