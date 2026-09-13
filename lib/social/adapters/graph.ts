@@ -133,6 +133,11 @@ async function graphCall<T>(
   }
 }
 
+/** Masks every `access_token=` value, including JSON-escaped and truncated ones. */
+export function redactAccessTokens(text: string): string {
+  return text.replace(/(access_token(?:=|%3D))[^&"'\s\\]*/gi, '$1[redacted]');
+}
+
 /**
  * Read the first of `metricNames` that Graph will actually answer for a node.
  *
@@ -183,7 +188,11 @@ export async function graphInsightValue(
      * by hand — recording the shape here makes the next sweeper pass the probe
      * instead, which is what `metrics_error` is for.
      */
-    const shape = JSON.stringify(res.data.data?.[0] ?? res.data) ?? 'undefined';
+    // Graph's `paging` links embed the Page access token, so the payload is
+    // redacted before it can reach the database or a log line.
+    const shape = redactAccessTokens(
+      JSON.stringify(res.data.data?.[0] ?? res.data) ?? 'undefined'
+    );
     last = { message: `No value for ${metric}: ${shape.slice(0, 240)}` };
   }
   return { error: last, permanent: false };

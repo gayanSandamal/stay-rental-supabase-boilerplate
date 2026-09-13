@@ -74,12 +74,13 @@ describe('the refresh sweeper', () => {
     // same defect as printing 0.
     const unknownAt = source.indexOf('counts.unknown++');
     const failureBranch = source.slice(source.lastIndexOf('await db', unknownAt), unknownAt);
-    expect(failureBranch).toContain('metricsError: result.error');
+    expect(failureBranch).toContain('metricsError: error');
+    expect(source).toContain('const error = redactAccessTokens(result.error)');
     expect(failureBranch).not.toContain('viewCount:');
   });
 
   it('stamps the attempt on failure so a dead grant is not retried forever', () => {
-    expect(source).toMatch(/set\(\{\s*metricsFetchedAt: now, metricsError: result\.error/);
+    expect(source).toMatch(/set\(\{\s*metricsFetchedAt: now, metricsError: error/);
   });
 
   it('issues its platform reads one at a time on a max:1 pool', () => {
