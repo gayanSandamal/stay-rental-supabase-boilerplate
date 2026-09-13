@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 import dotenv from 'dotenv';
+import { holdInvocationUntilIdle } from './hold-until-idle';
 
 dotenv.config();
 
@@ -14,6 +15,8 @@ if (!connectionString) {
     'Database URL not set. Set DATABASE_URL or POSTGRES_URL in your environment.'
   );
 }
+
+const IDLE_TIMEOUT_SECONDS = 30;
 
 export const client = postgres(connectionString, {
   max: process.env.VERCEL ? 1 : 10,
@@ -58,7 +61,19 @@ export const client = postgres(connectionString, {
    * FASTER path — setting `prepare: false` for the transaction pooler is a
    * robustness change that costs performance, not a speedup.
    */
-  idle_timeout: 30,
+  idle_timeout: IDLE_TIMEOUT_SECONDS,
   connect_timeout: 10,
 });
-export const db = drizzle(client, { schema });
+
+/*
+ * The logger is not for logging. drizzle calls it before every query, and it
+ * keeps the invocation alive until the connection above has gone idle and
+ * closed, so Fluid Compute never suspends an instance holding a live socket.
+ * See lib/db/hold-until-idle.ts for the 2026-09-12 incident this prevents,
+ * and for why it is not `attachDatabasePool` (throws for postgres-js) or
+ * postgres-js's `debug` hook (would put query parameters in error logs).
+ */
+export const db = drizzle(client, {
+  schema,
+  logger: { logQuery: () => holdInvocationUntilIdle(IDLE_TIMEOUT_SECONDS) },
+});
