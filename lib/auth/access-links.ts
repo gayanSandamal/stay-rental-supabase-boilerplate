@@ -30,6 +30,11 @@ export interface AccessLinks {
   /** Where the landlord takes the listing back off our social accounts. */
   socialUrl: string;
   dashboardUrl: string;
+  /**
+   * Where a RENTER lands. `dashboardUrl` drops them on the listing manager,
+   * which for a tenant is an empty page about a thing they are not doing.
+   */
+  renterUrl: string;
 }
 
 function baseUrl(): string {
@@ -79,6 +84,7 @@ export async function mintAccessLink(args: {
     deleteUrl: id ? `${root}/l/${token}/d/${id}` : `${root}/l/${token}`,
     socialUrl: id ? `${root}/l/${token}/s/${id}` : `${root}/l/${token}`,
     dashboardUrl: `${root}/l/${token}`,
+    renterUrl: `${root}/l/${token}/r`,
   };
 }
 

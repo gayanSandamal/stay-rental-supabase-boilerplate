@@ -49,6 +49,7 @@ import {
   searchNotAvailableMessage,
   intentUnclearMessage,
   intentUnclearButtons,
+  renterWelcomeMessage,
 } from '@/lib/intake/messages';
 import { setReportFrequency } from '@/lib/reports/prefs';
 import { recordConsent } from '@/lib/social/consent';
@@ -56,6 +57,7 @@ import { pullDownForListing } from '@/lib/social/publish';
 import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { hasListingDetail } from '@/lib/intake/parser/types';
 import { mintAccessLink } from '@/lib/auth/access-links';
+import { getOrCreateWhatsAppRenter } from '@/lib/intake/landlord-identity';
 import { resolveReplyLang, type ReplyLang } from '@/lib/intake/language';
 import { db } from '@/lib/db/drizzle';
 import { landlords, users } from '@/lib/db/schema';
@@ -196,10 +198,24 @@ async function handleInbound(
         link: `/back-office/imports/${claimedImportId}`,
       }).catch(() => {});
     }
-    // One lookup per inbound message, reused by every reply below. Resolved
-    // from what this sender has written before plus what they just wrote, so a
-    // Sinhala landlord answering "50000" is still answered in Sinhala.
-    const lang = await langFor(message.senderId, message.text);
+    /*
+     * One lookup per inbound message, reused by every reply below. Resolved
+     * from what this sender has written before plus what they just wrote, so a
+     * Sinhala landlord answering "50000" is still answered in Sinhala.
+     *
+     * A TAP IS NOT WRITING. For an interactive reply the adapter sets
+     * `text = reply.title` — the label WE chose and sent. Feeding that to
+     * language detection reads our own copy back as if the sender had typed it,
+     * and `langFor` PERSISTS the result to users.preferred_language, so one tap
+     * on a Sinhala-titled row could silently switch a sender's language for
+     * every future message. That is already reachable through the delete menu,
+     * whose rows are listing titles. The stored preference still applies — only
+     * the detection is skipped.
+     */
+    const lang = await langFor(
+      message.senderId,
+      message.interactiveReplyId ? null : message.text
+    );
 
     if (outcome.action === 'number_verified') {
       await whatsappAdapter.sendText(
@@ -455,21 +471,43 @@ async function handleInbound(
        *
        * Until the classifier existed this message became a LISTING: their own
        * phone number published as the contact on a property they do not own,
-       * and their account converted to a landlord. Replying with a link is a
-       * modest answer; not doing that is the point.
+       * and their account converted to a landlord. Not doing that was the
+       * point — but the reply it left them with was "browse the website",
+       * which is a dead end for the one person who has already opened a
+       * conversation with us.
+       *
+       * So: register them. Their number arrived from Meta, which is the same
+       * proof a landlord's does, and their profile carries a name — there is
+       * nothing left worth asking, so nothing is asked.
+       *
+       * The fallback is the old message, and it covers BOTH the flag being off
+       * and the registration failing. Whichever happens, the renter is answered
+       * with something true and useful rather than silence.
        */
-      await whatsappAdapter.sendText(message.senderId, searchNotAvailableMessage(lang));
+      const welcomed = isFeatureEnabled('enableWhatsAppRenterAccounts')
+        ? await registerRenter(message)
+        : false;
+      if (!welcomed) {
+        await whatsappAdapter.sendText(message.senderId, searchNotAvailableMessage(lang));
+      }
     } else if (outcome.action === 'intent_unclear') {
-      // Ask rather than guess. Buttons when they are available, the numbered
-      // text otherwise — enableWhatsAppRichReplies defaults off, so the text
-      // form is the live path and not a fallback in name only.
-      const asked =
-        rich &&
-        (await sendWhatsAppButtons(
-          message.senderId,
-          intentUnclearMessage(lang),
-          intentUnclearButtons()
-        ));
+      /*
+       * Ask rather than guess — and ask with buttons whatever
+       * enableWhatsAppRichReplies says.
+       *
+       * That flag governs conversational polish: blue ticks, typing
+       * indicators, a native picker for the delete menu. This prompt is not
+       * polish. It is a fork the whole conversation hangs on, put to someone
+       * who may be reading the third of three languages in the body, and a tap
+       * is the one answer that needs no reading at all. The numbered 1 / 2 text
+       * is still sent whenever the button send fails, so a client that cannot
+       * render them is never left without the question.
+       */
+      const asked = await sendWhatsAppButtons(
+        message.senderId,
+        intentUnclearMessage(lang),
+        intentUnclearButtons()
+      );
       if (!asked) {
         await whatsappAdapter.sendText(message.senderId, intentUnclearMessage(lang));
       }
@@ -584,6 +622,39 @@ async function langFor(senderId: string, text: string | null | undefined): Promi
   } catch (err) {
     console.error('[webhook] language lookup failed', err);
     return 'en';
+  }
+}
+
+/**
+ * Register a renter and send them their sign-in link. Returns false when
+ * anything at all went wrong, so the caller falls back to the browse-the-site
+ * reply rather than leaving them with nothing.
+ *
+ * Safe to run more than once. `getOrCreateWhatsAppRenter` returns the existing
+ * account for a number it already knows, so a Meta redelivery or a second tap
+ * re-mints a link instead of creating a second account — and a send that failed
+ * the first time heals the next time they say they are looking. Token growth is
+ * bounded by mintAccessLink's own MAX_LIVE_TOKENS_PER_USER prune.
+ */
+async function registerRenter(
+  message: ReturnType<typeof whatsappAdapter.normalizeInbound>[number]
+): Promise<boolean> {
+  try {
+    const account = await getOrCreateWhatsAppRenter({
+      senderId: message.senderId,
+      profileName: message.senderName,
+    });
+    if (!account) return false;
+    // No listingId: a renter has no listing, and the token is user-scoped
+    // anyway — the destination lives in the path, not the token.
+    const links = await mintAccessLink({ userId: account.userId, channel: 'whatsapp' });
+    return await whatsappAdapter.sendText(
+      message.senderId,
+      renterWelcomeMessage(message.senderName, links.renterUrl)
+    );
+  } catch (err) {
+    console.error('[webhook] renter registration failed', err);
+    return false;
   }
 }
 

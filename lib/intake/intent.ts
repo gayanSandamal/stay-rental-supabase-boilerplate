@@ -31,7 +31,6 @@
  */
 
 import type { NormalizedInboundMessage } from './channels/types';
-import { hasListingDetail } from './parser/types';
 import type { ParsedIntake } from './parser/types';
 import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
 
@@ -62,9 +61,28 @@ const BUDGET_COMPARATOR_RE =
 const SEEKING_RE =
   /\b(?:looking\s+for|look(?:ing)?\s+to\s+rent|searching\s+for|search\s+for|in\s+search\s+of|need\s+an?\b|needed\b|wanted\b|anyone\s+(?:have|know)|do\s+you\s+have|any\s+\w+\s+available|find\s+me|show\s+me|got\s+any)\b|හොයනවා|தேடுகிறேன்/i;
 
+/**
+ * Someone OFFERING a property, stated in words rather than shown in detail.
+ *
+ * The mirror of SEEKING_RE, and it exists for the same reason: once a message
+ * carrying no listing detail asks the intent question instead of assuming a
+ * listing, "I want to list my house" would be asked about too — and that
+ * sentence is not ambiguous by any reading. A landlord who says plainly what
+ * they are doing should never be made to confirm it.
+ *
+ * Checked AFTER the seeking signals, so "looking for a house for rent" stays a
+ * search: the seeking phrase is the deliberate one and already returned.
+ */
+const OFFERING_RE =
+  /\b(?:rent(?:ing)?\s+out|let(?:ting)?\s+out|to\s+let|for\s+rent|on\s+rent|list(?:ing)?\s+(?:my|our|a|this)|post(?:ing)?\s+an?\s+ad|advertise|put\s+up\s+(?:my|our)|give\s+(?:my|our)\b|available\s+(?:for\s+rent|to\s+rent|from))\b|කුලියට\s*දෙන|බද්දට|දැන්වීම|வாடகைக்கு\s*விட|வாடகைக்கு\s*உள்ளது|விளம்பரம்/i;
+
 /** "Anything in Kottawa?" — a question mark on a short message is an ask. */
 function looksLikeAQuestion(text: string): boolean {
   return text.trim().endsWith('?') && text.length <= 160;
+}
+
+export function hasOfferingLanguage(text: string): boolean {
+  return OFFERING_RE.test(text);
 }
 
 export function hasBudgetComparator(text: string): boolean {
@@ -85,8 +103,8 @@ export function hasSeekingLanguage(text: string): boolean {
  *  2. Photos — nobody searches for a rental by sending pictures of one.
  *  3. Seeking or budget language — the specific, deliberate signals.
  *  4. An address or a phone number in the body — landlords print both.
- *  5. Listing-shaped detail with none of the above → ask.
- *  6. No detail at all → the existing "here's what we need" checklist path.
+ *  5. Offering language — "list my house" is a landlord with nothing filled in.
+ *  6. Anything left → ask. A message that says neither is not evidence of either.
  *
  * Note 3 sits ABOVE 4 on purpose: tenants do leave their number ("looking for a
  * 2BR under 70k, call me on 077…"), and treating that as an advert is precisely
@@ -111,6 +129,20 @@ export function classifyIntent(
   if (parsed.address) return 'listing';
   if (extractPhoneNumbers(text).length > 0) return 'listing';
 
-  // Town + bedrooms + a bare number, and nothing to say which way round it is.
-  return hasListingDetail(parsed) ? 'ambiguous' : 'listing';
+  // "I want to list my house" — no detail yet, but no ambiguity either.
+  if (hasOfferingLanguage(text)) return 'listing';
+
+  /*
+   * Everything else asks.
+   *
+   * This used to fall back to 'listing' for a message with no listing detail,
+   * which meant a bare "Hi" was answered with the fill-in-this-form template —
+   * fine for the landlord it assumed, useless for the renter it did not. A
+   * contentless message says nothing about which of the two it is, and on
+   * WhatsApp there is always someone to ask.
+   *
+   * hasListingDetail no longer gates this: it separated "town + bedrooms + a
+   * number" from "nothing at all", and both of those are now questions.
+   */
+  return 'ambiguous';
 }

@@ -60,10 +60,42 @@ describe('a landlord is never mistaken for a searcher', () => {
     expect(classify('Maharagama 2 bedrooms rent 70000 call 0771234567')).toBe('listing');
   });
 
-  it('a greeting with no detail keeps the existing checklist path', () => {
-    expect(classify('Hi')).toBe('listing');
-    expect(classify('I want to list my house')).toBe('listing');
+  it('saying you are listing is a listing, even with nothing filled in yet', () => {
+    // The mirror of the seeking phrases: stated intent needs no confirming.
+    for (const text of [
+      'I want to list my house',
+      'I want to rent out my annex',
+      'Advertise my property please',
+      'House for rent',
+      'I want to post an ad',
+      'මගේ නිවස කුලියට දෙන්න ඕන',
+      'எனது வீட்டை வாடகைக்கு விட வேண்டும்',
+    ]) {
+      expect(classify(text), text).toBe('listing');
+    }
+  });
+
+  it('an empty message is still a listing — there is nothing to ask about', () => {
+    // Media-only and location-only messages arrive with no text; the caller
+    // never reaches the classifier for a pin, and photos are settled earlier.
     expect(classify('')).toBe('listing');
+  });
+});
+
+describe('a contentless greeting is asked about, not assumed', () => {
+  /*
+   * This used to answer 'listing', so "Hi" was met with the fill-in-this-form
+   * template — correct for the landlord it assumed, a dead end for the renter
+   * it did not. A greeting is evidence of neither.
+   */
+  it('reads a bare greeting as ambiguous', () => {
+    for (const text of ['Hi', 'Hello', 'Hello good afternoon', 'ayubowan', 'හෙලෝ']) {
+      expect(classify(text), text).toBe('ambiguous');
+    }
+  });
+
+  it('still lets an open intake win, so a mid-submission "hi" is not re-asked', () => {
+    expect(classify('Hi', [], true)).toBe('listing');
   });
 });
 

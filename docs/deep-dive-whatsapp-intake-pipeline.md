@@ -301,3 +301,40 @@ landlord never saw and could not change cannot be evidence against them.
 records a deterministic note instead. A landlord-written title is still checked.
 
 _Updated by the rule-parser + channel-adapter refactor, 2026-07-13; go-live hardening 2026-07-28; live-launch follow-ups 2026-08-02; intake v2 2026-08-04. Original deep-dive generated 2026-07-10._
+
+## 2026-09-16 — the renter branch
+
+The intent classifier has been detecting renters since it was written, and
+answering them with `searchNotAvailableMessage` — "we can't search over WhatsApp
+just yet, browse everything at easyrent.lk/listings". That is a dead end for the
+one person who has already opened a conversation with us, and the machinery to
+do better was one branch away: the same number, the same proof of possession,
+and the same account creation that already works for landlords.
+
+`enableWhatsAppRenterAccounts` (OFF by default) turns the `search` outcome into a
+registration: `getOrCreateWhatsAppRenter` → `mintAccessLink` → a welcome message
+carrying `/l/<token>/r`. Zero questions — the name comes from the WhatsApp
+profile and the number from the message, which Meta has already proven.
+
+Four things worth knowing before touching it:
+
+1. **`classifyIntent` no longer falls back to `listing`.** A message with no
+   listing detail is now `ambiguous`, so "Hi" asks instead of assuming. The new
+   `OFFERING_RE` keeps stated intent ("I want to list my house", `කුලියට දෙන`,
+   `வாடகைக்கு விட`) on the listing path, so the extra tap lands only on messages
+   that genuinely say neither.
+2. **The question is trilingual in one message**, deliberately, because the
+   message that triggers it carries no script to detect. See the CLAUDE.md
+   section for the full reasoning and the `·`-not-`/` separator rule.
+3. **A button tap was rewriting `users.preferred_language`.** The adapter sets
+   `text = reply.title`, `langFor` persists what it detects, and the delete
+   menu's rows are listing titles — so this was already live before the renter
+   branch existed. The webhook now skips detection for interactive replies.
+4. **`getOrCreateWhatsAppLandlord`'s existing-user branch now promotes.** It
+   never wrote `role`, which only worked while every `wa_phone` row was already
+   a landlord. A renter who later sends a property is upgraded; `ops` and
+   `admin` are never written down.
+
+No migration: `intake_conversations.state` is plain text, `landlord_access_tokens`
+keys on `users`, `tenant` is already in the role enum, and `wa_account_created`
+already exists in `audit_action`.

@@ -205,6 +205,80 @@ Two supporting invariants worth keeping:
   gates it in `lib/moderation/text-check.ts`. A landlord-written title is still
   checked — two properties in one submission is real.
 
+## WhatsApp renter registration (2026-09-16)
+
+A sender who says they are LOOKING for a place now gets a tenant account and a
+passwordless sign-in link, instead of being told to browse the website. Flag-gated
+(`enableWhatsAppRenterAccounts`), OFF by default. **No migration** — the whole
+feature reuses existing columns and enum values.
+
+- **The classifier no longer assumes a contentless message is a listing.**
+  `classifyIntent` used to end `hasListingDetail(parsed) ? 'ambiguous' : 'listing'`,
+  so "Hi" was answered with `newListingTemplateMessage` — the fill-in-this-form
+  template. Correct for the landlord it assumed, a dead end for the renter it did
+  not. It now ends `'ambiguous'`, and a new `OFFERING_RE` (the mirror of
+  `SEEKING_RE`) keeps "I want to list my house" a `listing`, so a landlord who
+  says plainly what they are doing is still never asked to confirm it. The
+  asymmetry that governs the whole module is unchanged: an unrecognised phrase
+  costs a question, never a fabricated listing.
+- **The intent question is trilingual in ONE message, and that is not a
+  localisation failure.** Every other builder answers in the language the sender
+  wrote in. This one cannot: it replies to the message that OPENED the
+  conversation, which is overwhelmingly "Hi" or a photo. `replyLangFromText`
+  returns null for Latin script by design, so `resolveReplyLang` lands on `en`
+  and a per-language reply would be English for a Sinhala speaker who has not yet
+  written a Sinhala word. `t()` is still consulted first, so a returning sender
+  whose `users.preferred_language` we already know can be given a single-language
+  version later. Separator is `·`, never `/` — same reason
+  `newListingTemplateMessage` gives.
+- **Button titles stay English, and that is a cap, not a preference.** The Cloud
+  API allows 20 code points and `clip()` truncates to fit rather than failing, so
+  a three-language label is impossible — `දැන්වීමක් පළ කරන්න` alone is 18. Picking
+  one native language for the buttons would be worse than picking none, so the
+  three languages live in the body. `🏠 Post an ad` is 12, `🔍 Find a place` is 14;
+  `tests/unit/whatsapp-renter.test.ts` pins both.
+- **This one prompt sends buttons regardless of `enableWhatsAppRichReplies`.**
+  That flag governs polish — blue ticks, typing indicators, the native delete
+  picker. This is a fork the whole conversation hangs on, put to someone who may
+  be reading the third of three languages, and a tap needs no reading at all. The
+  numbered 1 / 2 text still goes out whenever the button send returns false.
+- **A TAP IS NOT WRITING.** The adapter sets `text = reply.title` for an
+  interactive reply — our own copy — and `langFor` PERSISTS what it detects to
+  `users.preferred_language`. So one tap on a natively-titled row could switch a
+  sender's language for every future message. This was already reachable through
+  the delete menu, whose rows are listing titles. The webhook now passes
+  `message.interactiveReplyId ? null : message.text`; the STORED preference still
+  applies, only the detection is skipped.
+- **One identity resolver, two roles.** `getOrCreateWhatsAppAccount` in
+  `lib/intake/landlord-identity.ts` owns everything true of any WhatsApp account:
+  synthetic email, per-phone advisory lock, recovery from a half-created auth
+  user, trigger-vs-insert reconciliation, and the refusal to attach an email
+  belonging to a different auth user. Duplicating any of those for renters is how
+  two people end up sharing an account. `getOrCreateWhatsAppRenter` differs only
+  in leaving the role at the trigger's `tenant` default and creating no
+  `landlords` row.
+- **The existing-user branch now promotes `tenant` → `landlord`.** It never wrote
+  `role` at all, which was harmless only while every `wa_phone` row had been
+  created as a landlord. A renter account breaks that: the same person later
+  sending their property would own listings while still being routed as a tenant.
+  Only `tenant` is promoted — `ops` and `admin` outrank landlord and must never be
+  written down to it, the same guard `/api/listings` uses.
+- **The renter link is `/l/<token>/r` → `/listings`.** The default destination is
+  the landlord listing manager, which for a tenant is an empty page about
+  something they are not doing. Still a fixed path shape, so it adds no
+  open-redirect surface. `/listings` is also where sign-in already sends a tenant.
+- **The welcome copy must never promise alerts.** Saved-search alerts are
+  delivered by EMAIL (`/api/cron/saved-search-alerts` reads
+  `savedSearches.emailAlerts` and sends to `users.email`), and a WhatsApp
+  account's address is on `wa.easyrent.lk`, a subdomain chosen for having no MX
+  record. `savedSearches.whatsappAlerts` exists in the schema and is read by
+  nothing. A renter promised alerts would simply never hear from us again; the
+  test asserts the copy stays clear of the whole vocabulary.
+- **`searchNotAvailableMessage` is still the live fallback** and covers BOTH the
+  flag being off and registration failing. `registerRenter` is safe to re-run —
+  an existing number returns its account — so a send that failed once heals the
+  next time they say they are looking.
+
 ## Social auto-publish (2026-08-22)
 
 Published listings can be posted to **Easy Rent's own** Facebook Page, Instagram

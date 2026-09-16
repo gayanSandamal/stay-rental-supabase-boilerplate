@@ -87,6 +87,13 @@ export const featureFlagDefaults = {
   // OFF keeps today's behaviour: listings owned by Easy Rent Operations.
   enableWhatsAppLandlordAccounts: false,
 
+  // A WhatsApp sender who says they are LOOKING for a place gets a tenant
+  // account and a sign-in link instead of being pointed at the website. Its own
+  // switch rather than a rider on the landlord flag above: that one is still off
+  // in production and gates who OWNS a listing, which this path never touches.
+  // OFF keeps searchNotAvailableMessage — the reply that exists today.
+  enableWhatsAppRenterAccounts: false,
+
   // 0057 — ops/admin can import a rental ad from a Facebook post URL. OFF by
   // default because this republishes someone's advert and photos before they
   // have agreed to anything; switching it on is a deliberate decision, not a
@@ -420,6 +427,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'WhatsApp landlord accounts',
     description:
       'Create a real landlord account for each WhatsApp sender and give them view/edit/delete links so they can manage their own listing. OFF keeps intake listings under the Easy Rent Operations identity with no self-service.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableWhatsAppRenterAccounts: {
+    label: 'WhatsApp renter accounts',
+    description:
+      'When a WhatsApp sender says they are looking for a place, create a tenant account from their verified number and reply with a passwordless sign-in link. OFF replies with the browse-the-website message instead, which is what happens today.',
     group: 'Platform',
     appWide: true,
     public: false,

@@ -1,5 +1,15 @@
 /**
- * Real landlord accounts for WhatsApp senders.
+ * Real accounts for WhatsApp senders — landlords, and since the renter intake
+ * branch, tenants too.
+ *
+ * ONE IDENTITY RESOLVER, TWO ROLES. `getOrCreateWhatsAppAccount` owns
+ * everything that is true of any WhatsApp account: the synthetic email, the
+ * per-phone advisory lock, recovery from a half-created auth user, the
+ * trigger-vs-insert reconciliation, and the refusal to attach an email that
+ * belongs to a different auth user. Duplicating any of those for renters is how
+ * two people end up sharing an account, so the role-specific parts are the only
+ * things the two public entry points differ in: a landlord is promoted and
+ * guaranteed a `landlords` row, a renter is neither.
  *
  * IDENTITY MODEL: the verified WhatsApp number is the identity, stored in
  * `users.wa_phone`. Supabase Auth still needs an email (and `users.email` is
@@ -49,6 +59,16 @@ export interface WhatsAppLandlord {
   isNew: boolean;
 }
 
+/**
+ * An account resolved from a WhatsApp number, before any role-specific work.
+ * A renter has no `landlordId` — that is the whole difference.
+ */
+export interface WhatsAppAccount {
+  userId: number;
+  authUserId: string | null;
+  isNew: boolean;
+}
+
 /** Deterministic so a retry after a partial failure recovers the same account. */
 export function syntheticEmailFor(e164: string): string {
   const digest = crypto.createHash('sha256').update(e164).digest('hex').slice(0, 16);
@@ -77,9 +97,46 @@ export async function getOrCreateWhatsAppLandlord(args: {
    */
   phoneVerified?: boolean;
 }): Promise<WhatsAppLandlord | null> {
+  const account = await getOrCreateWhatsAppAccount({ ...args, asLandlord: true });
+  if (!account) return null;
+  const landlordId = await ensureLandlordRow(account.userId);
+  return { ...account, landlordId };
+}
+
+/**
+ * Get-or-create the TENANT account for a messaging sender.
+ *
+ * Same identity model, same synthetic email, same advisory lock — the only
+ * differences are that the role is left at the trigger's `tenant` default and
+ * no `landlords` row is created. Kept as a separate export rather than a flag
+ * at the call site so the intent is readable where it is used.
+ *
+ * Deliberately NOT a demotion path: if this number already belongs to a
+ * landlord, ops or admin account, that account is returned untouched. A renter
+ * and a landlord cannot share a number anyway — `users_wa_phone_live_key` is
+ * unique across every live row regardless of role.
+ */
+export async function getOrCreateWhatsAppRenter(args: {
+  senderId: string;
+  profileName: string | null;
+  phoneVerified?: boolean;
+}): Promise<WhatsAppAccount | null> {
+  return getOrCreateWhatsAppAccount({ ...args, asLandlord: false });
+}
+
+async function getOrCreateWhatsAppAccount(args: {
+  senderId: string;
+  profileName: string | null;
+  phoneVerified?: boolean;
+  /**
+   * Promote the account to `landlord` and guarantee it can own listings. False
+   * leaves the role alone, which for a fresh account is the trigger's `tenant`.
+   */
+  asLandlord: boolean;
+}): Promise<WhatsAppAccount | null> {
   const e164 = args.senderId.startsWith('+') ? args.senderId : `+${args.senderId}`;
   const email = syntheticEmailFor(e164);
-  const displayName = args.profileName?.trim() || 'Property owner';
+  const displayName = args.profileName?.trim() || (args.asLandlord ? 'Property owner' : 'Renter');
   const verified = args.phoneVerified !== false;
 
   try {
@@ -91,14 +148,37 @@ export async function getOrCreateWhatsAppLandlord(args: {
       // THE CLAIM MOMENT. An account the importer created holds an unproven
       // number; the first message from that number is the proof, and this is
       // where it lands. Stamped once and never cleared.
-      if (verified && !existing.waPhoneVerifiedAt) {
+      const stampVerified = verified && !existing.waPhoneVerifiedAt;
+
+      /*
+       * PROMOTE A TENANT WHO IS NOW LISTING.
+       *
+       * This branch used not to write `role` at all, which was harmless only
+       * for as long as every row carrying a `wa_phone` had been created by the
+       * create-branch below as a `landlord`. A WhatsApp RENTER account breaks
+       * that assumption: it holds a verified `wa_phone` with role `tenant`, so
+       * the same person later sending us their property would get a `landlords`
+       * row and own listings while still being routed as a tenant — sent to
+       * /listings at sign-in, shown the "list your property" cross-sell, and
+       * counted as a tenant by anything reading the role.
+       *
+       * Only `tenant` is promoted. `ops` and `admin` already outrank landlord
+       * and must never be written down to it — that is the same guard
+       * /api/listings uses when it upgrades a tenant on their first listing.
+       */
+      const promote = args.asLandlord && existing.role === 'tenant';
+
+      if (stampVerified || promote) {
         await db
           .update(users)
-          .set({ waPhoneVerifiedAt: new Date(), updatedAt: new Date() })
+          .set({
+            ...(stampVerified ? { waPhoneVerifiedAt: new Date() } : {}),
+            ...(promote ? { role: 'landlord' as const } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(users.id, existing.id));
       }
-      const landlordId = await ensureLandlordRow(existing.id);
-      return { userId: existing.id, landlordId, authUserId: existing.authUserId, isNew: false };
+      return { userId: existing.id, authUserId: existing.authUserId, isNew: false };
     }
 
     // 2. Create the auth user. No password → passwordless by construction.
@@ -108,7 +188,7 @@ export async function getOrCreateWhatsAppLandlord(args: {
       email,
       email_confirm: true,
       user_metadata: {
-        source: verified ? 'whatsapp_intake' : 'post_import',
+        source: args.asLandlord ? (verified ? 'whatsapp_intake' : 'post_import') : 'whatsapp_renter',
         wa_phone: e164,
         wa_profile_name: args.profileName ?? null,
       },
@@ -141,11 +221,13 @@ export async function getOrCreateWhatsAppLandlord(args: {
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('wa_identity'), hashtext(${e164}))`);
 
-      // The 0020 trigger inserts the row as role=tenant; upgrade and stamp it.
+      // The 0020 trigger inserts the row as role=tenant. A landlord is upgraded
+      // from there; a renter is already the right role, so `role` is left out
+      // of the SET entirely rather than written back as 'tenant'.
       const updated = await tx
         .update(users)
         .set({
-          role: 'landlord',
+          ...(args.asLandlord ? { role: 'landlord' as const } : {}),
           waPhone: e164,
           // coalesce, not a plain set: a row that is already verified must not
           // be demoted by a later unverified touch on the same number.
@@ -168,7 +250,7 @@ export async function getOrCreateWhatsAppLandlord(args: {
           authUserId: authUserId!,
           email,
           name: displayName,
-          role: 'landlord',
+          role: args.asLandlord ? 'landlord' : 'tenant',
           waPhone: e164,
           waPhoneVerifiedAt: verified ? new Date() : null,
           phone: e164,
@@ -195,8 +277,6 @@ export async function getOrCreateWhatsAppLandlord(args: {
       return null;
     }
 
-    const landlordId = await ensureLandlordRow(result.userId);
-
     if (result.isNew) {
       // Best-effort trail; never fail account creation over a log write.
       await logAudit({
@@ -204,13 +284,20 @@ export async function getOrCreateWhatsAppLandlord(args: {
         entityType: 'user',
         entityId: result.userId,
         userId: result.userId,
-        metadata: { waPhone: e164, profileName: args.profileName, verified },
+        metadata: {
+          waPhone: e164,
+          profileName: args.profileName,
+          verified,
+          role: args.asLandlord ? 'landlord' : 'tenant',
+        },
       }).catch(() => {});
       await createNotificationsForOpsAndAdmin({
         type: 'whatsapp_intake',
-        title: verified
-          ? `New landlord account from WhatsApp: ${displayName} (${e164})`
-          : `New landlord account from an imported post: ${displayName} (${e164}, unverified)`,
+        title: !args.asLandlord
+          ? `New renter account from WhatsApp: ${displayName} (${e164})`
+          : verified
+            ? `New landlord account from WhatsApp: ${displayName} (${e164})`
+            : `New landlord account from an imported post: ${displayName} (${e164}, unverified)`,
         link: verified ? '/back-office/whatsapp-intakes' : '/back-office/imports',
       }).catch(() => {});
     }
@@ -219,7 +306,7 @@ export async function getOrCreateWhatsAppLandlord(args: {
     // NOT merged — flag it for a human instead of guessing.
     await warnOnUnverifiedPhoneClash(e164, result.userId);
 
-    return { userId: result.userId, landlordId, authUserId, isNew: result.isNew };
+    return { userId: result.userId, authUserId, isNew: result.isNew };
   } catch (err) {
     console.error('[landlord-identity] failed', err);
     return null;
