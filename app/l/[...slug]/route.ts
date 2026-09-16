@@ -93,6 +93,16 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ slug?: 
   // a confirmation page, never on a mutation: a WhatsApp link preview or an
   // accidental long-press must not pull a live post down.
   else if (listingId && action === 's') destination = `/dashboard/listings/${listingId}/social`;
+  /*
+   * 'r' — a renter. Takes no listing id, because they have no listing.
+   *
+   * The default above is the landlord's listing manager, which for a tenant is
+   * an empty page about something they are not doing. /listings is where the
+   * account is actually worth having, and it is already where sign-in sends a
+   * tenant (app/(login)/actions.ts). Still a fixed path shape: nothing from the
+   * URL reaches the destination, so this adds no open-redirect surface.
+   */
+  else if (action === 'r') destination = '/listings';
 
   const supabase = await createClient();
 

@@ -77,7 +77,10 @@ describe('the ambiguous path asks instead of guessing', () => {
     expect(block).toContain('clearConversation');
   });
 
-  it('the webhook always has a plain-text path, since rich replies default off', () => {
+  // Buttons now go out regardless of enableWhatsAppRichReplies — see
+  // tests/unit/whatsapp-renter.test.ts. The plain-text path still has to exist
+  // for a client that cannot render them.
+  it('the webhook always keeps a plain-text path', () => {
     const branch = webhook.slice(
       webhook.indexOf("outcome.action === 'intent_unclear'"),
       webhook.indexOf("outcome.action === 'help'")

@@ -236,6 +236,39 @@ Location pins work regardless of these flags: a pin shared mid-session fills
 the listing's address/coordinates; a pin within 48h of publish attaches
 coordinates to that listing.
 
+## 6. Renter accounts (added 2026-09-16)
+
+Turn ON **WhatsApp renter accounts** (`enableWhatsAppRenterAccounts`).
+
+Independent of the four above — it never touches who owns a listing, so it can
+go on while `enableWhatsAppLandlordAccounts` is still off. OFF keeps today's
+reply: "we can't search over WhatsApp just yet, browse the website".
+
+With it on, a sender who taps **🔍 Find a place** (or types `2`) gets a `tenant`
+account keyed on their verified number and a sign-in link to `/listings`.
+Nothing is asked of them.
+
+Test it end to end:
+
+1. From a number the bot has never seen, send `Hi`.
+2. You should get the trilingual question with two buttons. Tap **🔍 Find a
+   place**.
+3. You should get a sign-in link within seconds. Open it on a *different*
+   device — you should land on `/listings` already signed in.
+4. In Back Office → the notification bell, confirm "New renter account from
+   WhatsApp".
+5. Now send a real advert from that same number ("2BR annex Nugegoda 65000,
+   upstairs"). It should publish as normal, and that user's role should move
+   `tenant` → `landlord`.
+
+**Watch for:** a renter who was registered but whose link failed to send gets the
+browse-the-website message instead. That is the designed fallback, not a bug —
+they get a fresh link the next time they say they are looking.
+
+**Known limitation:** the `LINK` command still only works for landlords
+(`linksFor` requires a `landlords` row), so a renter cannot ask for a fresh link
+by name. Re-stating that they are looking for a place does mint one.
+
 ## Ops notes
 
 - **Moderation queue**: Back Office → Moderation. Actions: publish anyway

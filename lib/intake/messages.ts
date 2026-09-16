@@ -820,23 +820,85 @@ export function searchNotAvailableMessage(lang: ReplyLang = 'en'): string {
  * property they do not own, which is worth one extra tap to avoid.
  */
 export function intentUnclearMessage(lang: ReplyLang = 'en'): string {
+  /*
+   * DELIBERATELY TRILINGUAL, and deliberately NOT routed through `t()` first.
+   *
+   * Every other builder here answers in the language the sender wrote in. This
+   * one cannot: it is the reply to the message that opened the conversation,
+   * which is overwhelmingly "Hi" or a photo. `replyLangFromText` returns null
+   * for Latin script by design, so `resolveReplyLang` lands on 'en' and a
+   * per-language reply would be English for a Sinhala speaker who has not yet
+   * written a Sinhala word. There is nothing to detect yet — so ask in all
+   * three and let the answer tell us.
+   *
+   * `t()` is still consulted, so a future catalogue entry can override the
+   * whole block for a sender whose language we DO already know (a returning
+   * one, from users.preferred_language).
+   *
+   * Separator is `·`, not `/`, for the same reason newListingTemplateMessage
+   * gives: `/` collides with real addresses like "45/2".
+   */
   return (
     t(lang, 'intent.unclear') ??
     [
       'Quick check so we get this right 🙂',
       '',
-      '1️⃣ I\'m listing a property to rent out',
-      '2️⃣ I\'m looking for a place to rent',
+      'ඔබ කුලියට ගැනීමට දේපළක් සොයනවාද, නැතහොත් දැන්වීමක් පළ කිරීමටද?',
+      'நீங்கள் வாடகைக்கு ஒரு சொத்தைத் தேடுகிறீர்களா, அல்லது விளம்பரம் வெளியிட வந்துள்ளீர்களா?',
+      'Are you looking for a property to rent, or here to post your advertisement?',
       '',
-      'Reply 1 or 2.',
+      '1️⃣ දැන්වීමක් පළ කරන්න · விளம்பரம் இட · Post an ad',
+      '2️⃣ දේපළක් හොයන්න · சொத்து தேட · Find a place',
+      '',
+      '1 හෝ 2 එවන්න · 1 அல்லது 2 அனுப்பவும் · Reply 1 or 2.',
     ].join('\n')
   );
 }
 
-/** The two-button form of the question, when rich replies are on. */
+/**
+ * The two-button form of the question.
+ *
+ * TITLES STAY ENGLISH, and that is a constraint rather than a preference: the
+ * Cloud API caps a reply title at 20 code points and `clip()` truncates to fit,
+ * so a three-language label is impossible — "දැන්වීමක් පළ කරන්න" alone is 18
+ * before any separator. Picking one native language for the buttons would be
+ * worse than picking none, so the three languages live in the body above and
+ * the buttons carry an emoji plus the shortest honest English.
+ *
+ * "🏠 Post an ad" is 12 code points, "🔍 Find a place" is 14.
+ */
 export function intentUnclearButtons(): Array<{ id: string; title: string }> {
   return [
-    { id: 'intent_listing', title: "I'm listing" },
-    { id: 'intent_search', title: "I'm looking" },
+    { id: 'intent_listing', title: '🏠 Post an ad' },
+    { id: 'intent_search', title: '🔍 Find a place' },
   ];
+}
+
+/**
+ * A renter is registered and signed in — the reply that replaces the dead end.
+ *
+ * WHAT THIS MUST NOT PROMISE. Saved-search alerts are delivered by email
+ * (`/api/cron/saved-search-alerts` reads `savedSearches.emailAlerts` and sends
+ * to `users.email`), and a WhatsApp account's address sits on `wa.easyrent.lk`,
+ * a subdomain chosen for having no MX record. Promising alerts would be a
+ * promise the platform cannot keep and could not quietly fix later. So the copy
+ * offers only what a signed-in tenant session actually does today: browse,
+ * filter, and contact owners.
+ *
+ * The link is a bearer credential sitting in a chat thread, so the warning is
+ * part of the message rather than a footnote — same wording as
+ * linkReissuedMessage, which landlords already receive.
+ */
+export function renterWelcomeMessage(profileName: string | null, dashboardUrl: string): string {
+  const name = profileName?.trim();
+  return [
+    '✅ ඔබගේ ගිණුම සූදානම් · உங்கள் கணக்கு தயார் · Your account is ready',
+    '',
+    `${name ? name + ', t' : 'T'}his link signs you in — no password needed:`,
+    dashboardUrl,
+    '',
+    'Browse every listing, filter by town, rent and bedrooms, and contact owners directly.',
+    '',
+    'සබැඳිය පුද්ගලිකව තබාගන්න · இணைப்பைத் தனிப்பட்டதாக வைக்கவும் · Keep this link private — anyone who has it can open your account.',
+  ].join('\n');
 }

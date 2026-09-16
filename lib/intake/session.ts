@@ -408,12 +408,22 @@ export async function appendToIntake(
         // 1 = listing, 2 = searching. Buttons carry an explicit id; a typed
         // reply is matched on the digit or the obvious word.
         const raw = (msg.text ?? '').trim().toLowerCase();
+        // Native tokens carry no word boundaries — `\b` is a Latin concept and
+        // does not fire between Sinhala or Tamil letters — so they are matched
+        // as plain substrings, the same way lib/intake/command-words.ts does.
+        // Kept deliberately short and unambiguous: `இடம்` (place) is a SEARCH
+        // word, so the Tamil listing token is the unmistakable `விளம்பரம்`
+        // rather than the two-letter `இட`.
         const wantsListing =
-          msg.interactiveReplyId === 'intent_listing' || /^1[.)]?$/.test(raw) || /\blist/.test(raw);
+          msg.interactiveReplyId === 'intent_listing' ||
+          /^1[.)]?$/.test(raw) ||
+          /\blist/.test(raw) ||
+          /දැන්වීම|කුලියට\s*දෙන|விளம்பரம்|வாடகைக்கு\s*விட/.test(raw);
         const wantsSearch =
           msg.interactiveReplyId === 'intent_search' ||
           /^2[.)]?$/.test(raw) ||
-          /\b(?:search|look|find|rent(?:ing)?\s+a)\b/.test(raw);
+          /\b(?:search|look|find|rent(?:ing)?\s+a)\b/.test(raw) ||
+          /හොයන|සොයන|தேடு|தேட/.test(raw);
 
         if (wantsListing || wantsSearch) {
           const parked = convo.payload.intentText ?? '';
