@@ -366,7 +366,27 @@ export function importDescription(
   // 400-character clip was handed back flattened — same words, every line break
   // and every bullet gone. A composed description that equals the whole advert
   // is still ours, and the raw text is the better copy of it.
-  const collapse = (text: string) => text.replace(/\s+/g, ' ').trim();
+  /*
+   * `[*_~]` IS NEUTRALISED ON BOTH SIDES, and that is not cosmetic.
+   *
+   * `normalize()` in rule-parser.ts strips WhatsApp's bold/italic/strike
+   * markers with `.replace(/[*_~]+/g, ' ')` BEFORE composing a description, so
+   * the composed text is not a literal prefix of the raw text whenever either
+   * character appears — and an underscore appears in almost every URL. A real
+   * advert opening with `maps.app.goo.gl/…?g_st=awb` composed to `?g st=awb`,
+   * the prefix test failed 45 characters in, `isAutoClip` went false, and the
+   * 400-character clip was published as the description with every line break
+   * gone. The same applies to any advert written with `*bold*`.
+   *
+   * Comparing like with like is the fix: both sides get the substitution the
+   * parser already made, so the test asks the question it meant to ask — is
+   * this composed text just our own clipped copy of the advert?
+   */
+  const collapse = (text: string) =>
+    text
+      .replace(/[*_~]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   const isAutoClip =
     !!full &&
     !!written &&
