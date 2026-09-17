@@ -143,6 +143,20 @@ export function ImportUrlForm() {
   const ready = urlOk && !pending;
 
   /*
+   * The URL field is EMPTY and the paste carries no Facebook link either —
+   * distinct from `showUrlError`, which is a link that was typed and rejected.
+   *
+   * This state used to say nothing at all: `showUrlError` needs a non-empty
+   * field, so an operator who pasted the whole advert and reached for a button
+   * that reads "Create draft" got a dead control and no reason for it. The
+   * paste is the slow part of the job, so that is the worst possible moment to
+   * go silent. `source_url` is NOT NULL and is the provenance link the review
+   * screen and the owner's consent message are both built on, so the gate is
+   * real — it just has to say so.
+   */
+  const needsUrl = !urlOk && !showUrlError;
+
+  /*
    * `requestSubmit` and not a hand-built FormData, so the <form action> below
    * stays the only submit path. That keeps the screen working before React has
    * hydrated — a server action degrades to a plain POST, and an operator on a
@@ -218,7 +232,9 @@ export function ImportUrlForm() {
             ? 'Not a Facebook post link. Open the post itself and copy the address — a profile or group home page will not do.'
             : lifted
               ? 'Taken from what you pasted. Change it if it picked the wrong link.'
-              : 'The link to one post. Group, page and photo posts all work.'}
+              : needsUrl && hasText
+                ? 'Still needed — the post’s own link. Your pasted text is kept and saved with it.'
+                : 'The link to one post. Group, page and photo posts all work.'}
         </p>
       </div>
 
@@ -293,9 +309,18 @@ export function ImportUrlForm() {
             ? hasText
               ? 'Reading the advert. Don’t reload.'
               : 'Asking Facebook, then saving any photos. Don’t reload.'
-            : hasText
-              ? 'Facebook is not asked — your text is used as it is.'
-              : 'Facebook is asked first. Slow, and it usually refuses.'}
+            : /*
+               * Why the button is off comes BEFORE what it would cost. A
+               * disabled control that advertises how fast it is answers a
+               * question the operator is not asking yet.
+               */
+              showUrlError
+              ? 'Fix the post link above to continue.'
+              : needsUrl
+                ? 'Add the Facebook post link above to continue.'
+                : hasText
+                  ? 'Facebook is not asked — your text is used as it is.'
+                  : 'Facebook is asked first. Slow, and it usually refuses.'}
         </span>
       </div>
     </form>
