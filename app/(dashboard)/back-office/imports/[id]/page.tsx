@@ -12,7 +12,7 @@ import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
 import { detectSaleAd } from '@/lib/intake/parser/sale-ad';
 import { isIntakeConfigured } from '@/lib/intake/channels/whatsapp/config';
 import { whatsappTemplateName } from '@/lib/intake/channels/whatsapp/send';
-import { parsePayload, parsePhotoUrls } from '@/lib/imports/publish';
+import { importDescription, parsePayload, parsePhotoUrls } from '@/lib/imports/publish';
 import { ReviewForm } from './review-form';
 
 export const revalidate = 30;
@@ -328,7 +328,25 @@ export default async function ImportReviewPage({
         rawText={record.rawText ?? ''}
         parsed={{
           title: parsed.title,
-          description: parsed.description,
+          /*
+           * THE BOX SHOWS WHAT WILL PUBLISH, not the parser's working copy.
+           *
+           * `parsed.description` is composed from `normalize()`d text, so it is
+           * a single flattened line clipped to 400 characters with an ellipsis.
+           * `importDescription` is what actually reaches the listing — it
+           * prefers the raw advert, keeping every line break, then tidies and
+           * scrubs. Showing the operator the clipped version meant the screen
+           * disagreed with the result, and it was worse than cosmetic: editing
+           * that box made the clip real, because a hand-edited description is
+           * no longer a prefix of the raw text and `isAutoClip` goes false. The
+           * operator would have been correcting a typo and silently amputating
+           * the advert.
+           *
+           * Passing the resolved text through is idempotent — publishing runs
+           * the same function over it and the scrub and tidy are no-ops the
+           * second time.
+           */
+          description: importDescription(parsed.description, record.rawText),
           propertyType: parsed.propertyType,
           address: parsed.address,
           city: parsed.city,

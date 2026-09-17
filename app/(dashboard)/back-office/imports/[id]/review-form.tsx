@@ -331,13 +331,25 @@ export function ReviewForm({
 
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="description">Description</Label>
+            {/*
+              A pasted advert is one short line per feature, so it arrives with
+              twenty-odd of them. Five rows showed about a fifth of it and made
+              a complete description look truncated — the very thing this field
+              was reported for. `whitespace-pre-wrap` is belt-and-braces: a
+              textarea honours newlines anyway, but the class keeps that true if
+              this ever becomes a rendered preview.
+            */}
             <textarea
               id="description"
               name="description"
               defaultValue={parsed.description ?? ''}
-              rows={5}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-xs focus-visible:border-teal-500 focus-visible:outline-none"
+              rows={14}
+              className="w-full resize-y whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm leading-relaxed shadow-xs focus-visible:border-teal-500 focus-visible:outline-none"
             />
+            <p className="text-xs text-slate-500">
+              This is what will be published, line breaks and all. Phone numbers are
+              already removed — the owner&rsquo;s number belongs in the field below.
+            </p>
           </div>
         </fieldset>
 

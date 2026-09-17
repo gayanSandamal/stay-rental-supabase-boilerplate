@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
 import { extractOwnerName } from '@/lib/imports/extract';
 import { importDescription } from '@/lib/imports/publish';
+import { parseIntakeRules } from '@/lib/intake/parser/rule-parser';
 import { isAllowedImageHost } from '@/lib/imports/facebook/url';
 import { inviteCommentText, parseInviteReference } from '@/lib/imports/invite';
 
@@ -142,6 +143,84 @@ describe('the published description is the whole advert, not 400 characters of i
 
   it('falls back to the boilerplate when there is nothing at all', () => {
     expect(importDescription(null, null)).toMatch(/^Listed by Easy Rent/);
+  });
+});
+
+/**
+ * THE CLIP CAME BACK, THROUGH AN UNDERSCORE.
+ *
+ * Reported 2026-09-17 with a real Colombo 6 advert: the Description box showed
+ * one flattened line ending in an ellipsis. The block above had covered the clip
+ * since #97, but its fixture is plain prose — no `*`, `_` or `~`, and no line
+ * breaks — so it passed straight through the failure.
+ *
+ * `normalize()` in rule-parser.ts strips WhatsApp's formatting markers with
+ * `.replace(/[*_~]+/g, ' ')` BEFORE a description is composed. The advert opened
+ * with `maps.app.goo.gl/…?g_st=awb`, which composed to `?g st=awb`, so the
+ * composed text was not a literal prefix of the raw text; `isAutoClip` went
+ * false 45 characters in and published the 400-character clip with every line
+ * break gone.
+ *
+ * These drive the REAL parser rather than a hand-built composed string, because
+ * a hand-built one is how the original tests missed it.
+ */
+describe('an advert whose text carries WhatsApp formatting characters', () => {
+  const ADVERT = [
+    'https://maps.app.goo.gl/S5eXsDceHJwgzfB47?g_st=awb',
+    '3-Bedroom only 17 unit Apartment',
+    'Colombo6',
+    'Wellawatte North',
+    'next to Bampalapitiya boarder',
+    'Land side - quiet & peaceful',
+    'Peterson Garden',
+    '85 Peterson lane',
+    '1091.78 sqft',
+    'mid 4th floor',
+    'Lift',
+    'car park',
+    'security',
+    'Bright, airy, well ventilated',
+    'Near Cooray park with ground view with 51 feet balcony',
+    'walking distance to top Govt & private schools, St Peters,HC,RHLC,MLC,St Pauls',
+    '2 bathroom',
+    'master bedroom with AC, attached bathroom, hot water supply',
+    'kitchen with pantry',
+    '17years old building',
+    'fully renovated with brand new bathroom and kitchen sinks.',
+    '0777008462',
+  ].join('\n');
+
+  const published = () => importDescription(parseIntakeRules(ADVERT).description, ADVERT);
+
+  it('publishes the whole advert, not the 400-character clip', () => {
+    expect(published()).not.toMatch(/…$/);
+    expect(published()).toContain('kitchen with pantry');
+    expect(published()).toContain('17years old building');
+  });
+
+  it('keeps the line breaks the landlord wrote', () => {
+    expect(published().split('\n').length).toBeGreaterThan(10);
+  });
+
+  /*
+   * The underscore is the whole point of this block — an advert whose first
+   * line is a URL is ordinary, and every URL has one.
+   */
+  it('is not defeated by an underscore in a URL', () => {
+    expect(parseIntakeRules(ADVERT).description).toContain('?g st=awb');
+    expect(ADVERT).toContain('?g_st=awb');
+    expect(published().split('\n').length).toBeGreaterThan(10);
+  });
+
+  it('is not defeated by *bold* markers either', () => {
+    const bolded = ADVERT.replace('3-Bedroom', '*3-Bedroom*');
+    const out = importDescription(parseIntakeRules(bolded).description, bolded);
+    expect(out).not.toMatch(/…$/);
+    expect(out.split('\n').length).toBeGreaterThan(10);
+  });
+
+  it('still removes the phone number from the recovered text', () => {
+    expect(published()).not.toContain('0777008462');
   });
 });
 
