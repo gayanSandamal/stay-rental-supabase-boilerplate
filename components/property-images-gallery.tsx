@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import {
+  LISTING_PLACEHOLDER_ALT,
+  LISTING_PLACEHOLDER_IMAGE,
+} from '@/lib/listings/placeholder';
 
 interface PropertyImagesGalleryProps {
   images: string[];
@@ -211,8 +215,15 @@ export function PropertyImagesGallery({ images, title = 'Property' }: PropertyIm
 
   if (!images || images.length === 0) {
     return (
-      <div className="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center">
-        <p className="text-gray-500">No images available</p>
+      <div className="relative w-full h-96 rounded-lg overflow-hidden bg-slate-900">
+        <Image
+          src={LISTING_PLACEHOLDER_IMAGE}
+          alt={LISTING_PLACEHOLDER_ALT}
+          fill
+          priority
+          className="object-cover"
+          sizes="(max-width: 768px) 100vw, 768px"
+        />
       </div>
     );
   }

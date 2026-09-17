@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, Home, ArrowRight, Star, Clock, Building2, CalendarClock } from 'lucide-react';
+import { MapPin, Bed, Bath, Zap, Droplet, Wifi, ShieldCheck, Eye, ArrowRight, Star, Clock, Building2, CalendarClock } from 'lucide-react';
 import { PublisherInfo } from './publisher-info';
 import { TEMPORARY_RENTAL_HELP_TEXT } from '@/lib/forms/listing-form-config';
+import {
+  LISTING_PLACEHOLDER_ALT,
+  LISTING_PLACEHOLDER_IMAGE,
+} from '@/lib/listings/placeholder';
 import {
   VerificationBadges,
   VERIFIED_LISTING_LABEL,
@@ -75,19 +79,13 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
           <div className="flex flex-col md:flex-row gap-0">
             {/* Image */}
             <div className="md:w-64 h-52 md:h-auto relative flex-shrink-0 bg-slate-100">
-              {imageUrl ? (
-                <Image
-                  src={imageUrl}
-                  alt={listing.title || 'Property image'}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 256px"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
-                  <Home className="h-12 w-12 text-teal-300" />
-                </div>
-              )}
+              <Image
+                src={imageUrl ?? LISTING_PLACEHOLDER_IMAGE}
+                alt={imageUrl ? listing.title || 'Property image' : LISTING_PLACEHOLDER_ALT}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 256px"
+              />
               {(listing.verified || listing.visited || listing.kycVerified || isActiveUntil(listing.featuredUntil) || isActiveUntil(listing.boostedUntil) || isActiveUntil(listing.urgentUntil) || isAgencyLandlord(listing)) && (
                 <div className="absolute top-3 left-3 flex flex-wrap gap-1">
                   <VerificationBadges kycVerified={listing.kycVerified} variant="overlay" />
@@ -210,19 +208,13 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-250 overflow-hidden h-full flex flex-col">
         {/* Image */}
         <div className="relative h-52 bg-slate-100 flex-shrink-0">
-          {imageUrl ? (
-            <Image
-              src={imageUrl}
-              alt={listing.title || 'Property image'}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform duration-500"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-teal-100">
-              <Home className="h-16 w-16 text-teal-300" />
-            </div>
-          )}
+          <Image
+            src={imageUrl ?? LISTING_PLACEHOLDER_IMAGE}
+            alt={imageUrl ? listing.title || 'Property image' : LISTING_PLACEHOLDER_ALT}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
 
           {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
