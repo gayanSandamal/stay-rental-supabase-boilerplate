@@ -219,9 +219,14 @@ describe('the screen works on whatever device it is opened on', () => {
   /*
    * `required` must not fight the URL sitting in the paste: the browser would
    * block a submit the server would have handled, with no visible reason why.
+   *
+   * Since 0065 it must not fight the SOURCELESS path either — text with no post
+   * behind it is a legitimate import, not an incomplete form — so the attribute
+   * is flatly off and `createImportAction` refuses the genuinely empty case.
    */
-  it('only demands the URL box when the text carries no link', () => {
-    expect(form).toContain('required={!firstFacebookUrlIn(text)}');
+  it('never lets the browser block the submit on the URL box', () => {
+    expect(form).toContain('required={false}');
+    expect(form).not.toContain('required={!firstFacebookUrlIn(text)}');
   });
 
   /*

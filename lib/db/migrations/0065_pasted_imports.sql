@@ -1,0 +1,22 @@
+-- PASTED IMPORTS: an advert that never had a Facebook post behind it.
+--
+-- 0057 made source_url NOT NULL because every import came from a Facebook URL
+-- an operator pasted, and storing it even when the fetch failed is what lets
+-- anyone check a listing against the original later. That is still true of
+-- every Facebook import and nothing about them changes here.
+--
+-- What changes is that an operator can now paste the advert text on its own —
+-- a landlord who sent their details to the office, an advert from somewhere
+-- with no linkable post. There is no URL to store, and a fabricated one would
+-- be worse than none: `Original post` on the review screen would lead nowhere,
+-- and provenance that lies is worse than provenance that is absent.
+--
+-- source_platform is a varchar precisely so a new source needs no migration;
+-- 'pasted' is written by the application. Only the NOT NULL has to move.
+--
+-- Safe to replay: DROP NOT NULL on a column that is already nullable is a
+-- no-op, and no row is read or written. The plain (non-unique) index from 0057
+-- is left alone — Postgres treats NULLs as distinct, so many sourceless rows
+-- coexist fine.
+
+ALTER TABLE post_imports ALTER COLUMN source_url DROP NOT NULL;

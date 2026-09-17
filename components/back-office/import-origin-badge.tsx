@@ -15,7 +15,13 @@ export function ImportOriginBadge({ origin }: { origin: ListingOrigin }) {
   return (
     <Badge
       variant="outline"
-      title={`${origin.sourceUrl} — ${resolvedViaLabel(origin.resolvedVia)}`}
+      /* A pasted import has no source URL; interpolating it raw put the string
+         "null" in front of the operator (0065). */
+      title={
+        origin.sourceUrl
+          ? `${origin.sourceUrl} — ${resolvedViaLabel(origin.resolvedVia)}`
+          : `No original post — ${resolvedViaLabel(origin.resolvedVia)}`
+      }
     >
       <Download />
       {originLabel(origin)}

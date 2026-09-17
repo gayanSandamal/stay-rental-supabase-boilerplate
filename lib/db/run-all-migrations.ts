@@ -67,6 +67,7 @@ const MIGRATIONS = [
   '0062_social_post_metrics.sql',
   '0063_temporary_rental_flag.sql',
   '0064_broker_pivot.sql',
+  '0065_pasted_imports.sql',
 ];
 
 function splitStatements(sql: string): string[] {

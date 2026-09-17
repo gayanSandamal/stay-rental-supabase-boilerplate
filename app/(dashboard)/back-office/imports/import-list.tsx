@@ -13,7 +13,8 @@ import { shortAge, fullTimestamp } from '@/lib/back-office/format';
 
 export type ImportRow = {
   id: number;
-  sourceUrl: string;
+  /** Null for a pasted import — there is no post to link to (migration 0065). */
+  sourceUrl: string | null;
   sourcePlatform: string;
   resolvedVia: string;
   status: string;
@@ -31,6 +32,13 @@ const VIA_LABELS: Record<string, string> = {
   graph: 'full post',
   og: 'preview only',
   manual: 'pasted by hand',
+};
+
+const PLATFORM_LABELS: Record<string, string> = {
+  facebook_group: 'Facebook group',
+  facebook_page: 'Facebook page',
+  /** No post behind it — an advert typed or pasted straight in (0065). */
+  pasted: 'Pasted advert',
 };
 
 /**
@@ -75,18 +83,25 @@ export function ImportList({ rows }: { rows: ImportRow[] }) {
             </TableCell>
 
             <TableCell className="text-sm">
-              <div className="text-slate-700">
-                {row.sourcePlatform === 'facebook_group' ? 'Facebook group' : 'Facebook page'}
-              </div>
-              <a
-                href={row.sourceUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="mt-0.5 flex items-center gap-1 text-xs text-slate-500 hover:underline"
-              >
-                {VIA_LABELS[row.resolvedVia] ?? row.resolvedVia}
-                <ExternalLink className="h-3 w-3" />
-              </a>
+              <div className="text-slate-700">{PLATFORM_LABELS[row.sourcePlatform] ?? row.sourcePlatform}</div>
+              {/*
+                A pasted import has no post to open. Rendering the anchor anyway
+                would give the operator a link that navigates nowhere and imply a
+                source we do not have — the row states how it arrived instead.
+              */}
+              {row.sourceUrl ? (
+                <a
+                  href={row.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-0.5 flex items-center gap-1 text-xs text-slate-500 hover:underline"
+                >
+                  {VIA_LABELS[row.resolvedVia] ?? row.resolvedVia}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <div className="mt-0.5 text-xs text-slate-500">no original post</div>
+              )}
             </TableCell>
 
             <TableCell className="text-sm">

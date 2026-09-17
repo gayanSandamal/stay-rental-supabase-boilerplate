@@ -99,10 +99,42 @@ export async function createImportAction(formData: FormData): Promise<void> {
    * candidate through parseFacebookUrl, the same allowlist the typed box gets.
    */
   const url = typedUrl || firstFacebookUrlIn(pastedText) || '';
-  if (!url) redirect(`${BASE_PATH}/new?error=no_url`);
+
+  /*
+   * NO URL AND NO TEXT is the only dead end left. With one of the two there is
+   * something to build a draft from; with neither there is nothing at all, and
+   * the screen says so rather than creating an empty row.
+   */
+  if (!url && !pastedText) redirect(`${BASE_PATH}/new?error=no_input`);
 
   let resolved;
-  if (pastedText) {
+  if (!url) {
+    /*
+     * A PASTED IMPORT — the advert text on its own, with no post behind it.
+     * Typically a landlord who sent their details to the office directly.
+     *
+     * `sourceUrl` stays null rather than taking a placeholder: `Original post`
+     * has to lead somewhere or not be offered, and provenance that lies is
+     * worse than provenance that is absent. Nothing here is fetched, so the
+     * SSRF surface the allowlist guards is not widened — there is no URL to
+     * dereference. Photos are added by hand on the review screen, the same as
+     * for a group post Facebook refused to serve.
+     *
+     * Consent is NOT relaxed. `assertImportConsent` still gates publishing;
+     * what changes is only which channel can obtain it, because the approved
+     * consent template says "we found your rental advert ... on Facebook" and
+     * that sentence is false here. See publishImportAction.
+     */
+    resolved = {
+      canonicalUrl: null,
+      platform: 'pasted' as const,
+      resolvedVia: 'manual' as const,
+      text: pastedText,
+      imageUrls: [] as string[],
+      authorName: null,
+      note: null,
+    };
+  } else if (pastedText) {
     try {
       resolved = resolveFromPastedText(url, pastedText);
     } catch {
@@ -374,6 +406,26 @@ export async function publishImportAction(formData: FormData): Promise<void> {
   }
   if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
     redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  /*
+   * A PASTED IMPORT CANNOT BE ASKED WITH THIS TEMPLATE.
+   *
+   * `CONSENT_TEMPLATE_TEXT` reads "we found your rental advert for X on
+   * Facebook". That sentence is the premise of the whole message, and for an
+   * advert with no post behind it, it is false — we would be opening a request
+   * for someone's consent with a claim about where we got their property that
+   * is not true. It is also the text registered with Meta, so it cannot be
+   * varied per import without re-registering and breaking delivery for every
+   * recipient at once.
+   *
+   * So the sourceless path gets consent the honest way or not at all:
+   * `publishManualConsentAction`, where an operator attests that the owner
+   * already agreed — which is the normal case for an advert the owner sent to
+   * the office themselves. `assertImportConsent` is untouched and still the
+   * one gate; only the channel is narrowed.
+   */
+  if (!saved.sourceUrl) {
+    redirect(`${BASE_PATH}/${id}?error=pasted_needs_manual_consent`);
   }
   if (saved.consentRequestedAt) {
     // Asking twice is how a stranger's polite silence becomes harassment, and

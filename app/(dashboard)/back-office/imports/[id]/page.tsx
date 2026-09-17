@@ -97,6 +97,20 @@ const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = 
     title: 'Could not send the consent request',
     detail: 'Nothing was published. Try again; if it repeats, check the server logs.',
   },
+  /*
+   * The approved consent template opens "we found your rental advert … on
+   * Facebook". For a pasted advert that is untrue, and the wording is
+   * registered with Meta so it cannot be varied for one import. The honest
+   * route is the operator's own attestation — which needs
+   * allowManualImportConsent, OFF by default, so the message names it rather
+   * than leaving the draft in a dead end.
+   */
+  pasted_needs_manual_consent: {
+    ok: false,
+    title: 'A pasted advert cannot be asked over WhatsApp',
+    detail:
+      'The approved consent template tells the owner we found their advert on Facebook, which is not true here. Confirm the owner already agreed instead — that needs “Manual consent for Facebook imports” switched on in Back Office → Settings.',
+  },
   published: {
     ok: true,
     title: 'Published',
@@ -214,14 +228,20 @@ export default async function ImportReviewPage({
         summary={
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={record.status} />
-            <a
-              href={record.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-1 hover:underline"
-            >
-              Original post <ExternalLink className="h-3 w-3" />
-            </a>
+            {/* A pasted advert has no original post; say so rather than
+                offering a link that goes nowhere. */}
+            {record.sourceUrl ? (
+              <a
+                href={record.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1 hover:underline"
+              >
+                Original post <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : (
+              <span className="text-slate-500">Pasted advert — no original post</span>
+            )}
             {record.listingId && (
               <Link
                 href={`/dashboard/listings/${record.listingId}`}

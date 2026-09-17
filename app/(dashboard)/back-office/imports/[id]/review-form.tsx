@@ -85,6 +85,8 @@ export function ReviewForm({
   allowManualConsent: boolean;
 }) {
   const [pending, start] = useTransition();
+  /** No Facebook post behind this one — see the consent note below (0065). */
+  const isPasted = sourcePlatform === 'pasted';
   const [photoUrls, setPhotoUrls] = useState<string[]>(photos);
   const [manualConsentAttested, setManualConsentAttested] = useState(false);
   const [phone, setPhone] = useState(ownerPhone ?? '');
@@ -568,18 +570,38 @@ export function ReviewForm({
 
         {!locked && (
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
-            <Button
-              type="submit"
-              formAction={(fd) => start(() => publishImportAction(fd))}
-              disabled={missing.length > 0 || pending}
-            >
-              {pending ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-1.5 h-4 w-4" />
-              )}
-              Ask the owner for consent
-            </Button>
+            {/*
+              A PASTED ADVERT IS NEVER OFFERED THE WHATSAPP ASK. The approved
+              template opens by telling the owner we found their advert on
+              Facebook, and for an import with no post behind it that is untrue;
+              the wording is registered with Meta, so it cannot be softened for
+              one send. `publishImportAction` refuses this server-side too —
+              hiding a button is not a gate — but an operator should not have to
+              click something to find out it was never available to them.
+            */}
+            {!isPasted && (
+              <Button
+                type="submit"
+                formAction={(fd) => start(() => publishImportAction(fd))}
+                disabled={missing.length > 0 || pending}
+              >
+                {pending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-1.5 h-4 w-4" />
+                )}
+                Ask the owner for consent
+              </Button>
+            )}
+
+            {isPasted && !allowManualConsent && (
+              <p className="text-sm text-amber-900">
+                This advert has no Facebook post, so the owner cannot be asked with
+                the approved template. Switch on{' '}
+                <strong>Manual consent for Facebook imports</strong> in Back Office →
+                Settings to publish it on your own attestation.
+              </p>
+            )}
 
             {allowManualConsent && (
               <Button
