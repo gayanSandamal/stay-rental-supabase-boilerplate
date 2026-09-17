@@ -8,16 +8,18 @@
  */
 
 export interface ListingOrigin {
-  /** facebook_group | facebook_page */
+  /** facebook_group | facebook_page | pasted */
   platform: string;
   /** graph | og | manual — how much of it Facebook actually gave us. */
   resolvedVia: string;
-  sourceUrl: string;
+  /** Null for a pasted import: no post lies behind it (migration 0065). */
+  sourceUrl: string | null;
   importId: number;
 }
 
 /** The label an operator reads. Kept here so every screen says the same thing. */
 export function originLabel(origin: ListingOrigin): string {
+  if (origin.platform === 'pasted') return 'Imported · pasted advert';
   return origin.platform === 'facebook_group'
     ? 'Imported · Facebook group'
     : 'Imported · Facebook page';

@@ -60,7 +60,9 @@ export default async function NewImportPage({
         <p className="text-sm text-slate-600">
           Paste the post&rsquo;s <span className="font-medium text-slate-900">text</span> as
           well as its link and the draft is ready at once. Link alone means waiting on
-          Facebook, which usually refuses.
+          Facebook, which usually refuses.{' '}
+          <span className="font-medium text-slate-900">Text alone works too</span> — for an
+          advert a landlord sent you directly, with no post behind it.
         </p>
 
         <ImportUrlForm />

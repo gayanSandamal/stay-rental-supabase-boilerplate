@@ -140,21 +140,26 @@ export function ImportUrlForm() {
   const showUrlError = url.trim().length > 0 && !urlOk;
 
   const hasText = text.trim().length > 0;
-  const ready = urlOk && !pending;
 
   /*
-   * The URL field is EMPTY and the paste carries no Facebook link either —
-   * distinct from `showUrlError`, which is a link that was typed and rejected.
+   * EITHER input is enough. A link alone asks Facebook; text alone makes a
+   * pasted import with no post behind it (migration 0065, `source_url` is now
+   * nullable). Only an empty screen has nothing to build a draft from.
    *
-   * This state used to say nothing at all: `showUrlError` needs a non-empty
-   * field, so an operator who pasted the whole advert and reached for a button
-   * that reads "Create draft" got a dead control and no reason for it. The
-   * paste is the slow part of the job, so that is the worst possible moment to
-   * go silent. `source_url` is NOT NULL and is the provenance link the review
-   * screen and the owner's consent message are both built on, so the gate is
-   * real — it just has to say so.
+   * This used to be `urlOk` alone, which meant an operator who had pasted a
+   * whole advert faced a dead button and — until the message added below it —
+   * no reason for it. A typed-but-malformed link still blocks, because that is
+   * a mistake to fix rather than an input to do without: silently ignoring it
+   * would drop provenance the operator believed they had supplied.
    */
-  const needsUrl = !urlOk && !showUrlError;
+  const ready = (urlOk || (hasText && !showUrlError)) && !pending;
+
+  /*
+   * Text pasted with no post link. Not an error — it is the sourceless path —
+   * but the operator should know what they are about to create, because it is
+   * the one kind of import the WhatsApp consent template cannot be used for.
+   */
+  const pastedOnly = hasText && !urlOk && !showUrlError;
 
   /*
    * `requestSubmit` and not a hand-built FormData, so the <form action> below
@@ -177,7 +182,10 @@ export function ImportUrlForm() {
     >
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="sourceUrl">Facebook post URL</Label>
+          <Label htmlFor="sourceUrl">
+            Facebook post URL{' '}
+            <span className="font-normal text-slate-500">— optional</span>
+          </Label>
           {canPaste && (
             <button
               type="button"
@@ -213,11 +221,14 @@ export function ImportUrlForm() {
           spellCheck={false}
           enterKeyHint="next"
           /*
-           * Required only when the text does not already carry the link.
-           * A flat `required` would have the browser block a submit whose URL
-           * is sitting in the paste below, which the server lifts out anyway.
+           * Never `required`. The browser would block a submit whose URL is
+           * sitting in the paste below (which the server lifts out anyway),
+           * and since 0065 it would also block the sourceless path outright —
+           * text with no post behind it is a legitimate import, not an
+           * incomplete form. `createImportAction` refuses the genuinely empty
+           * case, where there is neither a link nor a word of advert.
            */
-          required={!firstFacebookUrlIn(text)}
+          required={false}
           placeholder="https://www.facebook.com/groups/…/posts/…"
           disabled={pending}
           aria-invalid={showUrlError}
@@ -232,8 +243,8 @@ export function ImportUrlForm() {
             ? 'Not a Facebook post link. Open the post itself and copy the address — a profile or group home page will not do.'
             : lifted
               ? 'Taken from what you pasted. Change it if it picked the wrong link.'
-              : needsUrl && hasText
-                ? 'Still needed — the post’s own link. Your pasted text is kept and saved with it.'
+              : pastedOnly
+                ? 'Leave it empty if there is no post — the advert below is enough.'
                 : 'The link to one post. Group, page and photo posts all work.'}
         </p>
       </div>
@@ -316,8 +327,8 @@ export function ImportUrlForm() {
                */
               showUrlError
               ? 'Fix the post link above to continue.'
-              : needsUrl
-                ? 'Add the Facebook post link above to continue.'
+              : pastedOnly
+                ? 'No post link — saved as a pasted advert. You will confirm the owner agreed.'
                 : hasText
                   ? 'Facebook is not asked — your text is used as it is.'
                   : 'Facebook is asked first. Slow, and it usually refuses.'}

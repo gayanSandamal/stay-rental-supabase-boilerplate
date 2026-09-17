@@ -784,9 +784,17 @@ export const postImports = pgTable('post_imports', {
    * The pasted URL, normalised. Operator input that the SERVER dereferences —
    * never fetched without passing the host allowlist in
    * lib/imports/facebook/url.ts first.
+   *
+   * NULL for a pasted import (migration 0065): the operator typed or pasted
+   * the advert itself and there is no post behind it. A placeholder URL would
+   * be worse — `Original post` would lead nowhere, and provenance that lies is
+   * worse than provenance that is absent. Every reader must handle null.
    */
-  sourceUrl: text('source_url').notNull(),
-  /** facebook_group | facebook_page. Text, so a new source needs no migration. */
+  sourceUrl: text('source_url'),
+  /**
+   * facebook_group | facebook_page | pasted. Text, so a new source needs no
+   * migration. 'pasted' is the one value with no sourceUrl.
+   */
   sourcePlatform: varchar('source_platform', { length: 32 })
     .notNull()
     .default('facebook_page'),
