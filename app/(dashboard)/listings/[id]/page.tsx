@@ -35,7 +35,12 @@ import { db } from '@/lib/db/drizzle';
 import { businessAccountMembers, businessAccounts, users, landlords } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { Metadata } from 'next';
-import { getFirstListingPhoto } from '@/lib/seo';
+import { getFirstListingPhoto, absoluteUrl } from '@/lib/seo';
+import {
+  LISTING_PLACEHOLDER_ALT,
+  LISTING_PLACEHOLDER_IMAGE,
+  LISTING_PLACEHOLDER_SIZE,
+} from '@/lib/listings/placeholder';
 import { jsonLdHtml, breadcrumbList, isListingAvailable } from '@/lib/seo/jsonld';
 import Link from 'next/link';
 
@@ -67,7 +72,21 @@ export async function generateMetadata({
 
   const description = `${listing.bedrooms} bed rental in ${listing.city}${listing.district ? `, ${listing.district}` : ''} - LKR ${Number(listing.rentPerMonth).toLocaleString()}/month. ${listing.description?.slice(0, 140) ?? ''}`;
   const listingUrl = `${baseUrl}/listings/${listing.id}`;
+  /**
+   * A share card with no image previews badly everywhere, so a listing whose
+   * landlord has not uploaded a photo falls back to the branded placeholder.
+   * This is the OG card only — `jsonld.ts` deliberately emits no `image` for
+   * such a listing, because there `image` claims to be a photo OF the property.
+   */
   const firstPhoto = getFirstListingPhoto(listing.photos);
+  const ogImage = firstPhoto
+    ? { url: firstPhoto, width: 1200, height: 630, alt: listing.title }
+    : {
+        url: absoluteUrl(LISTING_PLACEHOLDER_IMAGE),
+        width: LISTING_PLACEHOLDER_SIZE.width,
+        height: LISTING_PLACEHOLDER_SIZE.height,
+        alt: LISTING_PLACEHOLDER_ALT,
+      };
 
   return {
     title: listing.title,
@@ -81,15 +100,13 @@ export async function generateMetadata({
       type: 'website',
       url: listingUrl,
       siteName: 'Easy Rent',
-      images: firstPhoto
-        ? [{ url: firstPhoto, width: 1200, height: 630, alt: listing.title }]
-        : undefined,
+      images: [ogImage],
     },
     twitter: {
       card: 'summary_large_image',
       title: listing.title,
       description,
-      images: firstPhoto ? [firstPhoto] : undefined,
+      images: [ogImage.url],
     },
   };
 }
