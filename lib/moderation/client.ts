@@ -6,7 +6,12 @@
  * on transient failures only, and tolerant JSON extraction.
  */
 
-import { MODERATION_API_BASE, MODERATION_TIMEOUT_MS, moderationApiKey } from './config';
+import {
+  MODERATION_API_BASE,
+  MODERATION_MIN_CALL_MS,
+  MODERATION_TIMEOUT_MS,
+  moderationApiKey,
+} from './config';
 
 export interface ChatImage {
   /** Raw image bytes; sent as a base64 data URL. */
@@ -51,6 +56,14 @@ export async function chatJson<T>(opts: {
   user: string;
   images?: ChatImage[];
   maxTokens?: number;
+  /**
+   * Epoch ms by which this call must have returned. Each attempt gets only the
+   * time left (capped at MODERATION_TIMEOUT_MS), and an attempt with less than
+   * MODERATION_MIN_CALL_MS left is not made: the call fails `out_of_time`,
+   * which the caller treats like any provider error. Without it a slow
+   * provider pushed whole runs past Vercel's 60s limit.
+   */
+  deadline?: number;
 }): Promise<ChatCallResult<T>> {
   const apiKey = moderationApiKey();
   if (!apiKey) return { data: null, usage: { inputTokens: 0, outputTokens: 0 }, error: 'not_configured' };
@@ -76,8 +89,16 @@ export async function chatJson<T>(opts: {
     response_format: { type: 'json_object' },
   });
 
+  const deadline = opts.deadline ?? Number.POSITIVE_INFINITY;
   let lastError = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining < MODERATION_MIN_CALL_MS) {
+      // A retry that cannot finish is worse than none: report the first
+      // attempt's error, or out_of_time when there was no first attempt.
+      if (attempt === 0) lastError = 'out_of_time';
+      break;
+    }
     try {
       const res = await fetch(`${MODERATION_API_BASE}/chat/completions`, {
         method: 'POST',
@@ -86,7 +107,7 @@ export async function chatJson<T>(opts: {
           authorization: `Bearer ${apiKey}`,
         },
         body,
-        signal: AbortSignal.timeout(MODERATION_TIMEOUT_MS),
+        signal: AbortSignal.timeout(Math.min(MODERATION_TIMEOUT_MS, remaining)),
       });
 
       if (!res.ok) {

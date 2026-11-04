@@ -113,6 +113,8 @@ export async function checkImage(args: {
   originalUrl: string;
   contentHash: string;
   bytes: Buffer;
+  /** Epoch ms the provider calls must finish by — see chatJson. */
+  deadline?: number;
 }): Promise<ImageCheckOutcome> {
   const { originalUrl, contentHash, bytes } = args;
   const usage = { inputTokens: 0, outputTokens: 0 };
@@ -173,6 +175,7 @@ export async function checkImage(args: {
     user: 'Inspect this photo and return the JSON object.',
     images: [prepared],
     maxTokens: 400,
+    deadline: args.deadline,
   });
   usage.inputTokens += gate.usage.inputTokens;
   usage.outputTokens += gate.usage.outputTokens;
@@ -204,9 +207,21 @@ export async function checkImage(args: {
       user: 'Settle the questions for this photo and return the JSON object.',
       images: [prepared],
       maxTokens: 400,
+      deadline: args.deadline,
     });
     usage.inputTokens += adj.usage.inputTokens;
     usage.outputTokens += adj.usage.outputTokens;
+    if (adj.error === 'out_of_time') {
+      // Ran out of clock before the adjudicator could look. Falling through
+      // would judge (and CACHE, permanently) the gate's "text was added" claim
+      // unadjudicated — the exact false positive tier 2 exists to prevent. Leave
+      // the photo unjudged instead; the next run asks again from the cache-miss.
+      return {
+        verdict: { originalUrl, contentHash, verdict: 'pass', reasons: [], fromCache: false },
+        usage,
+        error: adj.error,
+      };
+    }
     if (adj.data) {
       adjudicated = true;
       // The adjudicator settles the added-vs-photographed text question only.
