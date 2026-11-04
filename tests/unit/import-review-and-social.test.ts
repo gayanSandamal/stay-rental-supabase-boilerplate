@@ -116,7 +116,8 @@ describe('origin lookups are batched', () => {
       'app/(dashboard)/back-office/moderation/page.tsx',
       'app/(dashboard)/back-office/listings/page.tsx',
     ]) {
-      expect(code(file), file).toContain('importOriginsFor(rows.map((r) => r.id))');
+      // `r.id`, or `r.listing.id` where the row also carries joined columns.
+      expect(code(file), file).toMatch(/importOriginsFor\(rows\.map\(\(r\) => r(\.listing)?\.id\)\)/);
     }
   });
 });
