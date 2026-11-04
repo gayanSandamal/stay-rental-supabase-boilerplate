@@ -8,6 +8,7 @@ import { getUser } from '@/lib/db/queries';
 import { getFeatureValue } from '@/lib/feature-flags';
 import { logListingAction } from '@/lib/db/audit-logger';
 import { PROMPT_VERSION } from '@/lib/moderation/prompts';
+import { activationExpiresAt } from '@/lib/listings/activation-expiry';
 import {
   adoptOrphanPhotos,
   derivePhotos,
@@ -58,7 +59,7 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
       photos: publishable.length ? JSON.stringify(publishable) : null,
       moderationSummary: `Published by ${user.role} override`,
       publishedAt: listing.publishedAt ?? now,
-      expiresAt: listing.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
+      expiresAt: activationExpiresAt(listing.expiresAt, now, days),
       moderationLeaseUntil: null,
       updatedAt: now,
     })
