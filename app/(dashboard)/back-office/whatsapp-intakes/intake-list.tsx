@@ -24,7 +24,18 @@ import { BulkIntakeActions } from './bulk-intake-actions';
 
 export type IntakeRow = {
   id: number;
+  /** The raw `whatsapp_intakes.status`. Drives which actions apply. */
   status: string;
+  /**
+   * What the screen shows (`lib/intake/display-state.ts`). For a `published`
+   * intake this is the LISTING's real state — `live`, `awaiting_review`,
+   * `expired`… — never the bare word "published", which only means the
+   * intake created a listing.
+   */
+  state: string;
+  listingStatus: string | null;
+  moderationStatus: string | null;
+  moderationSummary: string | null;
   channel: string;
   profileName: string | null;
   fromNumber: string;
@@ -39,6 +50,24 @@ export type IntakeRow = {
   replyLanguage: string | null;
   lastMessageAt: string;
 };
+
+/** One line under an awaiting-review badge: who it is waiting on. */
+function reviewNote(row: IntakeRow): string | null {
+  if (row.state !== 'awaiting_review') return null;
+  switch (row.moderationStatus) {
+    case 'queued':
+    case 'running':
+      return 'moderation queued';
+    case 'held':
+      return 'held by moderation';
+    case 'error':
+      return 'moderation failed';
+    case 'passed':
+      return 'passed, needs approval';
+    default:
+      return 'needs approval';
+  }
+}
 
 function parseAsked(raw: string | null): string[] {
   try {
@@ -122,7 +151,15 @@ export function IntakeList({ rows }: { rows: IntakeRow[] }) {
 
                 <TableCell>
                   <div className="flex flex-col items-start gap-1">
-                    <StatusBadge status={row.status} />
+                    <StatusBadge status={row.state} />
+                    {reviewNote(row) && (
+                      <span
+                        className="text-[11px] text-slate-500"
+                        title={row.moderationSummary ?? undefined}
+                      >
+                        {reviewNote(row)}
+                      </span>
+                    )}
                     {row.needsInfoRounds > 0 && (
                       <span className="text-[11px] text-slate-500 tabular-nums">
                         asked {row.needsInfoRounds}×
@@ -203,13 +240,26 @@ export function IntakeList({ rows }: { rows: IntakeRow[] }) {
         {open && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={open.status} />
+              <StatusBadge status={open.state} />
               <Badge variant="outline">{open.channel}</Badge>
               {open.replyLanguage && <Badge variant="neutral">{open.replyLanguage}</Badge>}
               <span className="text-xs text-slate-500">
                 {fullTimestamp(open.lastMessageAt)}
               </span>
             </div>
+
+            {open.state === 'awaiting_review' && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                <h3 className="text-xs font-semibold text-sky-900">
+                  Listing #{open.listingId} is not live yet
+                </h3>
+                <p className="mt-1 text-xs text-sky-800">
+                  {reviewNote(open)}
+                  {open.moderationSummary ? ` — ${open.moderationSummary}` : ''}. Approve
+                  it from the listing page or Back Office → Moderation.
+                </p>
+              </div>
+            )}
 
             {open.failureReason && (
               <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">

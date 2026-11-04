@@ -61,6 +61,11 @@ const STATUS_TONE: Record<string, VariantProps<typeof badgeVariants>["variant"]>
   published: "ok",
   manual_review: "danger",
   rejected: "inert",
+  // intake, by its listing's state (lib/intake/display-state.ts)
+  live: "ok",
+  awaiting_review: "queued",
+  listing_rejected: "inert",
+  no_listing: "warn",
   // listing
   active: "ok",
   pending: "queued",

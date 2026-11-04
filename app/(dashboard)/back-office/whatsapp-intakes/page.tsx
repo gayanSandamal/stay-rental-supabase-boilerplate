@@ -1,8 +1,9 @@
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
-import { whatsappIntakes } from '@/lib/db/schema';
+import { listings, whatsappIntakes } from '@/lib/db/schema';
 import { NEEDS_INFO_MAX_ROUNDS } from '@/lib/intake/accumulator';
-import { and, asc, count, desc, eq, gte, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
+import { CLOSED_STATES, intakeDisplayStateSql } from '@/lib/intake/display-state';
+import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import { MessageCircle, UserRoundSearch } from 'lucide-react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/back-office/page-header';
@@ -29,15 +30,34 @@ export const maxDuration = 60;
 
 const BASE_PATH = '/back-office/whatsapp-intakes';
 
-const TABS = ['needs_human', 'talking', 'published', 'rejected', 'all'] as const;
+/*
+ * There is no "Published" tab. `whatsapp_intakes.status = 'published'` only
+ * means the intake CREATED its listing — which may still be `pending` behind
+ * moderation — so those intakes are split by the listing's real state
+ * (`lib/intake/display-state.ts`): live, awaiting review, or off the market.
+ */
+const TABS = [
+  'needs_human',
+  'talking',
+  'awaiting_review',
+  'live',
+  'closed',
+  'rejected',
+  'all',
+] as const;
 
 const TAB_LABELS: Record<string, string> = {
   needs_human: 'Needs a human',
   talking: 'In conversation',
-  published: 'Published',
+  awaiting_review: 'Awaiting review',
+  live: 'Live',
+  closed: 'Off the market',
   rejected: 'Rejected',
   all: 'All',
 };
+
+/** Requires `whatsapp_intakes LEFT JOIN listings` — see `intakeDisplayStateSql`. */
+const displayState = intakeDisplayStateSql();
 
 /**
  * An intake the bot has given up on: it either failed outright, or we already
@@ -65,8 +85,12 @@ function tabCondition(tab: string): SQL | undefined {
           lt(whatsappIntakes.needsInfoRounds, NEEDS_INFO_MAX_ROUNDS)
         )
       );
-    case 'published':
-      return eq(whatsappIntakes.status, 'published');
+    case 'awaiting_review':
+      return sql`${displayState} = 'awaiting_review'`;
+    case 'live':
+      return sql`${displayState} = 'live'`;
+    case 'closed':
+      return inArray(displayState, [...CLOSED_STATES]);
     case 'rejected':
       return eq(whatsappIntakes.status, 'rejected');
     default:
@@ -139,17 +163,22 @@ export default async function WhatsAppIntakesPage({
       .select({
         needsHuman: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'manual_review' or (${whatsappIntakes.status} = 'needs_info' and ${whatsappIntakes.needsInfoRounds} >= ${NEEDS_INFO_MAX_ROUNDS}))`,
         talking: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'received' or (${whatsappIntakes.status} = 'needs_info' and ${whatsappIntakes.needsInfoRounds} < ${NEEDS_INFO_MAX_ROUNDS}))`,
-        published: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'published')`,
+        awaitingReview: sql<number>`count(*) filter (where ${displayState} = 'awaiting_review')`,
+        live: sql<number>`count(*) filter (where ${displayState} = 'live')`,
+        closed: sql<number>`count(*) filter (where ${inArray(displayState, [...CLOSED_STATES])})`,
         rejected: sql<number>`count(*) filter (where ${whatsappIntakes.status} = 'rejected')`,
         all: sql<number>`count(*)`,
       })
       .from(whatsappIntakes)
+      .leftJoin(listings, eq(listings.id, whatsappIntakes.listingId))
   );
 
   const counts = {
     needs_human: Number(tallies?.needsHuman ?? 0),
     talking: Number(tallies?.talking ?? 0),
-    published: Number(tallies?.published ?? 0),
+    awaiting_review: Number(tallies?.awaitingReview ?? 0),
+    live: Number(tallies?.live ?? 0),
+    closed: Number(tallies?.closed ?? 0),
     rejected: Number(tallies?.rejected ?? 0),
     all: Number(tallies?.all ?? 0),
   };
@@ -162,23 +191,43 @@ export default async function WhatsAppIntakesPage({
       ? [asc(whatsappIntakes.lastMessageAt)]
       : [desc(whatsappIntakes.lastMessageAt)];
 
+  /*
+   * The listing's state is JOINED, never looked up per row — one query per
+   * page whatever its size (the max: 1 pool wedges under concurrent queries).
+   */
   const rows = await phase('intakes:rows', () =>
-    db.query.whatsappIntakes.findMany({
-      where,
-      orderBy,
-      limit: params.perPage,
-      offset: params.offset,
-    })
+    db
+      .select({
+        intake: whatsappIntakes,
+        state: displayState,
+        listingStatus: listings.status,
+        moderationStatus: listings.moderationStatus,
+        moderationSummary: listings.moderationSummary,
+      })
+      .from(whatsappIntakes)
+      .leftJoin(listings, eq(listings.id, whatsappIntakes.listingId))
+      .where(where)
+      .orderBy(...orderBy)
+      .limit(params.perPage)
+      .offset(params.offset)
   );
   const totalRows = await phase('intakes:total', () =>
-    db.select({ n: count() }).from(whatsappIntakes).where(where)
+    db
+      .select({ n: count() })
+      .from(whatsappIntakes)
+      .leftJoin(listings, eq(listings.id, whatsappIntakes.listingId))
+      .where(where)
   );
 
   const total = Number(totalRows[0]?.n ?? 0);
 
-  const intakes: IntakeRow[] = rows.map((intake) => ({
+  const intakes: IntakeRow[] = rows.map(({ intake, ...listing }) => ({
     id: intake.id,
     status: intake.status,
+    state: listing.state,
+    listingStatus: listing.listingStatus,
+    moderationStatus: listing.moderationStatus,
+    moderationSummary: listing.moderationSummary,
     channel: intake.channel,
     profileName: intake.profileName,
     fromNumber: intake.fromNumber,
