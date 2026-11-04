@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Shield, Eye, CheckCircle, XCircle } from 'lucide-react';
 import { Listing } from '@/lib/db/schema';
 import { RejectListingModal } from './reject-listing-modal';
+import { statusChangeFor, statusOptions } from '@/lib/listings/status-change';
 
 interface ListingApprovalFormProps {
   listing: Listing;
@@ -70,8 +71,13 @@ export function ListingApprovalForm({ listing }: ListingApprovalFormProps) {
     });
   };
 
+  // Active and Rejected take the same paths as the buttons below — see
+  // lib/listings/status-change.ts for why the dropdown may not shortcut them.
   const handleStatusChange = (newStatus: string) => {
-    handleUpdate({ status: newStatus });
+    const change = statusChangeFor(listing.status, newStatus);
+    if (change.kind === 'approve') handleApprove();
+    else if (change.kind === 'reject') setShowRejectModal(true);
+    else if (change.kind === 'update') handleUpdate({ status: change.status });
   };
 
   return (
@@ -89,11 +95,11 @@ export function ListingApprovalForm({ listing }: ListingApprovalFormProps) {
               disabled={isUpdating}
               className="w-full mt-1 h-9 rounded-md border border-gray-300 px-3 py-1 text-sm"
             >
-              <option value="pending">Pending</option>
-              <option value="active">Active</option>
-              <option value="rented">Rented</option>
-              <option value="archived">Archived</option>
-              <option value="rejected">Rejected</option>
+              {statusOptions(listing.status).map((o) => (
+                <option key={o.value} value={o.value} disabled={o.disabled}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </div>
 
