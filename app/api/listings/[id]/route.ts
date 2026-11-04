@@ -195,10 +195,12 @@ export async function PATCH(
     });
 
     // Send email notifications for status changes (non-blocking)
+    let landlordName: string | null = null;
     if (listing.landlord) {
       const landlordUser = await db.query.users.findFirst({
         where: eq(users.id, listing.landlord.userId),
       });
+      landlordName = landlordUser?.name ?? null;
 
       if (landlordUser) {
         if (status === 'active' && listing.status !== 'active') {
@@ -229,7 +231,10 @@ export async function PATCH(
       (status === 'rejected' && rejectionReason)
     ) {
       try {
-        await notifyWhatsAppOwner(listingId, updatedListing.title, status, rejectionReason ?? null);
+        await notifyWhatsAppOwner(listingId, updatedListing.title, status, rejectionReason ?? null, {
+          ownerName: landlordName,
+          expiresAt: updatedListing.expiresAt ?? null,
+        });
       } catch (err) {
         console.error('[listings PATCH] WhatsApp owner notify failed', err);
       }
@@ -292,28 +297,58 @@ export async function PATCH(
  * Chat reply for approval/rejection of a WhatsApp-originated listing. Lazy
  * import keeps the channel layer out of this route's module graph for the
  * (majority) non-WhatsApp requests.
+ *
+ * The approval goes out as the `listing_live_notice` TEMPLATE once
+ * `WHATSAPP_LIVE_TEMPLATE` is set (lib/listings/live-notice.ts): manual review
+ * often outlasts the 24-hour window, and re-approving an expired listing always
+ * does, so free-form text was rejected with 131047. Until it is set, the old
+ * free-form text is sent, which still lands inside the window. The rejection
+ * is still free-form.
  */
 async function notifyWhatsAppOwner(
   listingId: number,
   title: string,
   status: 'active' | 'rejected',
-  rejectionReason: string | null
+  rejectionReason: string | null,
+  owner: { ownerName: string | null; expiresAt: Date | null }
 ): Promise<void> {
   const intake = await db.query.whatsappIntakes.findFirst({
     where: eq(whatsappIntakes.listingId, listingId),
   });
   if (!intake?.fromNumber) return;
-  const { sendWhatsAppText } = await import('@/lib/intake/channels/whatsapp/send');
+  const { sendWhatsAppTemplate, sendWhatsAppText, whatsappTemplateName } = await import(
+    '@/lib/intake/channels/whatsapp/send'
+  );
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://easyrent.lk';
-  const message =
-    status === 'active'
-      ? `🎉 Your listing "${title}" is now live on Easy Rent:\n${base}/listings/${listingId}\n\nTenants will call or WhatsApp you directly.`
-      : `Your listing "${title}" couldn't be approved: ${rejectionReason}.\nReply here if you have questions — our team can help.`;
-  const sent = await sendWhatsAppText(intake.fromNumber, message);
+
+  let sent: boolean;
+  const liveTemplate = status === 'active' ? whatsappTemplateName('live') : null;
+  if (liveTemplate) {
+    const { liveTemplateParams } = await import('@/lib/listings/live-notice');
+    // No free-form fallback once the template is configured — see live-notice.ts.
+    sent = await sendWhatsAppTemplate(intake.fromNumber, {
+      name: liveTemplate,
+      bodyParams: liveTemplateParams({
+        ownerName: owner.ownerName,
+        listingTitle: title,
+        expiresAt: owner.expiresAt,
+        now: new Date(),
+        expirationDays: Number(getFeatureValue('listingExpirationDays') ?? 30),
+      }),
+      urlButtonParam: String(listingId),
+    });
+  } else {
+    const message =
+      status === 'active'
+        ? `🎉 Your listing "${title}" is now live on Easy Rent:\n${base}/listings/${listingId}\n\nTenants will call or WhatsApp you directly.`
+        : `Your listing "${title}" couldn't be approved: ${rejectionReason}.\nReply here if you have questions — our team can help.`;
+    sent = await sendWhatsAppText(intake.fromNumber, message);
+  }
   if (!sent) {
-    // Manual review routinely takes >24h, putting this send outside Meta's
-    // customer-service window (error 131047). WhatsApp is these landlords'
-    // ONLY channel — a silent drop means they never learn the outcome.
+    // Free-form: outside Meta's 24-hour customer-service window (131047).
+    // Template: not approved, wrong name/language, or the number left WhatsApp.
+    // WhatsApp is these landlords' ONLY channel — a silent drop means they
+    // never learn the outcome.
     const { createNotificationsForOpsAndAdmin } = await import('@/lib/notifications');
     await createNotificationsForOpsAndAdmin({
       type: 'whatsapp_intake',

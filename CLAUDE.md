@@ -137,7 +137,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 
 ## Key env vars
 
-`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `WHATSAPP_CONSENT_TEMPLATE` (asks an advert's owner whether we may list it; **unset = nothing can ever publish**, since the importer is opt-in) · `WHATSAPP_IMPORT_TEMPLATE` (the go-live notice sent after they say yes; unset = dry-run) · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
+`DATABASE_URL` (pooler :6543 in prod) · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `…PUBLISHABLE_KEY`) · `SUPABASE_SERVICE_ROLE_KEY` (admin/storage) · `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM` · `NEXT_PUBLIC_BASE_URL` · `CRON_SECRET` · `WHATSAPP_CONSENT_TEMPLATE` (asks an advert's owner whether we may list it; **unset = nothing can ever publish**, since the importer is opt-in) · `WHATSAPP_IMPORT_TEMPLATE` (the go-live notice sent after they say yes; unset = dry-run) · `WHATSAPP_LIVE_TEMPLATE` (the "your listing is live" notice when ops approve a WhatsApp landlord's listing; unset = the old free-form text, which fails outside the 24-hour window — always the case when re-approving an expired listing) · `VIEW_HASH_SALT` (view-dedup salt; must be stable across instances — a per-instance value multiplies every unique-viewer count). Never put secrets in `NEXT_PUBLIC_*`.
 
 ## Where to look
 

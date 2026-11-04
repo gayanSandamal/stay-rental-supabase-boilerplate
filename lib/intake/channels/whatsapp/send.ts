@@ -221,7 +221,9 @@ export async function sendWhatsAppLocationRequest(
  * approved template text, with the variables carrying only short scalar values.
  * `sanitizeTemplateParam` enforces that rather than trusting callers.
  */
-export function whatsappTemplateName(kind: 'report' | 'import' | 'consent'): string | null {
+export function whatsappTemplateName(
+  kind: 'report' | 'import' | 'consent' | 'live'
+): string | null {
   if (kind === 'report') return process.env.WHATSAPP_REPORT_TEMPLATE ?? null;
   // 0057 — telling an owner we listed the property from their Facebook ad.
   // Also business-initiated: they have never messaged us, by definition.
@@ -229,6 +231,10 @@ export function whatsappTemplateName(kind: 'report' | 'import' | 'consent'): str
   // 0060 — ASKING an owner whether we may list it. Precedes 'import', which is
   // now only sent to someone who already said yes.
   if (kind === 'consent') return process.env.WHATSAPP_CONSENT_TEMPLATE ?? null;
+  // Ops approved the listing (lib/listings/live-notice.ts). Review often takes
+  // longer than the 24-hour window, and re-approving an expired listing always
+  // does, so the free-form "now live" text was routinely rejected.
+  if (kind === 'live') return process.env.WHATSAPP_LIVE_TEMPLATE ?? null;
   return null;
 }
 

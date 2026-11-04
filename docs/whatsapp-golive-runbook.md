@@ -630,3 +630,58 @@ on `wa_phone`.**
 Switch `enableFacebookImport` off. The screens disappear (the pages `notFound()`
 and every action refuses), already-imported listings keep working, and imported
 owners keep their accounts and their edit links.
+
+---
+
+# Listing-approved notice (added 2026-11-04)
+
+When ops press **Approve & Activate** (or set the status dropdown to Active) on
+a listing that came in over WhatsApp, the landlord gets a "your listing is
+live" WhatsApp message. It used to be free-form text, which WhatsApp only
+accepts inside the 24-hour window the landlord's last message opened. Manual
+review often takes longer than that, and **re-approving an expired listing
+always does** (it was published 30+ days ago), so the message was rejected
+with 131047 and ops got a *"approved but the WhatsApp notice failed — contact
+the owner manually"* notification instead.
+
+With `WHATSAPP_LIVE_TEMPLATE` set it goes out as an approved template, which is
+delivered whether or not the window is open. Until it is set nothing changes:
+the old free-form text is still sent, and still works inside the window. Once
+it is set there is no free-form fallback; a failed template send raises the
+same ops notification. Rejection notices are still free-form.
+
+### Step 1 — Register the template
+
+WhatsApp Manager → Account tools → Message templates → Create template.
+
+- **Name**: `listing_live_notice` (must match `WHATSAPP_LIVE_TEMPLATE`)
+- **Category**: **Utility**. The recipient is an existing customer and the
+  message is about their own listing. Keep promotional words ("free", "no
+  commission") out: they push the classifier to Marketing, and a Marketing
+  template is silently dropped for anyone who switched marketing messages off.
+- **Language**: must match `WHATSAPP_TEMPLATE_LANGUAGE` (default `en`).
+- **Body**: copy `LIVE_TEMPLATE_TEXT` from `lib/listings/live-notice.ts`
+  **verbatim**. It declares exactly 3 variables and
+  `tests/unit/live-notice.test.ts` holds the code to the same count.
+- **Buttons**: ONE "Visit website" button labelled **View listing**, type
+  **Dynamic**, base URL `https://easyrent.lk/listings/` — the listing id is
+  passed as the suffix.
+
+Sample values for the approval form:
+
+| # | Meaning | Example |
+|---|---------|---------|
+| 1 | Landlord first name | `Nimal` |
+| 2 | Listing title | `3BR House in Nugegoda` |
+| 3 | Days until it expires | `30` |
+| Button suffix | Listing id | `123` |
+
+### Step 2 — Env var (Vercel), then redeploy
+
+```
+WHATSAPP_LIVE_TEMPLATE=listing_live_notice
+```
+
+Only set it after Meta has approved the template. A name Meta does not know
+fails every approval notice, where the free-form text would at least have
+reached landlords who messaged in the last 24 hours.
