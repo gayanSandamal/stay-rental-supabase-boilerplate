@@ -21,6 +21,7 @@ import {
   marketRentSnapshots,
 } from './schema';
 import { createClient } from '@/lib/supabase/server';
+import { getMcpPrincipal } from '@/lib/mcp/principal';
 import { businessAccountMembers } from './schema';
 import { withDeadline } from '@/lib/observability/phase-timer';
 import { MEASURABLE_PLATFORMS, type SocialPlatform } from '@/lib/social/types';
@@ -53,6 +54,15 @@ const AUTH_DEADLINE_MS = 10_000;
  * the property this needs — the value is derived from the request's own cookies.
  */
 export const getUser = cache(async function getUser() {
+  /*
+   * MCP connector: the request carried a bearer token that the /mcp endpoint
+   * already resolved to a live, unbanned user (lib/mcp/principal.ts). Checked
+   * first so a tool calling an app route handler is authorised exactly as that
+   * user would be in the browser — same role, same ownership rules.
+   */
+  const mcpPrincipal = getMcpPrincipal();
+  if (mcpPrincipal) return mcpPrincipal;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||

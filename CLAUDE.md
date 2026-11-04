@@ -148,6 +148,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 - Auth/Supabase setup → `docs/AUTH_CONFIGURATION.md`, `docs/SUPABASE_DATABASE.md`
 - Form builder → `FORM_BUILDER_GUIDE.md`, `lib/forms/README.md`
 - Facebook post import → `docs/deep-dive-facebook-post-import.md`
+- MCP server / Claude connector → `docs/mcp-connector.md`
 
 ## WhatsApp intake v2 (2026-08-04)
 
@@ -652,6 +653,41 @@ not the launch switch).
   no metric name fixes it. `isTokenError` covers code 10, so it is marked
   permanent and the sweeper backs off; because the back-off is a timestamp and
   not a dead flag, it heals by itself once the permission is granted.
+
+## MCP server & Claude connector (2026-11-04)
+
+Easy Rent is a remote MCP server at `/mcp` on the same Vercel app, and its own
+OAuth 2.1 authorization server, so people can add it to Claude as a custom
+connector. Flag `enableMcpConnector` (OFF by default), migration `0067`. Full
+write-up: `docs/mcp-connector.md`.
+
+- **Tools call route handlers; they never re-implement a rule.**
+  `lib/mcp/call-route.ts` invokes the app's own handlers in-process, and
+  `getUser()` returns the connector's user first (`lib/mcp/principal.ts`,
+  AsyncLocalStorage — never a module variable on Fluid Compute). That is what
+  keeps role checks, ownership, moderation, re-approval on edit, audit logging
+  and owner notices identical to the browser. A tool that writes to the DB
+  directly instead of going through a handler is a bug, however convenient.
+- **`getUser()` must consult `getMcpPrincipal()` before reading cookies.** A
+  test pins the order. Moving it below `createClient()` makes every MCP write
+  401.
+- **Rate limits key on `mcp-user-<id>`, not the IP.** Every Claude user arrives
+  from the same handful of Anthropic IPs.
+- **Every OAuth secret is sha256 only.** Refresh tokens rotate and a replayed
+  one revokes the grant; a replayed code revokes what it produced. Tokens are
+  bound to the host that minted them (`resource`).
+- **The `admin` scope is never sufficient on its own.** Admin tools are also
+  role-gated in the listing filter, and the routes underneath re-check the role.
+  It is never pre-ticked on the consent screen.
+- **No grant while impersonating** — `/api/oauth/authorize` is under `/api`, so
+  the middleware's read-only rule does not reach it; the handler refuses itself.
+- **The consent screen leads with the redirect host.** Registration is open, so
+  `client_name` is attacker-chosen.
+- **Photos cannot be added over MCP** (storage-only URLs, no upload channel), and
+  **listings are archived, never hard-deleted**. Visibility activation needs
+  `paymentConfirmed: true` — payments stay manual.
+- `/mcp` and `/.well-known/` are excluded from the middleware matcher; `mcp` and
+  `oauth` are reserved slugs.
 
 ## Performance: where the time actually goes (2026-09-02)
 

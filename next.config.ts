@@ -163,6 +163,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    /*
+     * OAuth discovery for the MCP connector (docs/mcp-connector.md). The
+     * well-known paths are fixed by RFC 8414 / RFC 9728, and a dot-folder under
+     * app/ is not something to lean on, so the handlers live under /api and
+     * these map the standard URLs onto them. The `/mcp` suffix variants are the
+     * path-inserted forms clients derive from the resource URL.
+     */
+    return [
+      { source: '/.well-known/oauth-authorization-server', destination: '/api/oauth/authorization-server-metadata' },
+      { source: '/.well-known/oauth-authorization-server/mcp', destination: '/api/oauth/authorization-server-metadata' },
+      { source: '/.well-known/oauth-protected-resource', destination: '/api/oauth/protected-resource-metadata' },
+      { source: '/.well-known/oauth-protected-resource/mcp', destination: '/api/oauth/protected-resource-metadata' },
+    ];
+  },
   async redirects() {
     return [
       {

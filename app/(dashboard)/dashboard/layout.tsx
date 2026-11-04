@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Home, List, Settings, Menu, Shield, Bell, BarChart3, Building2 } from 'lucide-react';
+import { Home, List, Settings, Menu, Shield, Bell, BarChart3, Building2, Plug } from 'lucide-react';
 
 export default function DashboardLayout({
   children
@@ -23,6 +23,7 @@ export default function DashboardLayout({
     // same pattern as every other flag-gated dashboard surface.
     { href: '/dashboard/business-account', icon: Building2, label: 'Business Account' },
     { href: '/dashboard/saved-searches', icon: Bell, label: 'Saved Alerts' },
+    { href: '/dashboard/connected-apps', icon: Plug, label: 'Connected apps' },
     { href: '/dashboard/general', icon: Settings, label: 'Settings' },
     { href: '/dashboard/security', icon: Shield, label: 'Security' },
   ];

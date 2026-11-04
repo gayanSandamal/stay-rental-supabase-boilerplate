@@ -94,6 +94,13 @@ export const featureFlagDefaults = {
   // OFF keeps searchNotAvailableMessage — the reply that exists today.
   enableWhatsAppRenterAccounts: false,
 
+  // 0067 — Easy Rent as a remote MCP server (/mcp) that a Claude custom
+  // connector signs in to with OAuth. OFF means /mcp answers 503 and
+  // /oauth/authorize refuses new grants; existing grants are kept, not revoked,
+  // so switching it back on needs no one to reconnect. A kill switch for a new
+  // write-capable API surface, not a rollout toggle. See docs/mcp-connector.md.
+  enableMcpConnector: false,
+
   // 0057 — ops/admin can import a rental ad from a Facebook post URL. OFF by
   // default because this republishes someone's advert and photos before they
   // have agreed to anything; switching it on is a deliberate decision, not a
@@ -427,6 +434,14 @@ export const featureFlagMeta: Record<FeatureFlag, FeatureFlagMeta> = {
     label: 'WhatsApp landlord accounts',
     description:
       'Create a real landlord account for each WhatsApp sender and give them view/edit/delete links so they can manage their own listing. OFF keeps intake listings under the Easy Rent Operations identity with no self-service.',
+    group: 'Platform',
+    appWide: true,
+    public: false,
+  },
+  enableMcpConnector: {
+    label: 'MCP connector (Claude)',
+    description:
+      'Serve the Easy Rent MCP server at /mcp so people can connect Claude (or any MCP client) to their account with OAuth. Tools act as the signed-in user with that user\'s role — renters search, landlords manage their own listings, ops/admin get back-office tools only if they also grant the admin scope. OFF answers 503 and blocks new authorisations; existing connections are kept.',
     group: 'Platform',
     appWide: true,
     public: false,
