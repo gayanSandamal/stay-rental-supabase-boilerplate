@@ -8,6 +8,7 @@ import {
   intakeDisplayState,
   intakeDisplayStateSql,
 } from '@/lib/intake/display-state';
+import { reviewTarget } from '@/lib/intake/review-target';
 
 /**
  * Back Office → WhatsApp Intakes counted intake #47 under "Published" while
@@ -133,5 +134,33 @@ describe('WhatsApp Intakes screen', () => {
     expect(list).not.toMatch(/<StatusBadge status=\{(row|open)\.status\}/);
     expect(list).toMatch(/<StatusBadge status=\{row\.state\}/);
     expect(list).toMatch(/<StatusBadge status=\{open\.state\}/);
+  });
+});
+
+describe('reviewTarget — an awaiting-review row points where it can be acted on', () => {
+  it('a held or failed listing goes to the Moderation queue, filtered to it', () => {
+    expect(reviewTarget(47, 'held').href).toBe('/back-office/moderation?tab=held&q=%2347');
+    expect(reviewTarget(47, 'error').href).toBe('/back-office/moderation?tab=error&q=%2347');
+    expect(reviewTarget(47, 'held').waitingOnSweeper).toBe(false);
+  });
+
+  it('a listing still in the sweeper needs nobody yet', () => {
+    expect(reviewTarget(47, 'queued').waitingOnSweeper).toBe(true);
+    expect(reviewTarget(47, 'running').waitingOnSweeper).toBe(true);
+  });
+
+  it('a passed or unmoderated listing goes to its approval page', () => {
+    expect(reviewTarget(47, 'passed').href).toBe('/dashboard/listings/47');
+    expect(reviewTarget(47, 'skipped').href).toBe('/dashboard/listings/47');
+    expect(reviewTarget(47, null).href).toBe('/dashboard/listings/47');
+  });
+
+  it('Needs a human stays about intakes with no listing, so no row is in both tabs', () => {
+    const page = readFileSync(
+      join(process.cwd(), 'app/(dashboard)/back-office/whatsapp-intakes/page.tsx'),
+      'utf-8',
+    );
+    const needsHuman = page.match(/const needsHumanCondition = [^;]+;/)?.[0] ?? '';
+    expect(needsHuman).not.toMatch(/listings|displayState|moderation/);
   });
 });

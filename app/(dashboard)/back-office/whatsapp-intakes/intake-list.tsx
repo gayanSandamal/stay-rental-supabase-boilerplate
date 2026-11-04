@@ -19,6 +19,7 @@ import { ThumbStrip } from '@/components/back-office/thumb-strip';
 import { useListKeys } from '@/components/back-office/use-list-keys';
 import { shortAge, fullTimestamp } from '@/lib/back-office/format';
 import { cn } from '@/lib/utils';
+import { reviewTarget } from '@/lib/intake/review-target';
 import { IntakeActions } from './intake-actions';
 import { BulkIntakeActions } from './bulk-intake-actions';
 
@@ -51,22 +52,10 @@ export type IntakeRow = {
   lastMessageAt: string;
 };
 
-/** One line under an awaiting-review badge: who it is waiting on. */
-function reviewNote(row: IntakeRow): string | null {
-  if (row.state !== 'awaiting_review') return null;
-  switch (row.moderationStatus) {
-    case 'queued':
-    case 'running':
-      return 'moderation queued';
-    case 'held':
-      return 'held by moderation';
-    case 'error':
-      return 'moderation failed';
-    case 'passed':
-      return 'passed, needs approval';
-    default:
-      return 'needs approval';
-  }
+/** Who an awaiting-review intake is waiting on, and where to act on it. */
+function review(row: IntakeRow) {
+  if (row.state !== 'awaiting_review' || row.listingId == null) return null;
+  return reviewTarget(row.listingId, row.moderationStatus);
 }
 
 function parseAsked(raw: string | null): string[] {
@@ -152,13 +141,15 @@ export function IntakeList({ rows }: { rows: IntakeRow[] }) {
                 <TableCell>
                   <div className="flex flex-col items-start gap-1">
                     <StatusBadge status={row.state} />
-                    {reviewNote(row) && (
-                      <span
-                        className="text-[11px] text-slate-500"
+                    {review(row) && (
+                      <Link
+                        href={review(row)!.href}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[11px] text-slate-500 underline decoration-dotted underline-offset-2 hover:text-teal-700"
                         title={row.moderationSummary ?? undefined}
                       >
-                        {reviewNote(row)}
-                      </span>
+                        {review(row)!.note}
+                      </Link>
                     )}
                     {row.needsInfoRounds > 0 && (
                       <span className="text-[11px] text-slate-500 tabular-nums">
@@ -248,16 +239,26 @@ export function IntakeList({ rows }: { rows: IntakeRow[] }) {
               </span>
             </div>
 
-            {open.state === 'awaiting_review' && (
+            {review(open) && (
               <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
                 <h3 className="text-xs font-semibold text-sky-900">
                   Listing #{open.listingId} is not live yet
                 </h3>
                 <p className="mt-1 text-xs text-sky-800">
-                  {reviewNote(open)}
-                  {open.moderationSummary ? ` — ${open.moderationSummary}` : ''}. Approve
-                  it from the listing page or Back Office → Moderation.
+                  {review(open)!.note}
+                  {open.moderationSummary ? ` — ${open.moderationSummary}` : ''}.
                 </p>
+                {!review(open)!.waitingOnSweeper && (
+                  <Link
+                    href={review(open)!.href}
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-sky-900 hover:underline"
+                  >
+                    {review(open)!.href.startsWith('/back-office/moderation')
+                      ? 'Review it in Moderation'
+                      : 'Approve it on the listing page'}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                )}
               </div>
             )}
 
