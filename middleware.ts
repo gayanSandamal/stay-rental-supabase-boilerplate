@@ -295,9 +295,15 @@ export const config = {
    * logo. `_next/static` and `_next/image` were already excluded, which is why
    * this went unnoticed: the bundled assets were fine and only the hand-placed
    * ones in /public paid.
+   *
+   * `mcp` and `.well-known/` are the MCP connector's endpoint and its OAuth
+   * discovery documents: machine clients with bearer tokens, never a session
+   * cookie, so the auth round trip here could only ever find nothing. `mcp$`
+   * and `mcp/` rather than a bare prefix, so a vanity slug like /mcpherson is
+   * unaffected (and `mcp` itself is reserved in lib/reserved-slugs.ts).
    */
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|l/|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|txt|xml|json|webmanifest|woff|woff2|ttf|otf|map)$).*)',
+    '/((?!api|mcp$|mcp/|\\.well-known/|_next/static|_next/image|favicon.ico|l/|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|txt|xml|json|webmanifest|woff|woff2|ttf|otf|map)$).*)',
   ],
   runtime: 'nodejs',
 };

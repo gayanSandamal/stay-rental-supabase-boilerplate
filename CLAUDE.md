@@ -57,7 +57,7 @@ Access control patterns:
 
 ## Tech stack
 
-Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Supabase** (Postgres + Auth + Storage) · Resend (email) · Tailwind 4 + Radix/shadcn-style UI + lucide · Zod · SWR · deployed on **Vercel** (+ Vercel Cron). Package manager is **pnpm**. Dev uses Turbopack.
+Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Supabase** (Postgres + Auth + Storage) · Resend (email) · Tailwind 4 + Radix/shadcn-style UI + lucide · Zod · SWR · deployed on **Vercel** (Hobby plan; frequent jobs run from Supabase pg_cron). Package manager is **pnpm**. Dev uses Turbopack.
 
 ## Architecture & conventions
 
@@ -72,7 +72,7 @@ Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Su
 - **Rate limiting**: `lib/rate-limit.ts` — in-memory (per-instance, resets on deploy). Applied to listing creation, contact numbers, uploads, view tracking.
 - **Storage**: Supabase `property-images` bucket (5 MB, JPEG/PNG/WebP/GIF) via `lib/storage.ts` / `/api/upload`. Photos are stored on `listings.photos` as a JSON array string.
 - **Notifications**: in-app center (`notifications` table, `lib/notifications.ts`) + transactional email via Resend (`lib/email.ts`). Without `RESEND_API_KEY`, emails log to console.
-- **Cron** (Vercel, secured by `CRON_SECRET` bearer token): `/api/cron/refresh-suggestions` (~15 min), `/api/cron/saved-search-alerts` (~6 h).
+- **Cron** — every `/api/cron/*` route is secured by the `CRON_SECRET` bearer token, and `lib/cron/schedule.ts` is the one table of what runs when and WHO runs it. **Vercel is on the Hobby plan, which rejects every deployment whose `vercel.json` has a cron firing more than once a day** (it blocked all deploys on 2026-11-04). So `vercel.json` keeps only the daily/weekly jobs, and the frequent ones (WhatsApp intake and moderation every 2 min, social every 5, expiry and suggestions every 15, alerts every 6 h) are fired by **Supabase pg_cron + pg_net** calling the same endpoints with the same token. Register/update them with `DATABASE_URL=… CRON_SECRET=… CRON_BASE_URL=https://easyrent.lk pnpm cron:setup-supabase` (`--status` to see runs and HTTP codes; a 401 means Vault's secret ≠ Vercel's). The secret lives in Supabase Vault, never in the job text. It is deliberately not a numbered migration — `db:migrate-all` replays against local databases, which would then call production. Never put a frequent cron back in `vercel.json`, and never schedule one job on both runners; `tests/unit/cron-schedule.test.ts` enforces both.
 
 ## Database & migrations — IMPORTANT GOTCHA
 
@@ -148,6 +148,7 @@ Test accounts (local seed): `admin@easyrent.com/admin123`, `ops@easyrent.com/ops
 - Auth/Supabase setup → `docs/AUTH_CONFIGURATION.md`, `docs/SUPABASE_DATABASE.md`
 - Form builder → `FORM_BUILDER_GUIDE.md`, `lib/forms/README.md`
 - Facebook post import → `docs/deep-dive-facebook-post-import.md`
+- MCP server / Claude connector → `docs/mcp-connector.md`
 
 ## WhatsApp intake v2 (2026-08-04)
 
@@ -652,6 +653,41 @@ not the launch switch).
   no metric name fixes it. `isTokenError` covers code 10, so it is marked
   permanent and the sweeper backs off; because the back-off is a timestamp and
   not a dead flag, it heals by itself once the permission is granted.
+
+## MCP server & Claude connector (2026-11-04)
+
+Easy Rent is a remote MCP server at `/mcp` on the same Vercel app, and its own
+OAuth 2.1 authorization server, so people can add it to Claude as a custom
+connector. Flag `enableMcpConnector` (OFF by default), migration `0067`. Full
+write-up: `docs/mcp-connector.md`.
+
+- **Tools call route handlers; they never re-implement a rule.**
+  `lib/mcp/call-route.ts` invokes the app's own handlers in-process, and
+  `getUser()` returns the connector's user first (`lib/mcp/principal.ts`,
+  AsyncLocalStorage — never a module variable on Fluid Compute). That is what
+  keeps role checks, ownership, moderation, re-approval on edit, audit logging
+  and owner notices identical to the browser. A tool that writes to the DB
+  directly instead of going through a handler is a bug, however convenient.
+- **`getUser()` must consult `getMcpPrincipal()` before reading cookies.** A
+  test pins the order. Moving it below `createClient()` makes every MCP write
+  401.
+- **Rate limits key on `mcp-user-<id>`, not the IP.** Every Claude user arrives
+  from the same handful of Anthropic IPs.
+- **Every OAuth secret is sha256 only.** Refresh tokens rotate and a replayed
+  one revokes the grant; a replayed code revokes what it produced. Tokens are
+  bound to the host that minted them (`resource`).
+- **The `admin` scope is never sufficient on its own.** Admin tools are also
+  role-gated in the listing filter, and the routes underneath re-check the role.
+  It is never pre-ticked on the consent screen.
+- **No grant while impersonating** — `/api/oauth/authorize` is under `/api`, so
+  the middleware's read-only rule does not reach it; the handler refuses itself.
+- **The consent screen leads with the redirect host.** Registration is open, so
+  `client_name` is attacker-chosen.
+- **Photos cannot be added over MCP** (storage-only URLs, no upload channel), and
+  **listings are archived, never hard-deleted**. Visibility activation needs
+  `paymentConfirmed: true` — payments stay manual.
+- `/mcp` and `/.well-known/` are excluded from the middleware matcher; `mcp` and
+  `oauth` are reserved slugs.
 
 ## Performance: where the time actually goes (2026-09-02)
 

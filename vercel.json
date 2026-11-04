@@ -4,40 +4,16 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/refresh-suggestions",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/saved-search-alerts",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron/process-whatsapp-intakes",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/cron/moderate-listings",
-      "schedule": "*/2 * * * *"
-    },
-    {
       "path": "/api/cron/purge-archived",
       "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron/publish-social",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/market-snapshot",
-      "schedule": "0 4 * * 1"
     },
     {
       "path": "/api/cron/landlord-reports",
       "schedule": "0 4 * * *"
     },
     {
-      "path": "/api/cron/expire-listings",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/market-snapshot",
+      "schedule": "0 4 * * 1"
     }
   ]
 }

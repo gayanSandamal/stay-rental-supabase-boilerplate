@@ -646,6 +646,74 @@ export const locations = pgTable('locations', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+/**
+ * 0067 — MCP connector (Claude custom connector). Easy Rent is its own OAuth 2.1
+ * authorization server for /mcp. Every secret is sha256 only; see
+ * lib/mcp/oauth/** and docs/mcp-connector.md.
+ *
+ * Registration is open (RFC 7591), so nothing on a client row is trusted —
+ * `clientName` especially is attacker-controlled. The consent screen leads with
+ * the redirect host for exactly that reason.
+ */
+export const mcpOauthClients = pgTable('mcp_oauth_clients', {
+  id: serial('id').primaryKey(),
+  clientId: text('client_id').notNull().unique(),
+  /** NULL for public clients (token_endpoint_auth_method = 'none'). */
+  clientSecretHash: text('client_secret_hash'),
+  clientName: text('client_name'),
+  clientUri: text('client_uri'),
+  /** JSON array of exact-match redirect URIs. */
+  redirectUris: text('redirect_uris').notNull(),
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('none'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at'),
+});
+
+/** One row per user authorisation of a client; refresh rotates hashes in place. */
+export const mcpOauthGrants = pgTable('mcp_oauth_grants', {
+  id: serial('id').primaryKey(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => mcpOauthClients.clientId, { onDelete: 'cascade' }),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Space-separated: read | write | admin. */
+  scope: text('scope').notNull(),
+  /** RFC 8707 resource the token is bound to — the /mcp URL it was issued for. */
+  resource: text('resource').notNull(),
+  accessTokenHash: text('access_token_hash').notNull().unique(),
+  accessExpiresAt: timestamp('access_expires_at').notNull(),
+  refreshTokenHash: text('refresh_token_hash').notNull().unique(),
+  /** The refresh token this one replaced. Seeing it again = replay → revoke. */
+  previousRefreshTokenHash: text('previous_refresh_token_hash'),
+  refreshExpiresAt: timestamp('refresh_expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at'),
+  revokedAt: timestamp('revoked_at'),
+});
+
+/** Single-use authorization codes (PKCE S256 required). */
+export const mcpOauthCodes = pgTable('mcp_oauth_codes', {
+  id: serial('id').primaryKey(),
+  codeHash: text('code_hash').notNull().unique(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => mcpOauthClients.clientId, { onDelete: 'cascade' }),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  redirectUri: text('redirect_uri').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  scope: text('scope').notNull(),
+  resource: text('resource').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  consumedAt: timestamp('consumed_at'),
+  /** Set on exchange, so a replayed code can revoke what it produced. */
+  grantId: integer('grant_id').references(() => mcpOauthGrants.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // Audit log action enum
 export const auditActionEnum = pgEnum('audit_action', [
   'listing_created',
@@ -708,6 +776,9 @@ export const auditActionEnum = pgEnum('audit_action', [
   'post_import_created',
   'post_import_published',
   'post_import_discarded',
+  // 0067 — MCP connector (Claude custom connector) OAuth grants
+  'mcp_connector_authorized',
+  'mcp_connector_revoked',
 ]);
 
 // WhatsApp concierge intake statuses
@@ -1268,6 +1339,9 @@ export type PostImport = typeof postImports.$inferSelect;
 export type NewPostImport = typeof postImports.$inferInsert;
 export type PhoneVerification = typeof phoneVerifications.$inferSelect;
 export type NewPhoneVerification = typeof phoneVerifications.$inferInsert;
+export type McpOauthClient = typeof mcpOauthClients.$inferSelect;
+export type McpOauthGrant = typeof mcpOauthGrants.$inferSelect;
+export type McpOauthCode = typeof mcpOauthCodes.$inferSelect;
 export type IntakeConversation = typeof intakeConversations.$inferSelect;
 export type NewIntakeConversation = typeof intakeConversations.$inferInsert;
 export type ListingModeration = typeof listingModerations.$inferSelect;

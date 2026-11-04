@@ -39,6 +39,10 @@ export const RESERVED_SLUGS = new Set([
   'link-expired',
   'list-your-property',
   'listings',
+  // 0067 — the MCP endpoint (Claude connector) and its OAuth consent screen.
+  // A landlord holding either slug would shadow the whole connector.
+  'mcp',
+  'oauth',
   // 0060 — /preview/<token> renders an imported advert to the owner we are
   // asking about it. A landlord holding this slug would shadow every one.
   'preview',
