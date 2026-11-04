@@ -303,6 +303,15 @@ and TikTok, with per-listing landlord consent asked over WhatsApp. Flag-gated
   must not stay live on our social accounts.
 - Captions must never contain a phone number (`stripContactDigits`, asserted in
   tests).
+- **Graph's `permalink_url` is not a link we can send as-is.** Since ~Oct 2026 it
+  leads with an id (`122111970747369710`) that resolves to nothing, so the post
+  opens logged-out on the web and fails in the Facebook app and logged-in mobile
+  web (listing #47, 2026-11-05). `facebookPostUrl` in
+  `lib/social/facebook-permalink.ts` keeps the story id and leads with the Page's
+  PUBLIC id: `FACEBOOK_PAGE_PUBLIC_ID`, else Graph's Page `link`, asked only from
+  the crons. That is neither `FACEBOOK_PAGE_ID` nor the permalink's lead id, and
+  never build a link from `FACEBOOK_PAGE_ID` (`{id}_{story}` is login-walled).
+  Stored rows are repaired at read time too (`withFacebookPostUrl`).
 - **TikTok's OAuth needs PKCE, hex-encoded.** No `code_challenge` = `errCode=10007`
   before any consent screen; and the challenge is SHA-256 of the verifier
   **hex-encoded**, not base64url as RFC 7636 says. Verified against the live

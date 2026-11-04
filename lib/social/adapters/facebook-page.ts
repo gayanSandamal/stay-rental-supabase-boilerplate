@@ -22,6 +22,10 @@ import {
   isRateLimitError,
   isTokenError,
 } from './graph';
+import { facebookPostUrl, resolveFacebookPublicPageRef } from '../facebook-permalink';
+
+/** Kept here for the callers and tests that already import it from the adapter. */
+export { normalizeFacebookPermalink } from '../facebook-permalink';
 
 async function publish(input: SocialPostInput): Promise<PublishResult> {
   if (!isFacebookPageConfigured()) {
@@ -84,11 +88,18 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
     };
   }
 
-  // Only Facebook can tell us a post's public URL — see normalizeFacebookPermalink.
+  // Graph's permalink_url carries the story id we trust and, since ~Oct 2026,
+  // a lead id the Facebook app cannot open — facebookPostUrl swaps it for the
+  // Page's public id. See lib/social/facebook-permalink.ts for the measurements.
   const permalink = await graphGet<{ permalink_url?: string }>(post.data.id, {
     fields: 'permalink_url',
   });
-  const url = permalink.ok ? normalizeFacebookPermalink(permalink.data.permalink_url) : null;
+  const publicPageRef = await resolveFacebookPublicPageRef({ network: true });
+  const url = facebookPostUrl({
+    permalink: permalink.ok ? permalink.data.permalink_url : null,
+    remotePostId: post.data.id,
+    publicPageRef,
+  });
   if (!url) {
     // Surfaced rather than papered over: the row still says `posted` and holds
     // the remote id, so ops can find the post — they just have no link to
@@ -101,40 +112,6 @@ async function publish(input: SocialPostInput): Promise<PublishResult> {
   }
 
   return { ok: true, remotePostId: post.data.id, permalink: url ?? undefined };
-}
-
-/**
- * Make Graph's `permalink_url` absolute. Returns null when there is nothing
- * usable — never a guess.
- *
- * WHY THERE IS NO CONSTRUCTED FALLBACK. A Page has TWO different ids, and the
- * one we publish with is not the one its public URLs use:
- *
- *   FACEBOOK_PAGE_ID          1229347226919525   ← what Graph publishes with
- *   the Page's public actor    61591091318155    ← what facebook.com URLs use
- *
- * Graph returns a post id as `{FACEBOOK_PAGE_ID}_{story-id}`, so ANY URL built
- * out of that carries the wrong id. Measured against listing #26's live post:
- *
- *   /1229347226919525_122111941959369710       → "Log into Facebook"
- *   /permalink.php?story_fbid=…&id=…           → "Log into Facebook"
- *   /1229347226919525/posts/122111941959369710 → renders on web, but only via a
- *                                                redirect; the mobile app can't
- *                                                deep-link it → "This isn't
- *                                                available"
- *   /61591091318155/posts/…/122111941959369710/ → the post, everywhere
- *
- * That last one is what Facebook itself advertises as `rel="canonical"`, and
- * `permalink_url` is where Graph hands it to us. The actor id appears nowhere
- * in our configuration, so there is nothing correct to build a URL from
- * locally — hence null, and a logged error, rather than a link that renders in
- * a logged-in desktop tab and dies in every landlord's phone.
- */
-export function normalizeFacebookPermalink(raw: string | null | undefined): string | null {
-  const url = (raw ?? '').trim();
-  if (!url) return null;
-  if (url.startsWith('/')) return `https://www.facebook.com${url}`;
-  return /^https?:\/\//i.test(url) ? url : null;
 }
 
 async function remove(remotePostId: string): Promise<boolean> {

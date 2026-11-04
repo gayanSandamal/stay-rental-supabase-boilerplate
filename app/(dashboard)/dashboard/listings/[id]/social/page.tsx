@@ -9,6 +9,7 @@ import { canManageListing } from '@/lib/auth/listing-access';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { isDryRunPost } from '@/lib/social/types';
+import { resolveFacebookPublicPageRef, withFacebookPostUrl } from '@/lib/social/facebook-permalink';
 import { pullDownOwnSocialAction } from './actions';
 import { PullDownButton } from './pull-down-button';
 
@@ -60,9 +61,13 @@ export default async function ListingSocialPage({
   const allowed = await canManageListing(user, listing);
   if (!allowed) notFound();
 
-  const posts = await db.query.listingSocialPosts.findMany({
-    where: eq(listingSocialPosts.listingId, listingId),
-  });
+  // Env/cache only — a render never calls Graph.
+  const publicPageRef = await resolveFacebookPublicPageRef();
+  const posts = (
+    await db.query.listingSocialPosts.findMany({
+      where: eq(listingSocialPosts.listingId, listingId),
+    })
+  ).map((p) => withFacebookPostUrl(p, publicPageRef));
 
   // Only what genuinely reached a platform the landlord can open. A dry run
   // sent nothing, and the Facebook Group row is an internal paste-draft.

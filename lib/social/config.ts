@@ -25,6 +25,16 @@ export const socialConfig = {
   get facebookPageAccessToken() {
     return process.env.FACEBOOK_PAGE_ACCESS_TOKEN ?? '';
   },
+  /**
+   * OPTIONAL. The Page's PUBLIC id (or username) — the id facebook.com puts in
+   * the Page's own URLs, which is not FACEBOOK_PAGE_ID. Post links are built
+   * on it so they open in the Facebook app; see lib/social/facebook-permalink.ts.
+   * Read it off the Page: facebook.com/p/Easy-Rent-<this>/. Unset, it is asked
+   * of Graph (`link`) from the crons.
+   */
+  get facebookPagePublicId() {
+    return process.env.FACEBOOK_PAGE_PUBLIC_ID ?? '';
+  },
   /** IG Professional account id, linked to the Page above. */
   get instagramAccountId() {
     return process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? '';
