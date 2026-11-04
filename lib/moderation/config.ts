@@ -50,7 +50,27 @@ export const MODERATION_BATCH_SIZE = Number(process.env.MODERATION_BATCH_SIZE ??
  */
 export const MODERATION_RUN_BUDGET_MS = Number(process.env.MODERATION_RUN_BUDGET_MS ?? 35_000);
 
-/** Give up and hold the listing after this many failed attempts. */
+/**
+ * Hard stop for PROVIDER CALLS in one cron run, measured from the start of the
+ * sweep. `MODERATION_RUN_BUDGET_MS` above only stops the image loop from
+ * STARTING another photo; it cannot interrupt a call already in flight, and
+ * one photo can cost a 25s gate call plus a retry plus a 25s adjudication plus
+ * a retry, with the text check after that. Runs that went past Vercel's 60s
+ * `maxDuration` were killed before they could write anything — listing #45 was
+ * claimed 64 times on 2026-10-11 and finished once. With this, a call is given
+ * only the time that is left and is not started at all when too little is,
+ * leaving ~12s for the DB write, audit rows and notifications.
+ */
+export const MODERATION_HARD_DEADLINE_MS = Number(process.env.MODERATION_HARD_DEADLINE_MS ?? 48_000);
+
+/** A provider call with less time than this left is not worth starting. */
+export const MODERATION_MIN_CALL_MS = 4_000;
+
+/**
+ * Give up and hold the listing after this many failed attempts. Counts every
+ * CLAIM, so it also covers runs that were killed before they could record a
+ * result — see `holdAbandonedRuns` in engine.ts.
+ */
 export const MODERATION_MAX_ATTEMPTS = 3;
 
 /**

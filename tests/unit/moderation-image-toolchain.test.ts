@@ -81,3 +81,35 @@ describe('checkImage when a single image cannot be decoded', () => {
     expect(chatJson).not.toHaveBeenCalled();
   });
 });
+
+describe('checkImage when the adjudicator runs out of time', () => {
+  it('returns out_of_time and does NOT cache the unadjudicated "text was added" verdict', async () => {
+    // A working sharp: the chain returns itself, toBuffer yields bytes.
+    const chain: any = {
+      rotate: () => chain,
+      resize: () => chain,
+      jpeg: () => chain,
+      toBuffer: async () => Buffer.from('jpeg'),
+    };
+    loadSharp.mockResolvedValue(() => chain);
+    // The gate claims overlay text, which always escalates to the adjudicator…
+    chatJson.mockResolvedValueOnce({
+      data: { overlay_text: true, overlay_text_sample: 'Call 0771234567', is_property_photo: true },
+      usage: { inputTokens: 1, outputTokens: 1 },
+      error: null,
+    });
+    // …and the run's clock runs out before the adjudicator can answer.
+    chatJson.mockResolvedValueOnce({ data: null, usage: { inputTokens: 0, outputTokens: 0 }, error: 'out_of_time' });
+
+    const { db } = await import('@/lib/db/drizzle');
+    const insert = vi.spyOn(db as any, 'insert');
+
+    const outcome = await checkImage({ ...ARGS, deadline: Date.now() + 30_000 });
+
+    expect(outcome.error).toBe('out_of_time');
+    // A cached reject would permanently drop a photo nobody finished judging.
+    expect(insert).not.toHaveBeenCalled();
+    expect(chatJson).toHaveBeenCalledTimes(2);
+    for (const call of chatJson.mock.calls) expect(call[0].deadline).toBeTypeOf('number');
+  });
+});

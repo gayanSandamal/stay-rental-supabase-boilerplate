@@ -87,7 +87,11 @@ export interface TextCheckOutcome {
   error: string | null;
 }
 
-export async function checkText(listing: LocationInput): Promise<TextCheckOutcome> {
+export async function checkText(
+  listing: LocationInput,
+  /** Epoch ms the provider call must finish by — see chatJson. */
+  opts: { deadline?: number } = {}
+): Promise<TextCheckOutcome> {
   const usage = { inputTokens: 0, outputTokens: 0 };
   const corpus = [listing.title, listing.description].filter(Boolean).join('\n');
   const script = analyzeScript(corpus);
@@ -143,6 +147,7 @@ export async function checkText(listing: LocationInput): Promise<TextCheckOutcom
       notes: deterministicNotes,
     }),
     maxTokens: 500,
+    deadline: opts.deadline,
   });
   usage.inputTokens += res.usage.inputTokens;
   usage.outputTokens += res.usage.outputTokens;

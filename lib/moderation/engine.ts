@@ -42,6 +42,7 @@ import { fetchOriginal, hashBytes, storeDerived } from '@/lib/images/store';
 import type { PhotoManifestEntry } from '@/lib/images/types';
 import {
   MODERATION_BATCH_SIZE,
+  MODERATION_HARD_DEADLINE_MS,
   MODERATION_MAX_ATTEMPTS,
   MODERATION_RUN_BUDGET_MS,
   isModerationConfigured,
@@ -55,6 +56,7 @@ import { MODERATION_IMAGE_MODEL } from './config';
 import { notifyModerationOutcome, reconcileMissedAnnouncements } from './notify';
 import type { ImageVerdict, ModerationPolicy, ModerationVerdict } from './types';
 import { activationExpiresAt } from '@/lib/listings/activation-expiry';
+import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 
 export interface SweepCounts {
   claimed: number;
@@ -65,6 +67,8 @@ export interface SweepCounts {
   /** Go-live announcements delivered late by the reconcile pass. */
   announced?: number;
   announceFailed?: number;
+  /** Listings held because their runs kept dying before they could finish. */
+  abandoned?: number;
 }
 
 type ListingRow = typeof listings.$inferSelect;
@@ -81,9 +85,46 @@ function policyFromFlags(): ModerationPolicy {
 }
 
 /**
+ * Hold listings whose runs keep dying before they can record anything.
+ *
+ * A run Vercel kills at `maxDuration` writes nothing: the row stays `running`
+ * until its lease expires and `claimListings` takes it again. The attempt cap
+ * used to be checked only when a run SURVIVED to write its result, so a listing
+ * whose run always died was retried every five minutes forever — #45 was
+ * claimed 64 times on 2026-10-11 and finished once, #42 35 times — spending
+ * provider credit on every try.
+ *
+ * `moderation_attempts` is incremented on every claim, so a lease-expired row
+ * already at the cap has been taken that many times without a run finishing
+ * (a finished pass resets the counter to 0). Hold it with a summary that says
+ * so; Re-run checks in Back Office → Moderation resets the counter. Listing
+ * `status` is not touched: a live listing must not go dark because our checks
+ * could not run (I7).
+ */
+export async function holdAbandonedRuns(): Promise<Array<{ id: number; attempts: number }>> {
+  const rows = await db.execute(sql`
+    UPDATE listings SET
+      moderation_status = 'held',
+      moderation_lease_until = NULL,
+      moderation_summary = 'Moderation never finished after ' || moderation_attempts
+        || ' attempts — the checks kept running out of time (provider slow or down). Re-run checks to try again.'
+    WHERE moderation_status = 'running'
+      AND moderation_lease_until < now()
+      AND moderation_attempts >= ${MODERATION_MAX_ATTEMPTS}
+    RETURNING id, moderation_attempts AS attempts
+  `);
+  return (rows as unknown as Array<{ id: number; attempts: number }>).map((r) => ({
+    id: Number(r.id),
+    attempts: Number(r.attempts),
+  }));
+}
+
+/**
  * Claim work with a lease. FOR UPDATE SKIP LOCKED plus an expiring lease means
  * overlapping cron runs never process the same listing and a crashed run
- * self-heals without a separate reaper.
+ * self-heals without a separate reaper — up to MODERATION_MAX_ATTEMPTS times;
+ * past that `holdAbandonedRuns` takes it instead, and the guard below keeps a
+ * claim from racing it.
  */
 export async function claimListings(limit: number): Promise<ListingRow[]> {
   const rows = await db.execute(sql`
@@ -94,7 +135,11 @@ export async function claimListings(limit: number): Promise<ListingRow[]> {
     WHERE id IN (
       SELECT id FROM listings
       WHERE moderation_status = 'queued'
-         OR (moderation_status = 'running' AND moderation_lease_until < now())
+         OR (
+           moderation_status = 'running'
+           AND moderation_lease_until < now()
+           AND moderation_attempts < ${MODERATION_MAX_ATTEMPTS}
+         )
       ORDER BY created_at
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -168,7 +213,13 @@ async function verifiedNumbersFor(listing: ListingRow): Promise<string[]> {
 
 export async function moderateListing(
   listing: ListingRow,
-  deadline = Number.POSITIVE_INFINITY
+  deadline = Number.POSITIVE_INFINITY,
+  /**
+   * Epoch ms every provider call must have returned by (see chatJson). Unlike
+   * `deadline`, which only stops the next photo from STARTING, this bounds a
+   * call already in flight.
+   */
+  hardDeadline = Number.POSITIVE_INFINITY
 ): Promise<ModerationVerdict> {
   const started = Date.now();
   const policy = policyFromFlags();
@@ -211,7 +262,12 @@ export async function moderateListing(
       const hash = hashBytes(fetched.buffer);
       entry.h = hash;
 
-      const outcome = await checkImage({ originalUrl: entry.o, contentHash: hash, bytes: fetched.buffer });
+      const outcome = await checkImage({
+        originalUrl: entry.o,
+        contentHash: hash,
+        bytes: fetched.buffer,
+        deadline: hardDeadline,
+      });
       usage.inputTokens += outcome.usage.inputTokens;
       usage.outputTokens += outcome.usage.outputTokens;
       if (outcome.error && outcome.error !== 'not_configured') providerError ??= outcome.error;
@@ -253,7 +309,7 @@ export async function moderateListing(
       district: listing.district,
       latitude: listing.latitude,
       longitude: listing.longitude,
-    });
+    }, { deadline: hardDeadline });
     usage.inputTokens += outcome.usage.inputTokens;
     usage.outputTokens += outcome.usage.outputTokens;
     if (outcome.error && outcome.error !== 'not_configured') providerError ??= outcome.error;
@@ -611,20 +667,48 @@ export async function sweepModerationQueue(): Promise<SweepCounts> {
   }
 
   const started = Date.now();
+
+  // Before claiming: a row past the attempt cap must be held, not taken again.
+  const abandoned = await holdAbandonedRuns().catch((err) => {
+    console.error('[moderation] abandoned-run hold failed', err);
+    return [];
+  });
+  if (abandoned.length) {
+    counts.abandoned = abandoned.length;
+    for (const { id, attempts } of abandoned) {
+      await createNotificationsForOpsAndAdmin({
+        type: 'whatsapp_intake',
+        title: `Listing #${id}: moderation never finished after ${attempts} attempts — held`,
+        body: 'Every run ran out of time before it could record a result, usually because the moderation provider is slow or out of credit. Re-run checks once it is healthy.',
+        link: `/dashboard/listings/${id}`,
+      }).catch((err) => console.error('[moderation] abandoned-run notice failed', id, err));
+    }
+  }
+
   const batch = await claimListings(MODERATION_BATCH_SIZE);
   counts.claimed = batch.length;
 
   for (const listing of batch) {
     if (Date.now() - started > MODERATION_RUN_BUDGET_MS) {
-      // Out of budget: release the lease so the next run picks it up.
+      // Out of budget: release the lease so the next run picks it up. The claim
+      // counted an attempt, but nothing ran — give it back, or a listing that
+      // keeps landing second in a slow batch is held without ever being tried.
       await db
         .update(listings)
-        .set({ moderationStatus: 'queued', moderationLeaseUntil: null })
+        .set({
+          moderationStatus: 'queued',
+          moderationLeaseUntil: null,
+          moderationAttempts: sql`greatest(${listings.moderationAttempts} - 1, 0)`,
+        })
         .where(eq(listings.id, listing.id));
       continue;
     }
     try {
-      const verdict = await moderateListing(listing, started + MODERATION_RUN_BUDGET_MS);
+      const verdict = await moderateListing(
+        listing,
+        started + MODERATION_RUN_BUDGET_MS,
+        started + MODERATION_HARD_DEADLINE_MS
+      );
       if (verdict.outcome === 'passed') counts.passed++;
       else if (verdict.outcome === 'held') counts.held++;
       else if (verdict.outcome === 'error') counts.errored++;
