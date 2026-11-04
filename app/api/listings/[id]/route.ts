@@ -21,6 +21,7 @@ import { isModerationConfigured } from '@/lib/moderation/config';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
 import { bodyTouchesTrustFields, patchListingSchema } from '@/lib/listings/patch-schema';
+import { activationExpiresAt } from '@/lib/listings/activation-expiry';
 
 export async function PATCH(
   request: NextRequest,
@@ -111,20 +112,19 @@ export async function PATCH(
     if (status !== undefined) {
       updates.status = status;
       
-      // When status changes to 'active', set publishedAt and expiresAt if not already set
+      // Going live: stamp the first-publish date once, and make sure the expiry
+      // is in the future. Re-approving an EXPIRED listing used to keep its past
+      // expiresAt, so the expire-listings cron undid the approval within 15
+      // minutes of the landlord being told it was live. See activationExpiresAt.
       if (status === 'active' && listing.status !== 'active') {
-        if (!listing.publishedAt) {
-          updates.publishedAt = new Date();
-          const expiresDate = new Date();
-          expiresDate.setDate(expiresDate.getDate() + Number(getFeatureValue('listingExpirationDays') ?? 30));
-          updates.expiresAt = expiresDate;
-        }
-        else if (!listing.expiresAt && listing.publishedAt) {
-          const publishedDate = new Date(listing.publishedAt);
-          const expiresDate = new Date(publishedDate);
-          expiresDate.setDate(expiresDate.getDate() + Number(getFeatureValue('listingExpirationDays') ?? 30));
-          updates.expiresAt = expiresDate;
-        }
+        const now = new Date();
+        if (!listing.publishedAt) updates.publishedAt = now;
+        const expiresAt = activationExpiresAt(
+          listing.expiresAt,
+          now,
+          Number(getFeatureValue('listingExpirationDays') ?? 30)
+        );
+        if (expiresAt !== listing.expiresAt) updates.expiresAt = expiresAt;
       }
     }
 

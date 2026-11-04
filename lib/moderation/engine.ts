@@ -54,6 +54,7 @@ import { PROMPT_VERSION } from './prompts';
 import { MODERATION_IMAGE_MODEL } from './config';
 import { notifyModerationOutcome, reconcileMissedAnnouncements } from './notify';
 import type { ImageVerdict, ModerationPolicy, ModerationVerdict } from './types';
+import { activationExpiresAt } from '@/lib/listings/activation-expiry';
 
 export interface SweepCounts {
   claimed: number;
@@ -511,8 +512,7 @@ async function persist(
             ? {
                 status: 'active' as const,
                 publishedAt: fresh.publishedAt ?? now,
-                expiresAt:
-                  fresh.expiresAt ?? new Date(now.getTime() + days * 24 * 60 * 60 * 1000),
+                expiresAt: activationExpiresAt(fresh.expiresAt, now, days),
               }
             : { status: 'pending' as const }),
         })
