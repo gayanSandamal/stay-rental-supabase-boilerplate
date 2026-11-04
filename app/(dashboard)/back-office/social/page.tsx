@@ -24,6 +24,7 @@ import { adapterFor, socialAdapters, isPlatformEnabled } from '@/lib/social/regi
 import { DRY_RUN_ID_PREFIX, isDryRunPost, type SocialPlatform } from '@/lib/social/types';
 import { checkSocialCredentials, platformStatusLine } from '@/lib/social/health';
 import { groupByListing } from '@/lib/social/group';
+import { resolveFacebookPublicPageRef, withFacebookPostUrl } from '@/lib/social/facebook-permalink';
 import { PageHeader } from '@/components/back-office/page-header';
 import { AlarmBanner } from '@/components/back-office/alarm-banner';
 import { FilterBar } from '@/components/back-office/filter-bar';
@@ -261,6 +262,9 @@ export default async function SocialPage({
 
   const failedCount = rows.filter(({ post }) => post.status === 'failed').length;
 
+  // Env/cache only — a render never calls Graph.
+  const publicPageRef = await resolveFacebookPublicPageRef();
+
   const views: SocialGroupView[] = groups.map((group) => ({
     listingId: group.listingId,
     title: group.title,
@@ -273,7 +277,7 @@ export default async function SocialPage({
       id: post.id,
       platform: post.platform,
       status: post.status,
-      remotePermalink: post.remotePermalink,
+      remotePermalink: withFacebookPostUrl(post, publicPageRef).remotePermalink,
       remotePostId: post.remotePostId,
       caption: post.caption,
       attempts: post.attempts,

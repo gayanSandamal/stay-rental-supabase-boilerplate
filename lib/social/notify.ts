@@ -25,6 +25,7 @@ import { isIntakeConfigured } from '@/lib/intake/channels/whatsapp/config';
 import { sendWhatsAppText } from '@/lib/intake/channels/whatsapp/send';
 import { socialResultsMessage, type SocialResultItem } from '@/lib/intake/messages';
 import { isDryRunPost } from './types';
+import { resolveFacebookPublicPageRef, withFacebookPostUrl } from './facebook-permalink';
 
 type ListingRow = typeof listings.$inferSelect;
 
@@ -124,8 +125,16 @@ export async function notifyLandlordOfSocialResults(listing: ListingRow): Promis
     where: eq(listingSocialPosts.listingId, listing.id),
   });
 
-  const results: SocialResultItem[] = posts
-    .filter((p) => p.status === 'posted')
+  // Rows stored before the public-id fix carry a Facebook link the app cannot
+  // open; repair them here, the moment they become a message. Asked of Graph
+  // only when there is a Facebook post to fix — this runs on the cron.
+  const posted = posts.filter((p) => p.status === 'posted');
+  const publicPageRef = posted.some((p) => p.platform === 'facebook_page')
+    ? await resolveFacebookPublicPageRef({ network: true })
+    : null;
+
+  const results: SocialResultItem[] = posted
+    .map((p) => withFacebookPostUrl(p, publicPageRef))
     .map((p) => ({
       platform: p.platform,
       permalink: p.remotePermalink,
