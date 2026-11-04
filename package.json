@@ -14,6 +14,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate-all": "npx tsx lib/db/run-all-migrations.ts",
     "db:check-drift": "npx tsx scripts/check-schema-drift.ts",
+    "cron:setup-supabase": "npx tsx scripts/setup-supabase-cron.ts",
     "imports:notify-owners": "npx tsx scripts/notify-imported-owner.ts",
     "imports:unstick-consent": "npx tsx scripts/unstick-dry-run-consent.ts",
     "db:migrate-all:local": "DATABASE_URL=postgresql://postgres:postgres@localhost:54323/postgres npx tsx lib/db/run-all-migrations.ts",

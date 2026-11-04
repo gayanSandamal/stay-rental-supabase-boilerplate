@@ -57,7 +57,7 @@ Access control patterns:
 
 ## Tech stack
 
-Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Supabase** (Postgres + Auth + Storage) · Resend (email) · Tailwind 4 + Radix/shadcn-style UI + lucide · Zod · SWR · deployed on **Vercel** (+ Vercel Cron). Package manager is **pnpm**. Dev uses Turbopack.
+Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Supabase** (Postgres + Auth + Storage) · Resend (email) · Tailwind 4 + Radix/shadcn-style UI + lucide · Zod · SWR · deployed on **Vercel** (Hobby plan; frequent jobs run from Supabase pg_cron). Package manager is **pnpm**. Dev uses Turbopack.
 
 ## Architecture & conventions
 
@@ -72,7 +72,7 @@ Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Su
 - **Rate limiting**: `lib/rate-limit.ts` — in-memory (per-instance, resets on deploy). Applied to listing creation, contact numbers, uploads, view tracking.
 - **Storage**: Supabase `property-images` bucket (5 MB, JPEG/PNG/WebP/GIF) via `lib/storage.ts` / `/api/upload`. Photos are stored on `listings.photos` as a JSON array string.
 - **Notifications**: in-app center (`notifications` table, `lib/notifications.ts`) + transactional email via Resend (`lib/email.ts`). Without `RESEND_API_KEY`, emails log to console.
-- **Cron** (Vercel, secured by `CRON_SECRET` bearer token): `/api/cron/refresh-suggestions` (~15 min), `/api/cron/saved-search-alerts` (~6 h).
+- **Cron** — every `/api/cron/*` route is secured by the `CRON_SECRET` bearer token, and `lib/cron/schedule.ts` is the one table of what runs when and WHO runs it. **Vercel is on the Hobby plan, which rejects every deployment whose `vercel.json` has a cron firing more than once a day** (it blocked all deploys on 2026-11-04). So `vercel.json` keeps only the daily/weekly jobs, and the frequent ones (WhatsApp intake and moderation every 2 min, social every 5, expiry and suggestions every 15, alerts every 6 h) are fired by **Supabase pg_cron + pg_net** calling the same endpoints with the same token. Register/update them with `DATABASE_URL=… CRON_SECRET=… CRON_BASE_URL=https://easyrent.lk pnpm cron:setup-supabase` (`--status` to see runs and HTTP codes; a 401 means Vault's secret ≠ Vercel's). The secret lives in Supabase Vault, never in the job text. It is deliberately not a numbered migration — `db:migrate-all` replays against local databases, which would then call production. Never put a frequent cron back in `vercel.json`, and never schedule one job on both runners; `tests/unit/cron-schedule.test.ts` enforces both.
 
 ## Database & migrations — IMPORTANT GOTCHA
 
