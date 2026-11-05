@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Importing Facebook adverts — Easy Rent operator guide</title>
+<!--
+  Source of docs/guides/facebook-import-guide.pdf.
+  Rebuild: node docs/guides/facebook-import/build.mjs
+  Screenshots live in ./img and were captured read-only from easyrent.lk on
+  2026-11-05 (no import created, no consent request sent). Personal data
+  (owner names, phone numbers, our support number) is blurred in the images.
+  Annotations are drawn by the script at the bottom from data-ann attributes,
+  in the image's own pixel coordinates: [label, x1, y1, x2, y2].
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f172a;
+    --body: #334155;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --soft: #f8fafc;
+    --brand: #1f5c57;
+    --brand-2: #2f7d76;
+    --brand-soft: #e7f3f1;
+    --pin: #e8590c;
+    --warn-bg: #fff8e6; --warn-line: #f2c46b; --warn-ink: #7a4b00;
+    --bad-bg: #fff1f2; --bad-line: #fda4af; --bad-ink: #9f1239;
+    --info-bg: #eff8ff; --info-line: #93c5fd; --info-ink: #1e3a8a;
+    --ok-bg: #ecfdf5; --ok-line: #86efac; --ok-ink: #065f46;
+  }
+  @page {
+    size: A4;
+    margin: 18mm 17mm 20mm 17mm;
+    @bottom-left { content: "Easy Rent · Facebook import guide"; font: 500 8pt Inter, sans-serif; color: #94a3b8; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 8pt Inter, sans-serif; color: #94a3b8; }
+  }
+  @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font: 400 10pt/1.55 Inter, -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--body); }
+  h1, h2, h3, h4 { color: var(--ink); line-height: 1.25; margin: 0; }
+  h1 { font-size: 20pt; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 4mm; }
+  h1 .num { color: var(--brand-2); margin-right: 3mm; }
+  h2 { font-size: 13pt; font-weight: 700; margin: 7mm 0 2.5mm; break-after: avoid; }
+  h3 { font-size: 10.5pt; font-weight: 700; margin: 5mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.2mm; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { font: 500 8.6pt "SFMono-Regular", Menlo, Consolas, monospace; background: #f1f5f9; padding: 0.3mm 1.2mm; border-radius: 1mm; color: #0f172a; }
+  .ui { font-weight: 600; color: var(--ink); background: #f1f5f9; border: 1px solid var(--line); border-radius: 1.2mm; padding: 0 1.3mm; white-space: nowrap; }
+  .muted { color: var(--muted); }
+  .lead { font-size: 11pt; color: #1e293b; }
+  section.chapter { break-before: page; }
+  .marker { position: absolute; font-size: 1px; color: #fff; line-height: 1px; }
+
+  /* ---------- cover ---------- */
+  .cover { page: cover; height: 297mm; position: relative; overflow: hidden; background: var(--brand); color: #fff; }
+  .cover .band { position: absolute; inset: 0; background:
+      radial-gradient(120mm 120mm at 105% -10%, rgba(255,255,255,0.12), transparent 70%),
+      radial-gradient(90mm 90mm at -10% 110%, rgba(255,255,255,0.08), transparent 70%); }
+  .cover .inner { position: absolute; left: 22mm; right: 22mm; top: 34mm; }
+  .cover .logo { display: flex; align-items: center; gap: 3mm; font-weight: 800; letter-spacing: 0.22em; font-size: 11pt; }
+  .cover .logo svg { width: 10mm; height: 10mm; }
+  .cover .logo small { display: block; font-size: 6.5pt; letter-spacing: 0.25em; font-weight: 500; opacity: 0.75; }
+  .cover .kicker { margin-top: 40mm; text-transform: uppercase; letter-spacing: 0.2em; font-size: 8.5pt; font-weight: 600; opacity: 0.8; }
+  .cover h1 { color: #fff; font-size: 34pt; line-height: 1.08; margin: 4mm 0 6mm; letter-spacing: -0.02em; }
+  .cover .sub { font-size: 13pt; line-height: 1.5; opacity: 0.92; max-width: 140mm; }
+  .cover .shot { position: absolute; left: 22mm; right: 22mm; bottom: 46mm; height: 70mm; border-radius: 3mm; overflow: hidden; box-shadow: 0 6mm 16mm rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.25); }
+  .cover .shot img { width: 100%; display: block; }
+  .cover .meta { position: absolute; left: 22mm; right: 22mm; bottom: 18mm; display: flex; justify-content: space-between; font-size: 8.5pt; opacity: 0.85; }
+
+  /* ---------- toc ---------- */
+  .toc { list-style: none; padding: 0; margin: 4mm 0 0; }
+  .toc li { display: flex; align-items: baseline; gap: 2mm; margin: 0; padding: 1mm 0; border-bottom: 1px solid var(--line); }
+  .toc li.sub { padding: 0.25mm 0 0.25mm 9mm; border-bottom: none; color: var(--muted); font-size: 9.2pt; }
+  .toc .n { width: 7mm; color: var(--brand-2); font-weight: 700; }
+  .toc .t { flex: 1; color: var(--ink); font-weight: 600; }
+  .toc li.sub .t { color: var(--body); font-weight: 400; }
+  .toc .p { min-width: 8mm; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .toc a { color: inherit; text-decoration: none; }
+
+  /* ---------- callouts ---------- */
+  .callout { border: 1px solid var(--line); border-left-width: 1.4mm; border-radius: 1.6mm; padding: 2.6mm 3.4mm; margin: 3mm 0 4mm; break-inside: avoid; background: var(--soft); }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout .h { font-weight: 700; color: var(--ink); margin-bottom: 1mm; display: block; }
+  .callout.tip { background: var(--brand-soft); border-color: #b6dbd6; border-left-color: var(--brand-2); }
+  .callout.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+  .callout.warn .h { color: var(--warn-ink); }
+  .callout.bad { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-ink); }
+  .callout.bad .h { color: var(--bad-ink); }
+  .callout.info { background: var(--info-bg); border-color: var(--info-line); color: var(--info-ink); }
+  .callout.info .h { color: var(--info-ink); }
+
+  .rules { display: grid; grid-template-columns: 1fr 1fr; gap: 2.4mm; margin: 2mm 0 3mm; }
+  .rule { border: 1px solid var(--line); border-radius: 2mm; padding: 2.2mm 3mm; background: #fff; break-inside: avoid; }
+  .rule b { display: block; color: var(--brand); font-size: 10.5pt; margin-bottom: 1mm; }
+  .rule p { margin: 0; font-size: 9.2pt; }
+
+  /* ---------- numbered steps ---------- */
+  ol.steps { list-style: none; padding: 0; counter-reset: step; margin: 2mm 0 4mm; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 9mm; margin-bottom: 2.4mm; break-inside: avoid; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: -0.2mm; width: 5.8mm; height: 5.8mm; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; font-size: 8.5pt; display: flex; align-items: center; justify-content: center; }
+
+  /* ---------- figures ---------- */
+  figure.shot { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure.shot .frame { position: relative; border: 1px solid #cbd5e1; border-radius: 2mm; overflow: hidden; box-shadow: 0 1mm 3mm rgba(15,23,42,0.08); background: #fff; }
+  figure.shot .frame img { display: block; width: 100%; }
+  figure.shot.w80 .frame { width: 80%; margin: 0 auto; }
+  figure.shot.w70 .frame { width: 70%; margin: 0 auto; }
+  figure.shot.w60 .frame { width: 60%; margin: 0 auto; }
+  figure.shot figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 1.8mm; text-align: center; }
+  figure.shot figcaption b { color: var(--ink); }
+  .ann-box { position: absolute; border: 0.6mm solid var(--pin); border-radius: 1.2mm; box-shadow: 0 0 0 0.6mm rgba(255,255,255,0.7); }
+  .ann-pin { position: absolute; width: 5.4mm; height: 5.4mm; margin: -2.7mm 0 0 -2.7mm; border-radius: 50%; background: var(--pin); color: #fff; font-weight: 800; font-size: 8pt; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 0.6mm #fff, 0 0.6mm 1.6mm rgba(0,0,0,0.3); }
+  ol.legend { list-style: none; padding: 0; margin: 2mm 0 4mm; counter-reset: none; }
+  ol.legend li { position: relative; padding-left: 7.5mm; margin-bottom: 1.4mm; font-size: 9.4pt; }
+  ol.legend li .k { position: absolute; left: 0; top: 0.1mm; width: 5mm; height: 5mm; border-radius: 50%; background: var(--pin); color: #fff; font-weight: 800; font-size: 7.5pt; display: flex; align-items: center; justify-content: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; align-items: start; }
+  .pair figure.shot { margin-top: 0; }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4.5mm; font-size: 9pt; }
+  th { text-align: left; font-weight: 700; color: var(--ink); background: #f1f5f9; border-bottom: 1px solid #cbd5e1; padding: 1.8mm 2.2mm; }
+  td { border-bottom: 1px solid var(--line); padding: 1.8mm 2.2mm; vertical-align: top; }
+  tr { break-inside: avoid; }
+  table.trouble td:first-child { width: 33%; font-weight: 600; color: var(--ink); }
+  .badge { display: inline-block; font-size: 7.6pt; font-weight: 600; border-radius: 1mm; padding: 0.1mm 1.6mm; white-space: nowrap; }
+  .b-draft { background: #e0f2fe; color: #075985; }
+  .b-await { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
+  .b-pub { background: #dcfce7; color: #166534; }
+  .b-dis { background: #e2e8f0; color: #475569; }
+  .b-dec { background: #ffe4e6; color: #9f1239; }
+  .b-queued { background: #e0f2fe; color: #075985; }
+  .b-warn { background: #fef3c7; color: #92400e; }
+  .b-bad { background: #ffe4e6; color: #be123c; }
+
+  /* ---------- whatsapp message mock ---------- */
+  .wa { background: #e7ddd3; border-radius: 2.4mm; padding: 4mm; margin: 3mm 0 4mm; break-inside: avoid; }
+  .wa .bubble { background: #fff; border-radius: 2mm; padding: 3mm 3.4mm; max-width: 120mm; font-size: 9pt; line-height: 1.5; white-space: pre-wrap; box-shadow: 0 0.4mm 0.8mm rgba(0,0,0,0.12); color: #111; }
+  .wa .bubble.out { margin-left: auto; background: #d9fdd3; max-width: 60mm; }
+  .wa .btn { display: block; margin-top: 2mm; border-top: 1px solid #e5e7eb; padding-top: 2mm; text-align: center; color: #0a7cff; font-weight: 600; }
+  .wa .label { font-size: 7.6pt; color: #5b4636; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 2mm; font-weight: 700; }
+
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding-left: 7mm; position: relative; margin-bottom: 1.8mm; }
+  .checklist li::before { content: ""; position: absolute; left: 0; top: 0.6mm; width: 3.6mm; height: 3.6mm; border: 0.4mm solid var(--brand); border-radius: 0.8mm; }
+  .card { border: 1px solid var(--line); border-radius: 2mm; padding: 3.5mm 4mm; margin-bottom: 4mm; break-inside: avoid; }
+  .card h3 { margin-top: 0; color: var(--brand); }
+  .flow { margin: 1mm auto 0; width: 84%; break-inside: avoid; }
+  .flow svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+
+<!-- =============================== COVER =============================== -->
+<div class="cover">
+  <div class="band"></div>
+  <div class="inner">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>
+      <div>EASY RENT<small>VERIFIED RENTALS · SRI LANKA</small></div>
+    </div>
+    <div class="kicker">Back Office · Operator guide</div>
+    <h1>Importing Facebook adverts into Easy Rent</h1>
+    <div class="sub">A step-by-step guide for ops and admin staff using <b>Back Office → Imports</b>: turning a Facebook rental advert into a listing, with the owner's permission, from paste to live.</div>
+  </div>
+  <div class="shot"><img src="img/01-imports-list.png" alt=""></div>
+  <div class="meta"><span>easyrent.lk/back-office/imports</span><span>Version 1.0 · 5 November 2026</span></div>
+</div>
+
+<!-- =============================== TOC =============================== -->
+<section class="chapter" style="break-before: page;">
+  <h1>Contents</h1>
+  <ol class="toc" id="toc"></ol>
+  <div class="callout info" style="margin-top:5mm">
+    <span class="h">How to read this guide</span>
+    Chapters 1–3 are the background you need once. Chapters 4–7 are the import itself, in the order you do it. Chapter 8 is the page to keep open while you work: every message the screens can show, what it means, and what to do about it.
+  </div>
+  <p class="muted" style="font-size:8.6pt">All screenshots are from the live Back Office at easyrent.lk, taken on 5 November 2026 without creating an import or messaging anyone. Owner names and phone numbers are blurred. Orange numbers on a screenshot match the numbered notes under it. The example advert typed into some screens is invented.</p>
+</section>
+
+<!-- =============================== 1 =============================== -->
+<section class="chapter" data-toc="What the importer does">
+  <h1><span class="num">1</span>What the importer does</h1>
+  <p class="lead">Landlords advertise rentals in Facebook groups and on Facebook pages every day. The importer lets you take one of those adverts and turn it into an Easy Rent listing, but only if the owner agrees.</p>
+  <p>You paste the advert, check and complete the draft, then get the owner's permission. When the owner says <strong>YES</strong>, Easy Rent creates a free landlord account for their phone number, publishes the listing, and sends them a link to edit or remove it. Tenants then contact the owner directly. Easy Rent never sits in the middle and never charges for the listing.</p>
+  <p><strong>Who can use it:</strong> staff with the <strong>ops</strong> or <strong>admin</strong> role, once the feature is switched on (chapter 2). Every action is recorded in the audit log under your name, including any consent you confirm yourself.</p>
+
+  <h2 data-toc-sub>The four rules that shape everything</h2>
+  <div class="rules">
+    <div class="rule"><b>Nothing publishes without a yes</b><p>A draft becomes a listing only when the owner replies YES on WhatsApp, or when you confirm that they agreed by phone or chat. There is no other route.</p></div>
+    <div class="rule"><b>Silence means no</b><p>If the owner never replies, nothing is ever published. There is no timeout that publishes anyway. Most imports end like this, and that is expected.</p></div>
+    <div class="rule"><b>One ask per owner</b><p>The WhatsApp request can be sent once per import. A second unsolicited message to a stranger is harassment and harms our WhatsApp account.</p></div>
+    <div class="rule"><b>A NO deletes</b><p>If the owner replies NO, we delete the advert text, photos and name we were holding. Only a record that they declined is kept, so they are never asked again.</p></div>
+  </div>
+
+  <h2 data-toc-sub>The whole flow at a glance</h2>
+  <div class="flow">
+    <svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#64748b"/></marker>
+      </defs>
+      <style>
+        .bx{fill:#fff;stroke:#cbd5e1;stroke-width:1.2}
+        .br{fill:#e7f3f1;stroke:#2f7d76;stroke-width:1.4}
+        .bg{fill:#ecfdf5;stroke:#22c55e;stroke-width:1.4}
+        .bd{fill:#fff1f2;stroke:#fb7185;stroke-width:1.2}
+        .bs{fill:#f8fafc;stroke:#94a3b8;stroke-width:1.2;stroke-dasharray:4 3}
+        .t{font-size:13px;font-weight:700;fill:#0f172a}
+        .s{font-size:10.5px;fill:#475569}
+        .ln{stroke:#64748b;stroke-width:1.4;fill:none;marker-end:url(#ar)}
+        .lb{font-size:10px;fill:#64748b;font-weight:600}
+        .step{font-size:10px;font-weight:800;fill:#2f7d76;letter-spacing:.08em}
+      </style>
+      <!-- row 1 -->
+      <text class="step" x="20" y="22">STEP 1</text>
+      <rect class="bx" x="20" y="30" width="160" height="62" rx="8"/>
+      <text class="t" x="34" y="56">Start an import</text>
+      <text class="s" x="34" y="76">Paste link + advert text</text>
+      <path class="ln" d="M180 61 H218"/>
+      <text class="step" x="222" y="22">STEP 2</text>
+      <rect class="bx" x="222" y="30" width="170" height="62" rx="8"/>
+      <text class="t" x="236" y="56">Complete the draft</text>
+      <text class="s" x="236" y="76">Fields, owner number, photos</text>
+      <path class="ln" d="M392 61 H430"/>
+      <text class="step" x="434" y="22">STEP 3 · GET CONSENT (pick one)</text>
+      <rect class="br" x="434" y="30" width="306" height="140" rx="8"/>
+      <text class="t" x="448" y="54">A · Invite comment</text>
+      <text class="s" x="448" y="70">Owner messages us themselves → normal intake</text>
+      <text class="t" x="448" y="96">B · Ask the owner for consent</text>
+      <text class="s" x="448" y="112">One WhatsApp request with a preview link</text>
+      <text class="t" x="448" y="138">C · Publish — I already have consent</text>
+      <text class="s" x="448" y="154">You spoke to the owner yourself</text>
+      <!-- answers -->
+      <path class="ln" d="M520 170 V206"/>
+      <rect class="bg" x="434" y="208" width="170" height="54" rx="8"/>
+      <text class="t" x="448" y="231">YES (or attested)</text>
+      <text class="s" x="448" y="249">Account + listing created</text>
+      <path class="ln" d="M660 170 V206"/>
+      <rect class="bd" x="616" y="208" width="124" height="54" rx="8"/>
+      <text class="t" x="630" y="231">NO</text>
+      <text class="s" x="630" y="249">Data wiped · declined</text>
+      <rect class="bs" x="222" y="208" width="170" height="54" rx="8"/>
+      <text class="t" x="236" y="231">No reply</text>
+      <text class="s" x="236" y="249">Stays awaiting consent forever</text>
+      <path class="ln" d="M470 170 C 420 190, 360 190, 330 206"/>
+      <!-- step 4 -->
+      <text class="step" x="20" y="300">STEP 4 · AFTER YES</text>
+      <path class="ln" d="M518 262 V300 H182"/>
+      <rect class="bx" x="20" y="308" width="160" height="70" rx="8"/>
+      <text class="t" x="34" y="334">Automated checks</text>
+      <text class="s" x="34" y="352">Listing is "pending"</text>
+      <text class="s" x="34" y="367">(when approval is on)</text>
+      <path class="ln" d="M180 343 H218"/>
+      <rect class="bg" x="222" y="308" width="170" height="70" rx="8"/>
+      <text class="t" x="236" y="334">Listing is live</text>
+      <text class="s" x="236" y="352">Status "active" · 30 days</text>
+      <text class="s" x="236" y="367">Social posts if ticked</text>
+      <path class="ln" d="M392 343 H430"/>
+      <rect class="bx" x="434" y="308" width="306" height="70" rx="8"/>
+      <text class="t" x="448" y="334">Owner gets the go-live notice</text>
+      <text class="s" x="448" y="352">WhatsApp: "your property is now listed" with an</text>
+      <text class="s" x="448" y="367">edit / take-down link. Reply REMOVE deletes it.</text>
+      <text class="lb" x="96" y="396">Held by the checks? Ops decides in Back Office → Moderation.</text>
+    </svg>
+  </div>
+
+</section>
+
+<!-- =============================== 2 =============================== -->
+<section class="chapter" data-toc="Before you start: settings that must be on">
+  <h1><span class="num">2</span>Before you start: settings that must be on</h1>
+  <p>Three switches in <strong>Back Office → Settings</strong> control the importer. An admin changes them. Changes can take up to 30 seconds to reach every server.</p>
+
+  <figure class="shot w60" data-ann='[[1,236,92,766,163],[2,236,186,766,256],[3,236,279,766,349]]' data-crop="225 85 775 355">
+    <div class="frame"><img src="img/04-settings-flags.png" alt="Back Office Settings with the three import switches"></div>
+    <figcaption><b>Figure 1.</b> Back Office → Settings, Platform group. All three are on in production.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Facebook post import</strong> (<code>enableFacebookImport</code>). Required. When it is off, the Imports screen does not exist (404) and every import action is refused.</li>
+    <li><span class="k">2</span><strong>Manual consent for Facebook imports</strong> (<code>allowManualImportConsent</code>). Optional. Adds the <span class="ui">Publish — I already have consent</span> button for when you have spoken to the owner yourself. It is the <em>only</em> way to publish a pasted advert that has no Facebook post behind it.</li>
+    <li><span class="k">3</span><strong>Message owners of imported listings</strong> (<code>notifyImportedOwners</code>). Required for WhatsApp. It controls <strong>both</strong> messages: the consent request <em>and</em> the go-live notice. When it is off, both are written to the server log and never sent, so no owner can ever reply YES. The settings description only mentions the notice, but the switch governs the request too.</li>
+  </ol>
+
+  <h2 data-toc-sub>What else has to be in place (admin / developer)</h2>
+  <table>
+    <tr><th style="width:36%">Setting</th><th>What it does, and what you see if it is missing</th></tr>
+    <tr><td><code>WHATSAPP_CONSENT_TEMPLATE</code><br><span class="muted">Meta template <code>listing_consent_request</code></span></td><td>The approved WhatsApp message that asks the owner for permission. If it is missing, the review screen shows a red <em>"Nothing here can be published yet"</em> (or <em>"The Ask the owner button cannot reach them yet"</em>) banner, and asking only logs the message.</td></tr>
+    <tr><td><code>WHATSAPP_IMPORT_TEMPLATE</code><br><span class="muted">Meta template <code>listing_imported_notice</code></span></td><td>The go-live notice sent once the listing is live. If it is missing, the list and review screens show an amber <em>"Owners are not being messaged"</em> banner. Listings still publish, but the owner is never told.</td></tr>
+    <tr><td><code>NEXT_PUBLIC_WHATSAPP_SUPPORT</code></td><td>Our WhatsApp number. It is used for the clickable link in the invite comment. Without it the comment just says "Send us a WhatsApp message".</td></tr>
+    <tr><td><strong>Automated listing approval</strong><br><span class="muted">Settings switch, on in production</span></td><td>Not an import setting, but it decides what happens after YES. When it is on, a new listing starts as <span class="badge b-await">pending</span> and goes live once the automated checks pass. When it is off, it goes live immediately.</td></tr>
+  </table>
+  <p><strong>Quick health check:</strong> open any draft. If there is no red or amber banner near the top, both WhatsApp templates are configured. If there is one, read it before you ask anybody anything.</p>
+</section>
+
+<!-- =============================== 3 =============================== -->
+<section class="chapter" data-toc="The Imports screen">
+  <h1><span class="num">3</span>The Imports screen</h1>
+  <p>Open <strong>Back Office → Imports</strong> (<code>/back-office/imports</code>). Each row is one advert you have brought in. Click a title to open its review screen, where all the work happens.</p>
+
+  <figure class="shot" data-ann='[[1,652,89,763,117],[2,245,135,595,160],[3,530,164,756,190],[4,410,230,500,262],[5,527,230,600,262],[6,626,237,683,253]]'>
+    <div class="frame"><img src="img/01-imports-list.png" alt="Imports list"></div>
+    <figcaption><b>Figure 2.</b> The Imports list, on the default <em>Awaiting review</em> tab.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><span class="ui">Import a post</span> starts a new import (chapter 4).</li>
+    <li><span class="k">2</span><strong>Tabs.</strong> <em>Awaiting review</em> shows drafts only. <em>Published</em> and <em>Discarded</em> show what their names say. Imports that are <strong>awaiting consent</strong> or <strong>declined</strong> have no tab of their own and appear only under <em>All</em>.</li>
+    <li><span class="k">3</span><strong>Search</strong> matches the post link, the advert text, the owner's name or number, or an import number such as <code>#17</code>.</li>
+    <li><span class="k">4</span><strong>Source</strong> shows where it came from and how much Facebook gave us: <em>full post</em>, <em>preview only</em>, or <em>pasted by hand</em>. The small arrow opens the original post.</li>
+    <li><span class="k">5</span><strong>Owner</strong> is the name and number you confirmed. <em>no number yet</em> means the owner's phone has not been filled in.</li>
+    <li><span class="k">6</span><strong>Status</strong>, plus a link to the listing once one exists and a badge if the owner's go-live notice did not go out (see the table below).</li>
+  </ol>
+
+  <div class="pair">
+    <figure class="shot" data-ann='[[1,345,57,393,77],[2,200,148,292,202],[3,398,281,486,300]]'>
+      <div class="frame"><img src="img/02-all-tab.png" alt="All tab"></div>
+      <figcaption><b>Figure 3.</b> The <em>All</em> tab. Owner details blurred.</figcaption>
+    </figure>
+    <figure class="shot" data-ann='[[4,398,74,458,92],[5,398,94,458,112]]'>
+      <div class="frame"><img src="img/03-all-tab-published.png" alt="Published rows"></div>
+      <figcaption><b>Figure 4.</b> Published imports, two with a failed notice.</figcaption>
+    </figure>
+  </div>
+  <ol class="legend">
+    <li><span class="k">1</span>Use <em>All</em> to follow imports you have already asked about.</li>
+    <li><span class="k">2</span><em>Pasted advert · no original post</em>: an import made from text only (chapter 4, path B).</li>
+    <li><span class="k">3</span><em>awaiting consent</em>: the owner has been asked and has not replied YES or NO.</li>
+    <li><span class="k">4</span><em>published</em>: the owner agreed and a listing was created. This does <strong>not</strong> mean the listing is live yet (chapter 7).</li>
+    <li><span class="k">5</span><em>send failed</em>: WhatsApp rejected the go-live notice. Contact the owner another way.</li>
+  </ol>
+
+  <h2 data-toc-sub>Statuses and badges</h2>
+  <table>
+    <tr><th style="width:26%">You see</th><th>Meaning</th></tr>
+    <tr><td><span class="badge b-draft">draft</span></td><td>Imported and waiting for you to complete it and get consent. Nothing is public.</td></tr>
+    <tr><td><span class="badge b-await">awaiting consent</span></td><td>The WhatsApp request was sent (or WhatsApp rejected it). Waiting for YES or NO. Nothing is public, and if they never answer it stays like this.</td></tr>
+    <tr><td><span class="badge b-pub">published</span></td><td>Consent was given and a listing row was created. The listing may still be <em>pending</em> automated checks. Check the listing's own status.</td></tr>
+    <tr><td><span class="badge b-dec">declined</span></td><td>The owner replied NO. Their advert text, photos and name have been deleted. Do not import the same advert again.</td></tr>
+    <tr><td><span class="badge b-dis">discarded</span></td><td>You discarded the draft. Nothing was sent.</td></tr>
+    <tr><td><span class="badge b-queued">owner notice queued</span></td><td>The listing is pending the automated checks. The go-live notice goes out when it passes.</td></tr>
+    <tr><td><span class="badge b-warn">not sent</span></td><td>The go-live notice was written and logged but not delivered, because the template is missing or owner messaging is switched off.</td></tr>
+    <tr><td><span class="badge b-bad">send failed</span></td><td>WhatsApp rejected the go-live notice. Tell the owner another way (call, or message from the business WhatsApp).</td></tr>
+  </table>
+</section>
+
+<!-- =============================== 4 =============================== -->
+<section class="chapter" data-toc="Step 1 · Start an import">
+  <h1><span class="num">4</span>Step 1 · Start an import</h1>
+  <p>Click <span class="ui">Import a post</span>. The screen has two boxes, and you can fill either or both.</p>
+
+  <figure class="shot" data-ann='[[1,250,258,750,291],[2,697,229,749,252],[3,250,336,750,438],[4,251,485,348,516]]' data-crop="220 75 780 530">
+    <div class="frame"><img src="img/05-new-empty.png" alt="Import a post, empty"></div>
+    <figcaption><b>Figure 5.</b> <em>Import a post</em>, before anything is pasted.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Facebook post URL</strong>: the link to one specific post. Group posts, page posts and photo posts all work. A profile or a group's home page does not.</li>
+    <li><span class="k">2</span><span class="ui">Paste</span> reads your clipboard into the right box. If you copied a share that has the post's first line and the link together, the link is pulled out for you.</li>
+    <li><span class="k">3</span><strong>Post text</strong>: the whole advert. This is the most important input. Rent, town, rooms and phone number are read from it.</li>
+    <li><span class="k">4</span>The button changes depending on what you filled in: <span class="ui">Fetch post</span> (link only) or <span class="ui">Create draft</span> (text given). With nothing filled in it is disabled. On a keyboard, <code>⌘/Ctrl + Enter</code> in the text box submits.</li>
+  </ol>
+
+  <div style="break-inside: avoid">
+  <h2 data-toc-sub>Choose your path</h2>
+  <table>
+    <tr><th style="width:24%">Path</th><th style="width:26%">You fill in</th><th>What happens</th></tr>
+    <tr><td><strong>A · Link + text</strong><br><span class="muted">recommended</span></td><td>The post link <em>and</em> the full advert text</td><td>Instant. Facebook is not contacted, your text is parsed, and the review screen opens already filled in. The link is kept as the source, and the owner can be asked over WhatsApp.</td></tr>
+    <tr><td><strong>B · Text only</strong><br><span class="muted">no post behind it</span></td><td>Just the advert text, for example details a landlord sent the office directly</td><td>Saved as a <em>Pasted advert</em> with no original post. The WhatsApp consent request <strong>cannot</strong> be used, because its approved wording says "we found your advert on Facebook". You publish it with manual consent after speaking to the owner.</td></tr>
+    <tr><td><strong>C · Link only</strong></td><td>Just the post link</td><td>Slow. We ask Facebook, which usually refuses (see the table below). You will almost always end up pasting the text on the next screen anyway.</td></tr>
+  </table>
+  </div>
+
+  <h3>Path A: link and text (do this by default)</h3>
+  <ol class="steps">
+    <li>Open the advert on Facebook. Copy the post's address: open the post itself (click its timestamp) and copy the URL from the address bar.</li>
+    <li>Paste it into <strong>Facebook post URL</strong>.</li>
+    <li>On the post, click <em>See more</em> so the whole advert is showing, select all of its text and copy it. Paste it into <strong>Post text</strong>.</li>
+    <li>Check that the line beside the button reads <em>"Facebook is not asked — your text is used as it is."</em> Click <span class="ui">Create draft</span> and do not reload while it saves.</li>
+  </ol>
+  <figure class="shot w80" data-ann='[[1,51,154,550,187],[2,51,231,550,368],[3,51,414,157,447]]'>
+    <div class="frame"><img src="img/06-new-url-and-text.png" alt="URL and text filled in"></div>
+    <figcaption><b>Figure 6.</b> Path A, ready to submit. (Example advert, invented.)</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span>A valid link shows <em>"The link to one post…"</em> underneath.</li>
+    <li><span class="k">2</span>The whole advert, line breaks and all. The box grows as you paste.</li>
+    <li><span class="k">3</span><span class="ui">Create draft</span> takes you straight to the review screen.</li>
+  </ol>
+
+  <h3>Path B: text only</h3>
+  <p>Leave the link empty. The hints change to say it will be saved as a pasted advert, and that you will confirm the owner agreed yourself.</p>
+  <div class="pair">
+    <figure class="shot" data-ann='[[1,51,186,330,204],[2,165,422,500,440]]'>
+      <div class="frame"><img src="img/07-new-text-only.png" alt="Text only"></div>
+      <figcaption><b>Figure 7.</b> Path B, text only.</figcaption>
+    </figure>
+    <figure class="shot" data-ann='[[3,51,154,550,187],[4,51,413,320,448]]'>
+      <div class="frame"><img src="img/08-new-bad-url.png" alt="Bad URL"></div>
+      <figcaption><b>Figure 8.</b> A link that is not a Facebook post.</figcaption>
+    </figure>
+  </div>
+  <ol class="legend">
+    <li><span class="k">1</span><em>"Leave it empty if there is no post — the advert below is enough."</em></li>
+    <li><span class="k">2</span><em>"No post link — saved as a pasted advert. You will confirm the owner agreed."</em> Publishing this needs the <strong>Manual consent</strong> switch (chapter 2).</li>
+    <li><span class="k">3</span>A link to another site (here, ikman) is flagged in red as you type…</li>
+    <li><span class="k">4</span>…and the button stays disabled until you fix or clear it. A link you typed is never silently ignored.</li>
+  </ol>
+
+  <h2 data-toc-sub>What Facebook will and won't give us</h2>
+  <p>This is the most common surprise, so it is worth knowing before you start. Facebook removed automated access to group posts in April 2024, and reading other pages' posts needs an approval we do not have. What comes back depends on where the advert was posted:</p>
+  <table>
+    <tr><th style="width:30%">Where the advert is</th><th>What we get</th><th style="width:20%">Shown as</th></tr>
+    <tr><td>Easy Rent's own Facebook Page</td><td>The full text and every photo</td><td><em>full post</em></td></tr>
+    <tr><td>Some public pages</td><td>A preview: the <strong>first line only</strong>, cut off with "…", plus <strong>one</strong> cover photo. No phone number and no author.</td><td><em>preview only</em></td></tr>
+    <tr><td>Facebook <strong>groups</strong></td><td>A login wall. <strong>Nothing.</strong></td><td><em>pasted by hand</em></td></tr>
+    <tr><td>Most other pages</td><td>A login wall. Nothing.</td><td><em>pasted by hand</em></td></tr>
+  </table>
+  <div class="callout info"><span class="h">"Pasted by hand" is the normal result, not an error</span>Internally this is <code>resolved_via = 'manual'</code>, and it is how most imports look. The review screen is built for it: think of it as a listing editor that sometimes comes pre-filled, not a "confirm what we found" form. Never try to get around the login wall with a personal Facebook login. It breaks constantly and puts Easy Rent's own Facebook Page at risk.</div>
+  <figure class="shot w80" data-ann='[[1,38,312,562,453]]'>
+    <div class="frame"><img src="img/09-new-why-details.png" alt="Why Facebook usually hands over nothing"></div>
+    <figcaption><b>Figure 9.</b> The same explanation is one click away under the form: <em>"Why Facebook usually hands over nothing"</em>.</figcaption>
+  </figure>
+</section>
+
+<!-- =============================== 5 =============================== -->
+<section class="chapter" data-toc="Step 2 · Complete the draft">
+  <h1><span class="num">5</span>Step 2 · Complete the draft</h1>
+  <p>After <span class="ui">Create draft</span> or <span class="ui">Fetch post</span> you land on the review screen for the new import. Work down it from top to bottom. The example below is a real draft where Facebook returned only its public preview.</p>
+
+  <figure class="shot" data-ann='[[1,500,118,632,141],[2,237,153,763,221],[3,237,240,763,463]]' data-crop="220 80 780 539">
+    <div class="frame"><img src="img/10-review-top.png" alt="Review screen, top"></div>
+    <figcaption><b>Figure 10.</b> Top of the review screen. Our WhatsApp number in the comment is blurred.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span>The status, and <em>Original post</em>, which opens the advert on Facebook. Keep it open in another tab and check everything against it.</li>
+    <li><span class="k">2</span><strong>What Facebook gave us.</strong> Blue means <em>preview only</em> (first line plus cover photo). Amber means nothing at all, for group posts and login walls. Either way, the next move is to paste the full text.</li>
+    <li><span class="k">3</span><strong>The invite comment</strong>: a ready-made comment to post under the original advert. It is often the best route to a complete, consented listing (chapter 6, route A).</li>
+  </ol>
+
+  <h2 data-toc-sub>5.1 Paste the full advert and fill the fields</h2>
+  <figure class="shot" data-ann='[[1,237,70,763,212],[2,238,222,356,249]]' data-crop="220 50 780 262">
+    <div class="frame"><img src="img/11-review-post-text.png" alt="Post text"></div>
+    <figcaption><b>Figure 11.</b> This draft holds only Facebook's preview, which stops at "Half Month's Rent…".</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Post text.</strong> Replace the preview with the whole advert from Facebook.</li>
+    <li><span class="k">2</span><span class="ui">Fill empty fields</span> reads the text into any field that is still <strong>blank</strong>. Anything already filled in is left alone, so pressing it twice is safe.</li>
+  </ol>
+  <div class="callout warn"><span class="h">Paste and fill first, then edit</span><span class="ui">Fill empty fields</span> saves the post text and reloads the form from what is saved. Field edits or photo uploads you have <em>not</em> yet saved are lost. So: paste the text → <span class="ui">Fill empty fields</span> → then type corrections → <span class="ui">Save draft</span>. If you want a field read again from the text, clear it first, then press <span class="ui">Fill empty fields</span>.</div>
+
+  <h2 data-toc-sub>5.2 Check the listing details</h2>
+  <figure class="shot" data-ann='[[1,237,92,494,121],[2,237,148,494,177],[3,237,204,494,233],[4,237,261,494,290],[5,506,92,763,121],[6,506,261,763,290]]' data-crop="220 50 780 300">
+    <div class="frame"><img src="img/12-review-details.png" alt="Listing details"></div>
+    <figcaption><b>Figure 12.</b> Listing details. A red star means required.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Title</strong> (required, up to 200 characters). Generated titles look like "3BR House in Nugegoda". It is quoted back to the owner in the consent request, so keep it plain and accurate.</li>
+    <li><span class="k">2</span><strong>Town / city</strong> (required). Check it against the advert. A wrong town is worse than none.</li>
+    <li><span class="k">3</span><strong>Bedrooms</strong> (required).</li>
+    <li><span class="k">4</span><strong>Rent per month (LKR)</strong> (required). Numbers only, for example <code>158000</code>. The parser can miss the rent when "hot water" appears just before it, so always check this one against the advert.</li>
+    <li><span class="k">5</span><strong>Property type</strong> accepts only <code>house</code>, <code>apartment</code> or <code>room</code>. Anything else (such as "annex") is dropped when you save.</li>
+    <li><span class="k">6</span><strong>Deposit (months)</strong>, bathrooms, district and address are optional but help renters. Enter the advance or key money in months.</li>
+  </ol>
+
+  <h2 data-toc-sub>5.3 Description and the owner's number</h2>
+  <figure class="shot" data-ann='[[1,237,70,763,334],[2,237,463,494,493],[3,506,463,763,493]]' data-crop="220 50 780 505">
+    <div class="frame"><img src="img/13-review-description-owner.png" alt="Description and owner"></div>
+    <figcaption><b>Figure 13.</b> The description is exactly what will be published. The phone box shows its placeholder.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Description</strong>: the advert as it will appear, with line breaks kept. Phone numbers are removed automatically, because the owner's number is shown separately. Tidy wording if needed, but do not cut it short.</li>
+    <li><span class="k">2</span><strong>Phone number</strong> (required). This is who the consent request goes to and whose account is created if they say yes. Use the owner's <strong>mobile</strong>: WhatsApp cannot reach a landline, and you only get one ask. Any format works, and it is stored as <code>+94…</code>.</li>
+    <li><span class="k">3</span><strong>Owner name</strong> (optional). Facebook never gives us the author, so fill it in only if the advert names them. It is used to greet them ("Hi Nimal").</li>
+  </ol>
+  <div class="callout tip"><span class="h">Phone chips: "found in the post text"</span>When the saved post text contains phone numbers, they appear as clickable chips above the phone box, labelled <em>found in the post text</em>. Click one to use it. A mobile number (+947…) is pre-selected because only a mobile can receive WhatsApp, even if the advert lists a landline first. The chips are built from the <strong>saved</strong> text, so they appear after <span class="ui">Fill empty fields</span> or <span class="ui">Save draft</span>. Nobody has verified this number. Confirm it against the original post before you ask.</div>
+  <figure class="shot w80">
+    <div class="frame"><img src="img/23-owner-blurred.png" alt="Owner section with values blurred"></div>
+    <figcaption><b>Figure 14.</b> A completed owner section (values blurred). <em>"Confirm it against the original post — nobody has verified it."</em></figcaption>
+  </figure>
+
+  <h2 data-toc-sub>5.4 Photos and the cover photo</h2>
+  <figure class="shot" data-ann='[[1,237,84,763,113],[2,237,153,404,320],[3,237,363,763,421],[4,237,431,345,457]]' data-crop="220 55 780 490">
+    <div class="frame"><img src="img/14-review-photos.png" alt="Photos"></div>
+    <figcaption><b>Figure 15.</b> Photos. Facebook only ever hands over the cover photo.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><span class="ui">Upload Images</span>: upload saved photos (JPEG, PNG, WebP or GIF, up to 5 MB each, 6 maximum). You can also copy an image in the browser and press <code>Ctrl+V</code> / <code>⌘V</code> on this screen.</li>
+    <li><span class="k">2</span>The photos so far, numbered. The red × removes one.</li>
+    <li><span class="k">3</span><strong>Add photos by URL</strong>: on the Facebook post, right-click each photo → <em>Copy image address</em>, and paste one per line.</li>
+    <li><span class="k">4</span><span class="ui">Fetch photos</span> copies them into our storage (Facebook's links expire within hours) and <strong>saves your other edits at the same time</strong>.</li>
+  </ol>
+  <p>When there is more than one photo, a row of <span class="ui">Make photo 2 the cover</span> buttons appears. The cover is the photo renters see first in search results, so pick the best exterior or living-room shot. If you have more photos than the limit, an amber note tells you which will be left out. Reorder them to choose.</p>
+  <figure class="shot w70">
+    <div class="frame"><img src="img/19-banner-photos-refused.png" alt="Photos refused"></div>
+    <figcaption><b>Figure 16.</b> Only Facebook's own photo servers are accepted, and copied links expire. If any are refused, copy the address again or download and upload the photo.</figcaption>
+  </figure>
+
+  <h2 data-toc-sub>5.5 Social sharing, saving and discarding</h2>
+  <figure class="shot" data-ann='[[1,237,208,763,288],[2,640,435,737,465],[3,240,476,316,500],[4,322,478,452,498]]' data-crop="220 50 780 510">
+    <div class="frame"><img src="img/15-review-actions.png" alt="Actions"></div>
+    <figcaption><b>Figure 17.</b> The bottom of the review screen. The consent buttons are covered in chapter 6.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span><strong>Also post this to Easy Rent's Facebook, Instagram and TikTok.</strong> Tick it to queue social posts when the listing goes live. The WhatsApp consent request names all three platforms, so the owner's YES covers it. If you get consent by phone instead, tick it only if they agreed to social sharing too. Phone numbers never appear in our posts.</li>
+    <li><span class="k">2</span><span class="ui">Save draft</span> saves everything on the screen, including the pasted post text. Nothing is public. You see <em>"Draft saved — Nothing is public yet."</em></li>
+    <li><span class="k">3</span><span class="ui">Discard</span> marks the import discarded. Use it for duplicates, sale ads, or anything you won't pursue. A published import cannot be discarded.</li>
+    <li><span class="k">4</span><em>Still needed: …</em> lists what is missing before you can ask: title, town, bedrooms, rent and phone number.</li>
+  </ol>
+  <div class="callout warn"><span class="h">Sale ads</span>If the advert reads like a property <strong>for sale</strong>, an amber banner says so. Easy Rent is for rentals only. Check the original, and discard it if it is a sale.</div>
+</section>
+
+<!-- =============================== 6 =============================== -->
+<section class="chapter" data-toc="Step 3 · Get the owner's consent">
+  <h1><span class="num">6</span>Step 3 · Get the owner's consent</h1>
+  <p>Nothing is public yet. There are three ways to get permission. Pick one per import:</p>
+  <table>
+    <tr><th style="width:24%">Route</th><th style="width:38%">Best when</th><th>Result</th></tr>
+    <tr><td><strong>A · Invite comment</strong></td><td>You can comment on the original post. It works for every advert, including group posts and ads with missing details.</td><td>The owner messages us on WhatsApp and the listing arrives complete through the normal WhatsApp intake. This is the strongest consent.</td></tr>
+    <tr><td><strong>B · Ask the owner for consent</strong></td><td>The draft is complete, it came from a Facebook post, and you have the owner's mobile number.</td><td>One WhatsApp request with a preview link. The listing is published if they reply YES.</td></tr>
+    <tr><td><strong>C · Publish — I already have consent</strong></td><td>You have spoken to the owner yourself (call or chat). This is the only route for a pasted advert.</td><td>The listing is published straight away, recorded as <em>your</em> attestation and fully audited.</td></tr>
+  </table>
+
+  <h2 data-toc-sub>Route A · The invite comment</h2>
+  <p>Facebook will not let us read most adverts, so the invite asks the owner to send them to us. Owners who reply this way have opted in clearly, and their listing arrives with the full text, every photo, their name and a number WhatsApp has proven. It also avoids the WhatsApp request's weak spot. That request is a <em>marketing</em> message, and anyone who has switched marketing messages off never receives it, with no error on our side.</p>
+  <ol class="steps">
+    <li>On the review screen, click <span class="ui">Copy comment</span> in <em>"Or ask the owner to send it to us"</em> (Figure 10, note 3).</li>
+    <li>Open the original post on Facebook and paste it as a <strong>comment</strong>, ideally posting as Easy Rent's Facebook Page, since the comment introduces itself as Easy Rent. Facebook does not allow us to post this automatically, so it is always done by hand.</li>
+    <li>The comment has a WhatsApp link with a reference such as <code>FB-17</code> (the import number). When the owner messages us with it, ops is notified, and their message becomes a normal WhatsApp intake (Back Office → WhatsApp Intakes).</li>
+    <li>Once their own submission has arrived, <span class="ui">Discard</span> this import draft so the same property is not asked about twice.</li>
+  </ol>
+  <div class="card">
+    <h3>The comment (as generated for import #17)</h3>
+    <p style="font-family:Menlo,monospace;font-size:8.4pt;white-space:pre-wrap;margin:0">Hi! We are Easy Rent, a rental marketplace in Sri Lanka.
+
+If this is your property, we will list it for you free of charge — no fee, no commission. Send us the details and photos on WhatsApp and we will do the rest, with your own number shown to renters.
+
+WhatsApp us here: https://wa.me/&lt;our number&gt;?text=…FB-17
+
+Please keep the reference FB-17 in your message so we know which advert you mean.</p>
+  </div>
+
+  <h2 data-toc-sub>Route B · Ask the owner for consent (WhatsApp)</h2>
+  <ol class="steps">
+    <li>Make sure the draft is complete. The button is disabled until title, town, bedrooms, rent and phone number are all filled in.</li>
+    <li>Check the phone number against the advert one more time. <strong>You get one ask.</strong></li>
+    <li>Click <span class="ui">Ask the owner for consent</span>. It saves your edits first, then sends the request.</li>
+    <li>Read the banner that comes back (Figures 18–21). The import moves to <span class="badge b-await">awaiting consent</span>.</li>
+  </ol>
+  <div class="wa">
+    <div class="label">What the owner receives · approved template "listing_consent_request"</div>
+<div class="bubble">🏠 <b>Easy Rent — may we list your property, free of charge?</b>
+
+Hi Nimal, we found your rental advert for <b>3BR House in Nugegoda</b> on Facebook. We would like to list it on Easy Rent, a rental marketplace in Sri Lanka, and share it on our Facebook, Instagram and TikTok pages.
+
+It is completely free. We never charge landlords anything, and we never take a commission.
+
+Nothing is published yet — tap below to see exactly how your listing would look.
+
+Reply YES and we will publish it. Reply NO and we will delete everything we hold. If you do not reply, we will not publish it.
+
+Tenants would contact you directly on <b>+94 7X XXX XXXX</b>. Your number is never shown on our social posts.<span class="btn">View your listing preview</span></div>
+  </div>
+  <p>The button opens a read-only <strong>preview page</strong> showing the title, rent, rooms, location and up to six photos exactly as they would appear. It does not sign the owner in, and it stops working once they answer. The owner's name, title and number come from your draft, so a typo there is what they will read.</p>
+
+  <div class="pair">
+    <figure class="shot"><div class="frame"><img src="img/16-banner-asked-sent.png" alt=""></div><figcaption><b>Figure 18.</b> Sent. Now wait.</figcaption></figure>
+    <figure class="shot"><div class="frame"><img src="img/17-banner-dry-run.png" alt=""></div><figcaption><b>Figure 19.</b> Not sent: a setup problem (chapter 2). You can ask again once it is fixed.</figcaption></figure>
+    <figure class="shot"><div class="frame"><img src="img/18-banner-already-asked.png" alt=""></div><figcaption><b>Figure 20.</b> Already asked. A second request is refused.</figcaption></figure>
+    <figure class="shot"><div class="frame"><img src="img/20-banner-incomplete.png" alt=""></div><figcaption><b>Figure 21.</b> Something required is missing.</figcaption></figure>
+  </div>
+  <figure class="shot w70" data-ann='[[1,243,61,327,78]]'>
+    <div class="frame"><img src="img/22-awaiting-consent.png" alt="Awaiting consent"></div>
+    <figcaption><b>Figure 22.</b> An import waiting for the owner's answer.</figcaption>
+  </figure>
+
+  <h3>What the owner can reply</h3>
+  <table>
+    <tr><th style="width:30%">Owner replies</th><th>What happens</th></tr>
+    <tr><td><strong>YES</strong><br><span class="muted">also: yeah, yep, ok, okay, sure, go ahead, please, ඔව්, හරි, ஆம், சரி</span></td><td>Consent is recorded and the listing is created immediately (chapter 7). The owner gets a WhatsApp confirmation. Tapping YES twice never creates two listings.</td></tr>
+    <tr><td><strong>NO</strong><br><span class="muted">also: no, stop, cancel, never mind, අවලංගු, ரத்து</span></td><td>Status becomes <span class="badge b-dec">declined</span>. The advert text, photos, name and preview link are deleted, as the message promised, and the owner gets a confirmation. They will never be asked again.</td></tr>
+    <tr><td><strong>Anything else</strong><br><span class="muted">"Who is this?", "Yes, how much?", a photo…</span></td><td>It counts as <strong>neither</strong>. The question is closed and their message goes to normal WhatsApp handling, so a later "YES" will <strong>not</strong> count either. Follow up with the owner personally and, once they agree, use route C.</td></tr>
+    <tr><td><strong>No reply</strong></td><td>Nothing is ever published. The import stays <span class="badge b-await">awaiting consent</span>. A YES is still understood for <strong>30 days</strong>. After that it is treated as an ordinary new message.</td></tr>
+  </table>
+
+  <h2 data-toc-sub>Route C · Publish — I already have consent</h2>
+  <p>Only shown when <strong>Manual consent for Facebook imports</strong> is on. Use it when you have actually spoken to the owner (a phone call, or a WhatsApp chat outside the template) and they agreed to the listing. It is also the only way to publish a <em>pasted advert</em>.</p>
+  <ol class="steps">
+    <li>Call or message the owner. Confirm the details, that they agree to be listed free on Easy Rent, and, if you will tick social sharing, that they agree to Facebook, Instagram and TikTok posts.</li>
+    <li>In the amber box <em>"Already have the owner's consent?"</em>, tick <strong>"I confirm I have spoken to … directly and they agreed…"</strong>. The box is never pre-ticked.</li>
+    <li>Click <span class="ui">Publish — I already have consent</span>. It saves your edits, records the consent under your name, and publishes.</li>
+  </ol>
+  <figure class="shot" data-ann='[[1,237,312,763,405],[2,237,435,414,465],[3,422,435,632,465]]' data-crop="220 295 780 510">
+    <div class="frame"><img src="img/15-review-actions.png" alt="Consent buttons"></div>
+    <figcaption><b>Figure 23.</b> The consent controls. Both buttons stay disabled until the required fields are filled. The manual one also needs the tick.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span>The attestation. It is recorded as <em>your</em> word, not the owner's own WhatsApp yes, and audited.</li>
+    <li><span class="k">2</span>Route B. It is hidden for pasted adverts.</li>
+    <li><span class="k">3</span>Route C.</li>
+  </ol>
+  <figure class="shot w70"><div class="frame"><img src="img/21-banner-pasted.png" alt=""></div><figcaption><b>Figure 24.</b> What you see if a pasted advert reaches the WhatsApp route.</figcaption></figure>
+  <div class="callout bad"><span class="h">Never tick the box on assumption</span>A screenshot of the advert, the owner "probably wanting it", or a colleague's say-so is not consent. If you have not heard the owner agree, use route A or B instead.</div>
+</section>
+
+<!-- =============================== 7 =============================== -->
+<section class="chapter" data-toc="Step 4 · After YES: going live">
+  <h1><span class="num">7</span>Step 4 · After YES: going live</h1>
+  <p>When the owner says YES (or you confirm consent), the system takes over:</p>
+  <ol class="steps">
+    <li><strong>An account is created</strong> for the owner's phone number: a free landlord account. If that number already has an account, the listing is added to it. The number is marked <em>unverified</em> until the owner messages us from it.</li>
+    <li><strong>The listing is created.</strong> With <em>Automated listing approval</em> on (production), it starts as <span class="badge b-await">pending</span>, and you get a bell notification: <em>"Imported listing queued for automated checks"</em>. With approval off it goes live at once and the notification says <em>"Imported listing published… spot-check it"</em>.</li>
+    <li><strong>The automated checks run</strong> within a few minutes. If they pass, the listing becomes <span class="badge b-pub">active</span>. If they hold it, it waits in <strong>Back Office → Moderation</strong> for an ops decision, and approving it there counts as going live.</li>
+    <li><strong>The owner gets the go-live notice</strong> on WhatsApp once the listing is actually live. While it is pending, the import shows <span class="badge b-queued">owner notice queued</span>.</li>
+    <li><strong>Social posts</strong> are queued if you ticked the box. The listing expires after 30 days, like every listing.</li>
+  </ol>
+  <div class="wa">
+    <div class="label">Go-live notice · approved template "listing_imported_notice"</div>
+<div class="bubble">🏠 <b>Easy Rent — your property is now listed</b>
+
+Hi Nimal, we saw your rental ad for <b>3BR House in Nugegoda</b> in <b>Nugegoda</b> on Facebook and listed it on Easy Rent, a rental marketplace in Sri Lanka.
+
+Tenants will contact you directly on <b>+94 7X XXX XXXX</b>.
+
+Tap below to edit the details or take it down — no password needed. Or reply REMOVE and we'll delete it.<span class="btn">Manage your listing</span></div>
+  </div>
+
+  <div class="callout warn"><span class="h">"published" on the Imports screen is not the same as live</span>The import's status flips to <span class="badge b-pub">published</span> the moment the listing row is created, even while that listing is still <em>pending</em> in the moderation queue. To know whether renters can see it, open the listing (the <em>Listing #…</em> link on the import) or check <strong>Back Office → Listings / Moderation</strong>. Look for status <code>active</code>.</div>
+
+  <figure class="shot w80" data-ann='[[1,337,58,422,80],[2,37,93,563,139]]'>
+    <div class="frame"><img src="img/24-published.png" alt="Published import"></div>
+    <figcaption><b>Figure 25.</b> A published import. The draft is locked.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li><span class="k">1</span>When a listing exists, a <em>Listing #id</em> link appears next to this badge. Use it to reach the live listing.</li>
+    <li><span class="k">2</span>From now on edit the <strong>listing itself</strong>. The draft no longer controls what is live. The owner can also edit or remove it from their link, or by replying REMOVE.</li>
+  </ol>
+  <h2 data-toc-sub>If something goes wrong after YES</h2>
+  <ul>
+    <li><strong>Publishing failed after the owner agreed.</strong> Their consent still stands. Ops gets a notification to finish it by hand, and the owner is told it is being processed. For a manual-consent import, press <span class="ui">Publish — I already have consent</span> again. It retries without asking twice.</li>
+    <li><strong><span class="badge b-bad">send failed</span> on the go-live notice.</strong> The listing is live but the owner does not know. Call them, or message them from the business WhatsApp, with the listing link.</li>
+    <li><strong><span class="badge b-warn">not sent</span>.</strong> The import template is missing or owner messaging is off. Fix the setup (chapter 2) and tell the owner yourself. Later fixes do not resend old notices.</li>
+  </ul>
+</section>
+
+<!-- =============================== 8 =============================== -->
+<section class="chapter" data-toc="Troubleshooting">
+  <h1><span class="num">8</span>Troubleshooting</h1>
+  <p>Every message the import screens can show, in the order you are likely to meet them.</p>
+  <h2 data-toc-sub>On "Import a post"</h2>
+  <table class="trouble">
+    <tr><th>You see</th><th>What it means → what to do</th></tr>
+    <tr><td>"Not a Facebook post link…" (red, under the URL)</td><td>The link is not on Facebook, or not a single post. Open the post itself (click its timestamp) and copy the address bar. Or clear the box and import the text only.</td></tr>
+    <tr><td>"That is not a Facebook post URL we can open…" (red banner after submitting)</td><td>The server refused the link. Same fix as above.</td></tr>
+    <tr><td>"Something went wrong reaching Facebook…"</td><td>Facebook did not respond. Paste the post text as well and try again. That skips Facebook entirely.</td></tr>
+    <tr><td><span class="ui">Fetch post</span> spins for a long time</td><td>Expected with a link only. Next time paste the text too and it is instant.</td></tr>
+  </table>
+  <h2 data-toc-sub>On the review screen</h2>
+  <table class="trouble">
+    <tr><th>You see</th><th>What it means → what to do</th></tr>
+    <tr><td>Amber: "Facebook does not allow group posts to be read…" or "…served a login wall"</td><td>Normal. Copy the text from the original into <strong>Post text</strong>, press <span class="ui">Fill empty fields</span>, add the photos.</td></tr>
+    <tr><td>Blue: "Only Facebook's public preview came back…"</td><td>We have the first line and the cover photo only. Paste the full text, and add the other photos.</td></tr>
+    <tr><td>Fields empty after <span class="ui">Fill empty fields</span></td><td>The text did not contain them, or used wording the reader missed. Type them in by hand.</td></tr>
+    <tr><td>My typed edits disappeared</td><td>You pressed <span class="ui">Fill empty fields</span> before saving them. Re-enter, then <span class="ui">Save draft</span>.</td></tr>
+    <tr><td>No phone chips</td><td>The saved text has no number in it (common with previews). Save first, or type the number from the advert.</td></tr>
+    <tr><td>"N photos added, N could not be fetched"</td><td>Only Facebook's photo servers are accepted, and copied links expire. Copy the image address again, or download the photo and upload it.</td></tr>
+    <tr><td>Amber: "Only the first 6 publish…"</td><td>Too many photos. Reorder with the cover buttons, or remove some.</td></tr>
+    <tr><td>Amber: "This reads like a property for sale"</td><td>Check the original. Discard sale ads.</td></tr>
+    <tr><td>"Still needed: …" / "Not enough to ask about"</td><td>Fill title, town, bedrooms, rent and the owner's phone number.</td></tr>
+    <tr><td><span class="ui">Ask the owner for consent</span> is missing</td><td>This is a pasted advert (no Facebook post). Use route C, or route A if there is a post to comment on.</td></tr>
+    <tr><td>Red: "Nothing here can be published yet" / "…cannot reach them yet"</td><td>The WhatsApp consent template is not configured. Ask an admin, and use route A or C meanwhile.</td></tr>
+    <tr><td>Amber: "Owners are not being messaged"</td><td>The go-live notice template is not configured. Listings still publish. Tell owners yourself.</td></tr>
+  </table>
+  <h2 data-toc-sub>After asking for consent</h2>
+  <table class="trouble">
+    <tr><th>You see</th><th>What it means → what to do</th></tr>
+    <tr><td>Green: "Asked the owner — nothing is published"</td><td>Sent. Wait. If there is no answer, that is the answer.</td></tr>
+    <tr><td>Red: "The owner was NOT asked"</td><td>Dry run: owner messaging is switched off, or the consent template is missing. Nothing was recorded as an ask, so you <em>can</em> press the button again once an admin fixes it.</td></tr>
+    <tr><td>Red: "WhatsApp rejected the consent request"</td><td>WhatsApp refused it, usually a bad number or a landline. This <em>does</em> count as your one ask, and the button will now say already asked. Fix the number and get consent by phone (route C) or by comment (route A).</td></tr>
+    <tr><td>Red: "This owner has already been asked"</td><td>One ask per import. Wait for the answer, or follow up personally.</td></tr>
+    <tr><td>Red: "Could not send the consent request"</td><td>Server error. Nothing was published. Try again. If it repeats, report it with the import number.</td></tr>
+    <tr><td>Owner replied but nothing happened</td><td>Their reply was not a plain YES/NO (see chapter 6), or arrived after 30 days. Check WhatsApp Intakes for their message, confirm with them, and use route C.</td></tr>
+    <tr><td>Red: "Manual consent is switched off"</td><td>An admin must enable <strong>Manual consent for Facebook imports</strong>.</td></tr>
+    <tr><td>Red: "Confirm you actually have consent"</td><td>Tick the attestation box before publishing.</td></tr>
+    <tr><td>Red: "Consent was recorded, but publishing failed"</td><td>Press the button again. It retries without re-asking. If it repeats, report it.</td></tr>
+    <tr><td>Import says <span class="badge b-pub">published</span>, listing not visible</td><td>It is probably <code>pending</code> automated checks, or held in Back Office → Moderation. See chapter 7.</td></tr>
+  </table>
+</section>
+
+<!-- =============================== 9 =============================== -->
+<section class="chapter" data-toc="Quick reference">
+  <h1><span class="num">9</span>Quick reference</h1>
+  <div class="card">
+    <h3>Every import, start to finish</h3>
+    <ul class="checklist">
+      <li>Open the advert on Facebook. Click <em>See more</em>. Copy the <strong>post link</strong> and the <strong>whole text</strong>.</li>
+      <li>Back Office → Imports → <span class="ui">Import a post</span>. Paste both → <span class="ui">Create draft</span>.</li>
+      <li>On the review screen, check the post text is complete → <span class="ui">Fill empty fields</span>.</li>
+      <li>Check title, town, bedrooms, rent (against the advert), property type and deposit.</li>
+      <li>Set the owner's <strong>mobile</strong> number and, if known, their name.</li>
+      <li>Add photos (upload, paste, or image URLs → <span class="ui">Fetch photos</span>). Pick the cover.</li>
+      <li>Decide on social sharing. <span class="ui">Save draft</span>.</li>
+      <li>Get consent with <strong>one</strong> route: copy the invite comment and post it, <em>or</em> <span class="ui">Ask the owner for consent</span> once, <em>or</em> call them and use <span class="ui">Publish — I already have consent</span>.</li>
+      <li>Follow up under <strong>All</strong>. On YES, confirm the listing reaches <code>active</code> and that the owner was notified.</li>
+    </ul>
+  </div>
+  <div class="pair">
+    <div class="card">
+      <h3>Do</h3>
+      <ul>
+        <li>Paste the text. Facebook rarely gives it to us.</li>
+        <li>Check the rent and town against the original.</li>
+        <li>Use a mobile number for the ask.</li>
+        <li>Prefer the invite comment for group posts.</li>
+        <li>Discard duplicates, sale ads and adverts you won't pursue.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Don't</h3>
+      <ul>
+        <li>Ask the same owner twice, by any route.</li>
+        <li>Tick "I already have consent" without hearing it.</li>
+        <li>Log in to Facebook to scrape a post.</li>
+        <li>Re-import an advert whose owner said NO.</li>
+        <li>Read "published" as "live".</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Where things are</h3>
+    <table style="margin:0">
+      <tr><td style="width:40%">Imports list</td><td><code>/back-office/imports</code></td></tr>
+      <tr><td>New import</td><td><code>/back-office/imports/new</code></td></tr>
+      <tr><td>One import</td><td><code>/back-office/imports/&lt;number&gt;</code></td></tr>
+      <tr><td>Switches</td><td>Back Office → Settings → Platform</td></tr>
+      <tr><td>Held listings</td><td>Back Office → Moderation</td></tr>
+      <tr><td>Owner replies / FB-references</td><td>Back Office → WhatsApp Intakes, and the bell</td></tr>
+      <tr><td>Technical background</td><td><code>docs/deep-dive-facebook-post-import.md</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<script>
+  // Draw annotation boxes + numbered pins from data-ann (image pixel coords).
+  function annotate() {
+    document.querySelectorAll('figure.shot[data-ann]').forEach(fig => {
+      const img = fig.querySelector('img');
+      const frame = fig.querySelector('.frame');
+      const [ox, oy, W, H] = cropOf(fig, img);
+      JSON.parse(fig.dataset.ann).forEach(([n, x1, y1, x2, y2]) => {
+        x1 -= ox; x2 -= ox; y1 -= oy; y2 -= oy;
+        const box = document.createElement('span');
+        box.className = 'ann-box';
+        Object.assign(box.style, { left: (x1 / W * 100) + '%', top: (y1 / H * 100) + '%', width: ((x2 - x1) / W * 100) + '%', height: ((y2 - y1) / H * 100) + '%' });
+        frame.appendChild(box);
+        const pin = document.createElement('span');
+        pin.className = 'ann-pin';
+        pin.textContent = n;
+        Object.assign(pin.style, { left: (x2 / W * 100) + '%', top: (y1 / H * 100) + '%' });
+        frame.appendChild(pin);
+      });
+    });
+  }
+  // data-crop="x1 y1 x2 y2" shows only that part of the screenshot.
+  function cropOf(fig, img) {
+    if (!fig.dataset.crop) return [0, 0, img.naturalWidth, img.naturalHeight];
+    const [x1, y1, x2, y2] = fig.dataset.crop.split(' ').map(Number);
+    return [x1, y1, x2 - x1, y2 - y1];
+  }
+  function applyCrops() {
+    document.querySelectorAll('figure.shot[data-crop]').forEach(fig => {
+      const img = fig.querySelector('img');
+      const frame = fig.querySelector('.frame');
+      const [x, y, w, h] = cropOf(fig, img);
+      frame.style.aspectRatio = `${w} / ${h}`;
+      Object.assign(img.style, { position: 'absolute', width: (img.naturalWidth / w * 100) + '%', maxWidth: 'none', left: (-x / w * 100) + '%', top: (-y / h * 100) + '%' });
+    });
+  }
+  // Table of contents from chapters (data-toc) and their h2s (data-toc-sub).
+  function buildToc() {
+    const toc = document.getElementById('toc');
+    let n = 0;
+    document.querySelectorAll('section.chapter[data-toc]').forEach(sec => {
+      n++;
+      const id = 'ch' + n;
+      sec.id = id;
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="n">${n}</span><span class="t"><a href="#${id}">${sec.dataset.toc}</a></span><span class="p" data-for="${id}"></span>`;
+      toc.appendChild(li);
+      addMarker(sec.querySelector('h1'), id);
+      sec.querySelectorAll('h2[data-toc-sub]').forEach((h, i) => {
+        const sid = id + '-' + (i + 1);
+        h.id = sid;
+        const s = document.createElement('li');
+        s.className = 'sub';
+        s.innerHTML = `<span class="t"><a href="#${sid}">${h.textContent}</a></span><span class="p" data-for="${sid}"></span>`;
+        toc.appendChild(s);
+        addMarker(h, sid);
+      });
+    });
+  }
+  // Invisible, extractable text the build script uses to find each heading's page.
+  function addMarker(el, id) {
+    el.style.position = 'relative';
+    const m = document.createElement('span');
+    m.className = 'marker';
+    m.textContent = `@@${id}@@`;
+    el.appendChild(m);
+  }
+  window.__pages = (map) => {
+    document.querySelectorAll('.toc .p').forEach(p => { p.textContent = map[p.dataset.for] ?? ''; });
+  };
+  buildToc();
+  const draw = () => { applyCrops(); annotate(); };
+  if (document.readyState === 'complete') draw(); else window.addEventListener('load', draw);
+</script>
+</body>
+</html>
