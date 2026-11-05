@@ -109,7 +109,7 @@ function statusExplainer(status: string): string {
     case 'rejected':
       return 'Not approved. Fix the reason given, then request a re-review.';
     case 'expired':
-      return 'Expired — listings run 30 days after publishing. Renew it from the dashboard.';
+      return 'Expired — listings run 3 months after publishing. Renew it from the dashboard.';
     case 'archived':
       return 'Archived by the owner; not visible to renters.';
     case 'rented':
@@ -398,7 +398,7 @@ export const renewListings = defineTool({
   name: 'renew_listings',
   title: 'Renew expiring listings',
   description:
-    'Extend active listings that expire within 7 days by another 30 days. Available on the Agency plan; other plans renew from the dashboard.',
+    'Extend active listings that expire within 7 days by another 3 months. Available on the Agency plan; other plans renew from the dashboard.',
   scope: 'write',
   input: z.object({ listingIds: z.array(z.number().int().min(1)).min(1).max(100) }),
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

@@ -404,7 +404,7 @@ export async function processIntake(
   })();
 
   const now = new Date();
-  const expirationDays = Number(getFeatureValue('listingExpirationDays') ?? 30);
+  const expirationDays = Number(getFeatureValue('listingExpirationDays') ?? 90);
   const expires = new Date(now.getTime() + expirationDays * 24 * 60 * 60 * 1000);
 
   // Enforce the cap at publish. NEVER truncate `intake.mediaPaths` — ops must

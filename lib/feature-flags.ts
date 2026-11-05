@@ -238,7 +238,7 @@ export const featureFlagDefaults = {
   trackSearchQueries: true,
 
   // Numeric / config flags
-  listingExpirationDays: 30,
+  listingExpirationDays: 90,
   // Instagram's carousel ceiling. Also bounds how many images the proxy has to
   // transcode per post.
   socialMaxPhotos: 10,

@@ -552,7 +552,7 @@ async function persist(
     });
 
     if (verdict.outcome === 'passed') {
-      const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
+      const days = Number(getFeatureValue('listingExpirationDays') ?? 90);
       const goLive = nextStatus === 'active';
       await tx
         .update(listings)

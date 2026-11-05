@@ -4,10 +4,11 @@ import { listings } from '@/lib/db/schema';
 import { getUser, getUserWithLandlord } from '@/lib/db/queries';
 import { getLandlordPlanTier } from '@/lib/landlord-plans';
 import { eq, and, lte, gte } from 'drizzle-orm';
+import { getFeatureValue } from '@/lib/feature-flags';
 
 /**
  * POST /api/listings/bulk-renew
- * Renew expiring listings (extend expiresAt by 30 days). Agency only.
+ * Renew expiring listings (extend expiresAt by `listingExpirationDays`). Agency only.
  * Body: { listingIds: number[] }
  */
 export async function POST(request: NextRequest) {
@@ -35,7 +36,8 @@ export async function POST(request: NextRequest) {
 
   const now = new Date();
   const expiringSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const newExpires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const days = Number(getFeatureValue('listingExpirationDays') ?? 90);
+  const newExpires = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
   let renewed = 0;
   for (const id of listingIds) {

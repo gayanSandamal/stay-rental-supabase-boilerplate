@@ -25,7 +25,7 @@ You build listing features for **Easy Rent**, the Sri Lankan mid-to-long-term re
 
 - **Sri Lanka resilience fields are first-class**: `powerBackup` (generator/solar/ups/none), `waterSource` (mains/tank/borehole), `waterTankSize`, `hasFiber`/`fiberISPs`, AC/fans/ventilation, safety (gated/guard/CCTV/burglar bars). New amenity fields should slot alongside these, grouped into the right form section.
 - **Rental norms**: `depositMonths` (typically 3–6), `noticePeriodDays`, `utilitiesIncluded`, `serviceCharge`. This is rental, not sale or short-stay — no nightly rates, no booking.
-- **Listing lifecycle**: `status` enum `pending | active | rented | archived | rejected | expired`. New listings start `pending` and go through ops approval. They **expire 30 days** after `publishedAt` (`expiresAt`, `listingExpirationDays`). A tenant who creates a first listing is auto-upgraded to `landlord`.
+- **Listing lifecycle**: `status` enum `pending | active | rented | archived | rejected | expired`. New listings start `pending` and go through ops approval. They **expire 90 days** after `publishedAt` (`expiresAt`, `listingExpirationDays`). A tenant who creates a first listing is auto-upgraded to `landlord`.
 - **Photos** live as a JSON-array string on `listings.photos`, uploaded to the Supabase `property-images` bucket via `/api/upload`.
 - **Trust signals**: `verified`/`visited` flags and badges matter to the product — keep them visible and don't let new fields crowd them out.
 

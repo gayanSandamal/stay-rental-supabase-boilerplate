@@ -126,7 +126,7 @@ export const adminReviewListing = defineTool({
   name: 'admin_review_listing',
   title: 'Approve or reject a listing',
   description:
-    'Approve (publish) or reject a listing, optionally marking it verified/visited. Approval notifies the owner and starts the 30-day listing period. A rejection needs a reason the owner can act on.',
+    'Approve (publish) or reject a listing, optionally marking it verified/visited. Approval notifies the owner and starts the 3-month listing period. A rejection needs a reason the owner can act on.',
   scope: 'admin',
   roles: [...STAFF],
   input: z.object({

@@ -122,7 +122,7 @@ export async function PATCH(
         const expiresAt = activationExpiresAt(
           listing.expiresAt,
           now,
-          Number(getFeatureValue('listingExpirationDays') ?? 30)
+          Number(getFeatureValue('listingExpirationDays') ?? 90)
         );
         if (expiresAt !== listing.expiresAt) updates.expiresAt = expiresAt;
       }

@@ -27,7 +27,7 @@ These are product decisions encoded in the code. Test cases assume the **launch*
 | New listing status | **`pending`** — requires ops/admin approval before public | `app/api/listings/route.ts` |
 | Tenant→landlord | **Auto-upgrade** on first listing creation | `app/api/listings/route.ts` |
 | Visibility activation | **admin/ops only** — landlords get 403 | `app/api/listings/[id]/{boost,feature,urgent,bundle}` |
-| Listing expiry | **30 days** after publish (`listingExpirationDays`) | `lib/feature-flags.ts` |
+| Listing expiry | **90 days** after publish (`listingExpirationDays`) | `lib/feature-flags.ts` |
 
 **Test accounts (seed):** `admin@easyrent.com/admin123` · `ops@easyrent.com/ops123` · `landlord@test.com/landlord123` · `tenant@test.com/tenant123`. (Repair with `pnpm tsx scripts/fix-seed-users.ts` if roles drift.) Use a throwaway tenant for destructive auth cases.
 
@@ -133,7 +133,7 @@ These are product decisions encoded in the code. Test cases assume the **launch*
 | F9 | P1 | Contact numbers management | landlord | Add/edit/delete contact numbers (`/api/contact-numbers`) | CRUD works; can't edit another user's numbers (IDOR) |
 | F10 | P1 | Duplicate detection | landlord | Create a near-duplicate listing | Flagged as likely duplicate (gated by `enableDuplicateDetection`); HTTP 409 with duplicate list |
 | F11 | P1 | Archive / mark rented | landlord | Archive a listing / mark as rented | Status transitions; removed from public index |
-| F12 | P1 | Listing expiry (30d) | landlord/system | Inspect an expired listing + reminder behavior | Auto-`expired` after `listingExpirationDays`; expiration reminder sent; not shown publicly |
+| F12 | P1 | Listing expiry (90d) | landlord/system | Inspect an expired listing + reminder behavior | Auto-`expired` after `listingExpirationDays`; expiration reminder sent; not shown publicly |
 | F13 | P1 | Analytics dashboard | landlord | Open `/dashboard/analytics` | Views/metrics render (gated by `enableAnalyticsDashboard`); hidden when off |
 | F14 | P1 | Listing limit NOT enforced | landlord | Create many listings on free tier | All allowed (limit 999999) — listings are free/unlimited by design |
 | F15 | P2 | Custom profile slug | landlord (pro/agency) | Set profile slug (`/api/landlords/me/profile-slug`) | Allowed only for pro/premium/agency; `/[slug]` resolves |
