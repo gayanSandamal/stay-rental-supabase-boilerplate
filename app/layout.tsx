@@ -120,6 +120,22 @@ export default async function RootLayout({
   // server-rendered pages and downstream isFeatureEnabled() calls see overrides.
   await loadFeatureFlags();
 
+  /*
+   * Deliberately not awaited — only components that read `/api/user` suspend.
+   * But a promise nobody awaits must still never reject UNHANDLED. When Vercel
+   * regenerates a page's PPR shell at runtime (ISR, `revalidate = 30`),
+   * getUser() reads cookies inside a prerender and rejects with React's
+   * postpone signal; if the shell render has already finished with this
+   * promise unconsumed, Node reports an unhandled rejection and the Vercel
+   * runtime exits the whole process (`exit status: 128`) — killing every
+   * other request in flight on that Fluid instance. Production logged exactly
+   * that on 2026-11-05 for /about and /listings/48, and a /listings request
+   * on the same instance died with no response. The no-op handler marks the
+   * rejection handled; SWR still receives the original promise unchanged.
+   */
+  const userPromise = getUser();
+  userPromise.catch(() => {});
+
   return (
     <html
       lang="en"
@@ -142,9 +158,7 @@ export default async function RootLayout({
         <SWRConfig
           value={{
             fallback: {
-              // We do NOT await here
-              // Only components that read this data will suspend
-              '/api/user': getUser(),
+              '/api/user': userPromise,
             }
           }}
         >

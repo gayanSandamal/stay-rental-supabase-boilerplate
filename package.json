@@ -35,6 +35,7 @@
     "test:e2e:public": "playwright test public seo security",
     "test:e2e:report": "playwright show-report e2e/.report",
     "images:rewatermark": "npx tsx scripts/rewatermark-listing-photos.ts",
+    "images:externalize-inline": "npx tsx scripts/externalize-inline-photos.ts",
     "listings:normalize-locations": "npx tsx scripts/normalize-listing-locations.ts",
     "locations:seed": "npx tsx scripts/seed-locations.ts"
   },
