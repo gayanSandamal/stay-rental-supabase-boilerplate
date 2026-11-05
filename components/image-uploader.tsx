@@ -37,62 +37,66 @@ export function ImageUploader({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = document.createElement('img');
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+  /**
+   * Downscale to MAX_WIDTH x MAX_HEIGHT and re-encode as JPEG before upload.
+   *
+   * This used to run only AFTER a failed upload, as the fallback that turned
+   * each photo into a base64 `data:` URL and stored THAT on the listing. That is
+   * how listing 48 came to carry six photos inline and made /listings an 8 MB
+   * page (see lib/images/photo-urls.ts; the listing routes now refuse them).
+   * Compressing FIRST is what makes the upload succeed in the first place: a
+   * phone photo is 3-8 MB, and Vercel rejects any function request body over
+   * 4.5 MB before our code runs.
+   *
+   * A GIF would lose its animation, and a file the browser cannot decode is
+   * sent as it is — the server's own type and size checks still apply.
+   */
+  const compressImage = async (file: File): Promise<File> => {
+    if (file.type === 'image/gif') return file;
+    try {
+      const bitmap = await createImageBitmap(file);
+      let { width, height } = bitmap;
+      const scale = Math.min(1, MAX_WIDTH / width, MAX_HEIGHT / height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
 
-          // Calculate new dimensions while maintaining aspect ratio
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = (height * MAX_WIDTH) / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = (width * MAX_HEIGHT) / height;
-              height = MAX_HEIGHT;
-            }
-          }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
 
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Failed to get canvas context'));
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convert to compressed base64
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', COMPRESSION_QUALITY);
-          resolve(compressedDataUrl);
-        };
-        img.onerror = () => reject(new Error('Failed to load image'));
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-    });
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', COMPRESSION_QUALITY)
+      );
+      if (!blob || blob.size >= file.size) return file;
+      const name = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+      return new File([blob], name, { type: 'image/jpeg' });
+    } catch {
+      return file;
+    }
   };
 
-  const uploadToServer = async (files: File[]): Promise<string[]> => {
+  /** One photo per request, so no single body can approach the 4.5 MB cap. */
+  const uploadOne = async (file: File): Promise<string> => {
     const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
+    formData.append('files', file);
     const res = await fetch('/api/upload', { method: 'POST', body: formData });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Upload failed');
+      throw new Error(
+        data.error ||
+          (res.status === 413
+            ? `${file.name} is too large to upload`
+            : `${file.name} could not be uploaded. Please try again.`)
+      );
     }
     const data = await res.json();
-    return data.files.map((f: { url: string }) => f.url);
+    const url = data.files?.[0]?.url;
+    if (typeof url !== 'string') throw new Error(`${file.name} could not be uploaded`);
+    return url;
   };
 
   /** Shared by the file picker and clipboard paste — same validation, same upload path. */
@@ -113,29 +117,23 @@ export function ImageUploader({
           if (!file.type.startsWith('image/')) {
             throw new Error(`${file.name} is not an image file`);
           }
+        }
+
+        // Photos that uploaded are kept even when a later one fails, so a
+        // flaky connection costs the landlord one retry, not the whole batch.
+        // Nothing that failed is ever kept: there is no inline fallback.
+        for (const original of files) {
+          const file = await compressImage(original);
           if (file.size > maxSizeInMB * 1024 * 1024) {
-            throw new Error(`${file.name} is larger than ${maxSizeInMB}MB`);
+            throw new Error(`${original.name} is larger than ${maxSizeInMB}MB`);
           }
+          const url = await uploadOne(file);
+          setImages((prev) => {
+            const next = [...prev, url];
+            onChange?.(next);
+            return next;
+          });
         }
-
-        let uploadedUrls: string[];
-
-        try {
-          uploadedUrls = await uploadToServer(files);
-        } catch {
-          // Fallback to client-side base64 if server upload fails
-          uploadedUrls = [];
-          for (const file of files) {
-            const url = await compressImage(file);
-            uploadedUrls.push(url);
-          }
-        }
-
-        setImages((prev) => {
-          const next = [...prev, ...uploadedUrls];
-          onChange?.(next);
-          return next;
-        });
       } catch (err: any) {
         setError(err.message || 'Failed to upload images');
       } finally {

@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { ListingCard } from './listing-card';
-import { Listing } from '@/lib/db/schema';
+import type { Listing as ListingRow } from '@/lib/db/schema';
+
+// Search results never carry `photosManifest` (see getActiveListings).
+type Listing = Omit<ListingRow, 'photosManifest'>;
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';

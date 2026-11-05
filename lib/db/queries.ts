@@ -34,6 +34,7 @@ import {
   type MarketRentTrend,
   type RentComparison,
 } from '@/lib/analytics/comparables';
+import { dropInlinePhotos } from '@/lib/images/photo-urls';
 
 const AUTH_DEADLINE_MS = 10_000;
 
@@ -485,7 +486,15 @@ export async function getActiveListings(filters?: {
     }
   }
 
-  const listingColumns = getTableColumns(listings);
+  /*
+   * `photos_manifest` is never read from a search result — the cards need the
+   * cover in `photos`, and the manifest is moderation bookkeeping for the
+   * dashboard and back office, which load a listing by id. It also holds every
+   * photo URL twice (`o` and `p`), so on a listing whose photos were stored
+   * inline it was 2.4 MB a row, pulled 1000 rows at a time by the homepage and
+   * shipped whole to the client grid. See lib/images/photo-urls.ts.
+   */
+  const { photosManifest: _photosManifest, ...listingColumns } = getTableColumns(listings);
   let query = db
     .select({
       ...listingColumns,
@@ -504,7 +513,14 @@ export async function getActiveListings(filters?: {
     query = query.offset(filters.offset) as any;
   }
 
-  return await query;
+  // Defence in depth for rows written before the listing routes refused inline
+  // photos: a base64 `data:` URL is the image itself, and one of them is bigger
+  // than the rest of the page. Search results show hosted photos only.
+  const rows = await query;
+  return rows.map((row) => {
+    const photos = dropInlinePhotos(row.photos);
+    return photos === row.photos ? row : { ...row, photos };
+  });
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   serializeManifest,
 } from '@/lib/images/manifest';
 import { photoCap } from '@/lib/images/cap';
+import { unhostedPhotos } from '@/lib/images/photo-urls';
 import { isModerationConfigured } from '@/lib/moderation/config';
 import { isUserPremium } from '@/lib/subscription';
 import { sendListingApprovedToLandlord, sendListingRejectedToLandlord } from '@/lib/email';
@@ -480,6 +481,19 @@ export async function PUT(
     // Grandfathered: refuse only if the landlord is submitting MORE than the cap
     // and more than the listing already has. Otherwise lowering the cap would
     // brick editing (or even reordering) every existing over-cap listing.
+    // Only NEW photos must be hosted URLs: an inline photo already on the
+    // listing is grandfathered so a plain text edit still saves (the repair
+    // script, scripts/externalize-inline-photos.ts, moves those to storage).
+    const newInline = unhostedPhotos(submittedPhotos.filter((p) => !currentPhotos.includes(p)));
+    if (newInline.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Some photos did not finish uploading. Remove them and upload again.',
+          code: 'PHOTO_NOT_UPLOADED',
+        },
+        { status: 400 }
+      );
+    }
     const cap = photoCap();
     const editCeiling = Math.max(cap, currentPhotos.length);
     if (submittedPhotos.length > editCeiling) {

@@ -14,6 +14,7 @@ import { loadLocations } from '@/lib/locations/store';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
 import { photoCap } from '@/lib/images/cap';
+import { unhostedPhotos } from '@/lib/images/photo-urls';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { isModerationConfigured } from '@/lib/moderation/config';
 
@@ -133,6 +134,17 @@ export async function POST(request: NextRequest) {
     // would park photos as queued forever with no checker to release them.
     const moderationArmed =
       isFeatureEnabled('enableListingModeration') && isModerationConfigured();
+    // A photo is a hosted URL, never the image itself — see lib/images/photo-urls.ts
+    // for the base64 listing that made /listings an 8 MB page.
+    if (unhostedPhotos(submittedPhotos).length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Some photos did not finish uploading. Remove them and upload again.',
+          code: 'PHOTO_NOT_UPLOADED',
+        },
+        { status: 400 }
+      );
+    }
     const cap = photoCap();
     if (submittedPhotos.length > cap) {
       return NextResponse.json(
