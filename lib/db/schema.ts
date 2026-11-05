@@ -234,7 +234,7 @@ export const listings = pgTable('listings', {
   createdBy: integer('created_by').references(() => users.id), // User who created the listing
   businessAccountId: integer('business_account_id').references(() => businessAccounts.id), // Business account (if created by team member)
   publishedAt: timestamp('published_at'), // When listing was first published/approved
-  expiresAt: timestamp('expires_at'), // When listing expires (publishedAt + 30 days)
+  expiresAt: timestamp('expires_at'), // When listing expires (publishedAt + listingExpirationDays, default 90)
 
   // Automated approval (migration 0032). `photos` above stays the array of
   // PUBLIC (compressed + watermarked) URLs every reader already parses;

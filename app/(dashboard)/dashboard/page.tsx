@@ -89,7 +89,7 @@ async function OpsStats() {
  * Reuses `getLandlordPortfolioData`, which is already scoped by landlordId —
  * no new query needed. "Expiring in 7 days" replaces the old "verified" count
  * deliberately: it is the only one of these numbers a landlord can act on, and
- * listings expire 30 days after publish.
+ * listings expire `listingExpirationDays` (90) after publish.
  */
 async function LandlordStats({ userId }: { userId: number }) {
   const withLandlord = await getUserWithLandlord(userId);

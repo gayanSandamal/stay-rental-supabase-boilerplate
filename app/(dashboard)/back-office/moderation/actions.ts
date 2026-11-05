@@ -33,7 +33,7 @@ export async function publishAnywayAction(formData: FormData): Promise<void> {
   if (!listing) return;
 
   const now = new Date();
-  const days = Number(getFeatureValue('listingExpirationDays') ?? 30);
+  const days = Number(getFeatureValue('listingExpirationDays') ?? 90);
 
   // "Publish anyway" means the reviewer looked at these photos and accepted
   // them — so the queued ones have to become published, not just the listing.

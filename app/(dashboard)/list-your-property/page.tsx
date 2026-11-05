@@ -100,7 +100,7 @@ const benefits = [
     icon: Clock,
     title: '30-Day Active Listings',
     description:
-      'Your listing remains active for 30 days with easy renewal. No daily re-posting needed.',
+      'Your listing remains active for 3 months with easy renewal. No daily re-posting needed.',
     tag: 'Set & Forget',
     gradient: 'from-sky-500 to-teal-600',
     tagColor: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -215,7 +215,7 @@ function buildFaqs(conciergeAvailable: boolean, viewCountsEnabled: boolean) {
     },
     {
       q: 'I already posted on ikman or Facebook. Why list here too?',
-      a: 'Because it costs you absolutely nothing to also be here, and it reaches renters who specifically want verified, scam-free listings. Your listing stays active for 30 days with no daily re-posting, and verification badges make your property stand out.',
+      a: 'Because it costs you absolutely nothing to also be here, and it reaches renters who specifically want verified, scam-free listings. Your listing stays active for 3 months with no daily re-posting, and verification badges make your property stand out.',
     },
     {
       q: 'How long until my listing goes live?',

@@ -203,7 +203,7 @@ const LANDLORD_STEPS: Step[] = [
     // and they are a floor rather than an exact figure — do not promise more
     // precision than lib/analytics says it has.
     description:
-      'Your dashboard carries a 30-day view graph, a 7-day total and how many people tapped Call or WhatsApp — on every plan, including free. Listings run for 30 days; contact us if you need yours extended or taken down.',
+      'Your dashboard carries a 30-day view graph, a 7-day total and how many people tapped Call or WhatsApp — on every plan, including free. Listings run for 3 months; contact us if you need yours extended or taken down.',
     icon: Eye,
     optional: false,
     illustration: ManageListingIllustration,
