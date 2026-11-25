@@ -22,12 +22,20 @@
  * Each job looks the secret up from vault.decrypted_secrets when it fires, so
  * rotating CRON_SECRET is: update it in Vercel, redeploy, re-run this.
  *
+ * A JOB WITH `wakeWhen` ASKS THE DATABASE FIRST. Its command is
+ * `select net.http_get(…) where <condition>`, so a tick whose queue is empty
+ * never wakes a Vercel function — function time is what Vercel Hobby
+ * enforces, and it soft-blocked the site on 2026-11-13. Guarded jobs still fire
+ * unconditionally once an hour. The conditions and the command text live in
+ * lib/cron/schedule.ts (pgCronCommand), where they are tested.
+ *
  * Idempotent: cron.schedule() with an existing job name updates that job, the
  * vault entries are upserted, and easyrent:* jobs no longer in the table are
- * unscheduled — re-running after editing lib/cron/schedule.ts converges.
+ * unscheduled — re-running after editing lib/cron/schedule.ts converges. That
+ * includes a changed `wakeWhen`, or the default of a flag one depends on.
  */
 import postgres from 'postgres';
-import { CRON_JOBS, supabaseJobName } from '../lib/cron/schedule';
+import { CRON_JOBS, pgCronCommand, supabaseJobName } from '../lib/cron/schedule';
 
 const SECRET_NAME = 'easyrent_cron_secret';
 const BASE_URL_NAME = 'easyrent_cron_base_url';
@@ -79,19 +87,13 @@ async function main() {
     const wanted = CRON_JOBS.filter((j) => j.runner === 'supabase');
     for (const job of wanted) {
       const name = supabaseJobName(job.path);
-      // The command is fixed text built from our own table; only the path
-      // varies, and it is checked against a strict pattern first.
-      if (!/^\/api\/cron\/[a-z0-9-]+$/.test(job.path)) throw new Error(`Bad path ${job.path}`);
-      const command = `select net.http_get(
-  url := (select decrypted_secret from vault.decrypted_secrets where name = '${BASE_URL_NAME}') || '${job.path}',
-  headers := jsonb_build_object(
-    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = '${SECRET_NAME}'),
-    'User-Agent', 'easyrent-pg-cron'
-  ),
-  timeout_milliseconds := 60000
-);`;
+      // Fixed text built from our own table; pgCronCommand checks the path
+      // and the vault names against strict patterns first.
+      const command = pgCronCommand(job, { baseUrl: BASE_URL_NAME, secret: SECRET_NAME });
       await sql`select cron.schedule(${name}, ${job.schedule}, ${command})`;
-      console.log(`  scheduled ${name.padEnd(40)} ${job.schedule}`);
+      console.log(
+        `  scheduled ${name.padEnd(40)} ${job.schedule.padEnd(14)} ${job.wakeWhen ? 'only when there is work (+ hourly)' : 'every tick'}`
+      );
     }
 
     // pg_cron keeps a row per run forever; at every-2-minutes that is ~2k rows
@@ -124,8 +126,10 @@ async function upsertVaultSecret(sql: postgres.Sql, name: string, value: string,
 }
 
 async function status(sql: postgres.Sql) {
-  const jobs = await sql<{ jobid: number; jobname: string; schedule: string; active: boolean }[]>`
-    select jobid, jobname, schedule, active from cron.job where jobname like ${JOB_PREFIX + '%'} order by jobname`;
+  const jobs = await sql<{ jobid: number; jobname: string; schedule: string; active: boolean; guarded: boolean }[]>`
+    select jobid, jobname, schedule, active,
+      position('extract(minute from now()' in command) > 0 as guarded
+    from cron.job where jobname like ${JOB_PREFIX + '%'} order by jobname`;
   if (jobs.length === 0) {
     console.log('No easyrent:* jobs are scheduled.');
     return;
@@ -136,10 +140,13 @@ async function status(sql: postgres.Sql) {
       where jobid = ${j.jobid} order by start_time desc limit 3`;
     const last = runs[0];
     console.log(
-      `${j.active ? '●' : '○'} ${j.jobname.padEnd(40)} ${j.schedule.padEnd(14)} ` +
+      `${j.active ? '●' : '○'} ${j.jobname.padEnd(40)} ${j.schedule.padEnd(14)} ${j.guarded ? 'guarded ' : 'always  '}` +
         (last ? `last ${last.status} at ${last.start_time.toISOString()}` : 'not run yet')
     );
   }
+  // A guarded tick that found nothing to do still logs a pg_cron run (status
+  // `succeeded`) but makes no HTTP call, so the HTTP counts below are lower
+  // than the run counts above by design.
   // HTTP outcomes of the calls (pg_net keeps ~6h). 200 = the endpoint ran;
   // 401 = CRON_SECRET in Vault does not match Vercel's.
   const http = await sql<{ status_code: number | null; n: number; error_msg: string | null }[]>`

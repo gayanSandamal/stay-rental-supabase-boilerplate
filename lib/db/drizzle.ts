@@ -16,20 +16,42 @@ if (!connectionString) {
   );
 }
 
-const IDLE_TIMEOUT_SECONDS = 30;
+const IDLE_TIMEOUT_SECONDS = 2;
 
 export const client = postgres(connectionString, {
   max: process.env.VERCEL ? 1 : 10,
   /*
-   * Long enough that a warm instance keeps its connection between navigations,
-   * SHORT ENOUGH THAT IT CANNOT REACH THE FUNCTION'S MAX DURATION.
+   * SHORT, BECAUSE EVERY SECOND OF IT IS BILLED — on every DB-touching request.
    *
-   * The reason for a generous value stands: at 20s a low-traffic site
-   * reconnects constantly, and most requests arrived on a warm instance whose
-   * pool had already closed, paying a fresh TCP + TLS + SCRAM handshake to the
-   * pooler before the first query could be sent.
+   * The invocation cannot finish until this timeout has closed the socket:
+   * the socket refs the event loop (below), and the logger at the bottom of
+   * this file holds the invocation for this long plus a 5s margin on purpose.
+   * Fluid compute bills provisioned memory (Hobby: a fixed 2 GB) for the whole
+   * time an instance is handling a request, so this number is a floor on what
+   * EVERY query-running request costs, whatever it did.
    *
-   * But 300 was not a bigger version of 20 — it was exactly the ceiling. An
+   * At 30s it took the site down. pg_cron fires ~1,900 calls a day
+   * (lib/cron/schedule.ts), nearly all of which find nothing to do, and each
+   * still cost ~35s of instance time: ~37 GB-hours a day against Hobby's 360 a
+   * month. Vercel soft-blocked the project on 2026-11-13
+   * (FAIR_USE_LIMITS_EXCEEDED, overage `fluidDuration`), nine days after the
+   * frequent crons moved to pg_cron, and every page answered 402 until the
+   * next billing cycle.
+   *
+   * What a short timeout costs is a reconnect for a request that arrives more
+   * than 2s after the last one. That used to be the reason for a long value
+   * (at 20s a low-traffic site "reconnects constantly"), but it was weighed
+   * while the functions ran in iad1, across the planet from the database.
+   * They run in sin1 now, beside the Singapore pooler. Measured 2026-11-25
+   * from Colombo: a fresh connection plus its first query took about six
+   * round trips (319 ms against 51 ms for a query on a warm connection). At
+   * in-region round-trip times that should be tens of milliseconds at most,
+   * TLS and SCRAM included — estimated, not yet measured from sin1.
+   *
+   * tests/unit/db-idle-hold.test.ts caps this at 5s.
+   *
+   * The 2026-09-04 history below is why it must also never approach the
+   * function's max duration. An
    * open postgres-js socket REFS THE NODE EVENT LOOP, and `idle_timeout` is
    * what eventually closes it, so the invocation cannot finish until this many
    * seconds after its last query. Measured locally: with idle_timeout 300 a
@@ -50,11 +72,9 @@ export const client = postgres(connectionString, {
    * 30s revalidate: the homepage stats stop updating, and a cache-missing
    * `/listings/[id]` hangs until the platform 504s it.
    *
-   * 30s keeps a list -> detail -> back loop on one connection (that loop is
-   * seconds, not minutes) with an order of magnitude of headroom under the
-   * ceiling. Raising this again means checking the function's maxDuration
-   * first, and leaving real margin: the socket, not the query, is what holds
-   * the invocation open.
+   * Raising this again means checking the bill first and the function's
+   * maxDuration second: the socket, not the query, is what holds the
+   * invocation open.
    *
    * `prepare` is deliberately left unset. postgres-js then uses named prepared
    * statements, which Supavisor supports in transaction mode and which is the

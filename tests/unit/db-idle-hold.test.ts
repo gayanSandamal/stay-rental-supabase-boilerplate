@@ -119,4 +119,23 @@ describe('lib/db/drizzle.ts wiring', () => {
   it('does not call attachDatabasePool, which throws for postgres-js clients', () => {
     expect(source).not.toContain('attachDatabasePool');
   });
+
+  it('keeps the idle timeout — and with it the hold on EVERY query-running request — short', () => {
+    // Fluid compute bills provisioned memory for the whole hold. At 30s it
+    // exhausted Vercel Hobby's monthly allowance in nine days (soft block,
+    // 2026-11-13). See the comment on idle_timeout in lib/db/drizzle.ts.
+    const match = /const IDLE_TIMEOUT_SECONDS = (\d+(?:\.\d+)?);/.exec(source);
+    expect(match, 'IDLE_TIMEOUT_SECONDS must stay a literal').not.toBeNull();
+    expect(Number(match![1])).toBeGreaterThan(0);
+    expect(Number(match![1])).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('page max duration', () => {
+  it('caps every page and server action at 60s from the root layout', () => {
+    // Without it the platform default is 300s, and a hung render is billed for
+    // all of it. A page that needs longer declares its own maxDuration.
+    const layout = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf-8');
+    expect(layout).toMatch(/^export const maxDuration = 60;$/m);
+  });
 });

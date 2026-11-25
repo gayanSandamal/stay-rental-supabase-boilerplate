@@ -13,6 +13,22 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://easyrent.lk';
 
+/*
+ * The longest any PAGE may run — and every server action, which runs inside
+ * its page's function. Without this the platform default applies: 300s, and a
+ * hung render is billed for all of it (2 GB of provisioned memory on Hobby,
+ * see lib/db/drizzle.ts). Nothing that renders a page needs a minute; the
+ * slowest ones (Back Office imports, moderation, social, listings) already
+ * declared 60.
+ *
+ * A page's own `maxDuration` still wins: Next merges segment config from the
+ * root layout down to the page, the last value set winning (reduceAppConfig
+ * in next/dist/build/utils.js). Route handlers do NOT inherit from layouts —
+ * the slow ones (WhatsApp webhook, /mcp, crons, social images) each declare
+ * their own. tests/unit/db-idle-hold.test.ts pins this value.
+ */
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   title: {
     default: 'Easy Rent - 100% Free Verified Rentals in Sri Lanka',
