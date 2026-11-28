@@ -1,5 +1,3 @@
-import { isReservedWaEmail } from '@/lib/intake/landlord-identity';
-
 /**
  * What to show as the publisher of a listing.
  *
@@ -15,11 +13,11 @@ export function publisherDisplayName(input: {
 }): string {
   const name = input.name?.trim();
   if (name) return name;
-  // A synthetic address is a phone-number-shaped identifier: never render it.
-  if (isReservedWaEmail(input.email)) return 'Property owner';
-  // NOTE: a real email still falls through, preserving today's behaviour. That
-  // is a pre-existing privacy smell (a nameless landlord's address appears on a
-  // public page) — deliberately not changed here, since it affects existing
-  // listings and is a separate product decision.
-  return input.email?.trim() || 'Property owner';
+  // Never fall back to the email, real or synthetic (2026-11-28). A synthetic
+  // `@wa.easyrent.lk` address is a phone-number-shaped identifier, and a real
+  // one put a landlord's personal Gmail on a public listing page (listing 48),
+  // where anyone could scrape it. Not even the local part: "ravindu1234" is
+  // just as identifying. `input.email` stays in the signature so callers that
+  // pass a whole user row keep compiling.
+  return 'Property owner';
 }

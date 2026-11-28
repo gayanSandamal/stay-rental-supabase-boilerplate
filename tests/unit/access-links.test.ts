@@ -59,8 +59,12 @@ describe('publisherDisplayName', () => {
     expect(publisherDisplayName({ name: '   ', email })).toBe('Property owner');
   });
 
-  it('falls back to a real email (unchanged existing behaviour)', () => {
-    expect(publisherDisplayName({ name: null, email: 'landlord@gmail.com' })).toBe('landlord@gmail.com');
+  it('never leaks a real email either, nor its local part', () => {
+    // Listing 48 printed a landlord's personal Gmail on its public page.
+    const shown = publisherDisplayName({ name: null, email: 'ravindu1234@gmail.com' });
+    expect(shown).toBe('Property owner');
+    expect(shown).not.toContain('ravindu1234');
+    expect(publisherDisplayName({ name: '  ', email: 'landlord@gmail.com' })).toBe('Property owner');
   });
 
   it('has a safe last resort', () => {
