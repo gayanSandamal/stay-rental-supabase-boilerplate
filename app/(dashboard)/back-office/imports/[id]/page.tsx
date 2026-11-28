@@ -12,6 +12,7 @@ import { extractPhoneNumbers } from '@/lib/moderation/contact-scrub';
 import { detectSaleAd } from '@/lib/intake/parser/sale-ad';
 import { isIntakeConfigured } from '@/lib/intake/channels/whatsapp/config';
 import { whatsappTemplateName } from '@/lib/intake/channels/whatsapp/send';
+import { parseExtraPhones } from '@/lib/imports/phones';
 import { importDescription, parsePayload, parsePhotoUrls } from '@/lib/imports/publish';
 import { ReviewForm } from './review-form';
 
@@ -85,6 +86,22 @@ const RESULTS: Record<string, { ok: boolean; title: string; detail: string }> = 
     title: 'Not enough to ask about',
     detail:
       'Title, city, bedrooms, monthly rent and the owner’s phone number are all required. The consent message quotes these back to the owner.',
+  },
+  key_money_missing: {
+    ok: false,
+    title: 'Enter the key money amount',
+    detail: 'Key money is selected but has no amount. Your other edits were saved.',
+  },
+  bad_extra_phone: {
+    ok: false,
+    title: 'Check the additional phone numbers',
+    detail: 'One of them is not a number we can read. Fix or remove it. Your other edits were saved.',
+  },
+  owner_not_whatsapp: {
+    ok: false,
+    title: 'The owner’s number is not marked as WhatsApp',
+    detail:
+      'The consent request is a WhatsApp message and can only be sent once. Put their WhatsApp number in the owner field, or tick WhatsApp if this number has it.',
   },
   already_asked: {
     ok: false,
@@ -355,10 +372,13 @@ export default async function ImportReviewPage({
           bathrooms: parsed.bathrooms,
           rentPerMonth: parsed.rentPerMonth,
           depositMonths: parsed.depositMonths,
+          keyMoney: parsed.keyMoney ?? null,
         }}
         photos={photos}
         ownerName={record.ownerName}
         ownerPhone={record.ownerPhone}
+        ownerPhoneIsWhatsApp={record.ownerPhoneIsWhatsApp}
+        extraPhones={parseExtraPhones(record.extraPhones)}
         phoneCandidates={phoneCandidates}
       />
     </section>

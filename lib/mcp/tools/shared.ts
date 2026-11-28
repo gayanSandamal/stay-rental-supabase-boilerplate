@@ -156,6 +156,7 @@ export function summarizeListing(l: ListingRow & Record<string, any>, origin: st
     bathrooms: l.bathrooms,
     areaSqft: l.areaSqft,
     depositMonths: l.depositMonths,
+    keyMoneyLKR: num(l.keyMoney),
     utilitiesIncluded: l.utilitiesIncluded,
     powerBackup: l.powerBackup || null,
     waterSource: l.waterSource || null,

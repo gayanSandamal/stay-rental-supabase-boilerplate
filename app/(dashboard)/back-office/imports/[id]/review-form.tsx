@@ -6,16 +6,23 @@ import {
   Copy,
   ImagePlus,
   Loader2,
+  MessageCircle,
   PhoneCall,
+  Plus,
   RefreshCw,
   Save,
   Send,
   Trash2,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedToggle } from '@/components/ui/segmented-toggle';
 import { ImageUploader } from '@/components/image-uploader';
+import { isTruncatedPreview } from '@/lib/imports/facebook/embedded';
+import { MAX_EXTRA_PHONES, type ImportPhone } from '@/lib/imports/phones';
+import { UPFRONT_OPTIONS, upfrontType } from '@/lib/listings/upfront';
 import { inviteCommentText } from '@/lib/imports/invite';
 import { useFeatureFlag, useFeatureValue } from '@/lib/hooks/use-feature-flags';
 import { capPhotos, effectiveCap } from '@/lib/images/cap';
@@ -53,6 +60,7 @@ export interface ReviewParsed {
   bathrooms: number | null;
   rentPerMonth: number | null;
   depositMonths: number | null;
+  keyMoney: number | null;
 }
 
 export function ReviewForm({
@@ -65,6 +73,8 @@ export function ReviewForm({
   photos,
   ownerName,
   ownerPhone,
+  ownerPhoneIsWhatsApp,
+  extraPhones,
   phoneCandidates,
   saleAd,
   shareOnSocial,
@@ -79,6 +89,8 @@ export function ReviewForm({
   photos: string[];
   ownerName: string | null;
   ownerPhone: string | null;
+  ownerPhoneIsWhatsApp: boolean;
+  extraPhones: ImportPhone[];
   phoneCandidates: string[];
   saleAd: boolean;
   shareOnSocial: boolean;
@@ -90,6 +102,18 @@ export function ReviewForm({
   const [photoUrls, setPhotoUrls] = useState<string[]>(photos);
   const [manualConsentAttested, setManualConsentAttested] = useState(false);
   const [phone, setPhone] = useState(ownerPhone ?? '');
+  const [phoneIsWhatsApp, setPhoneIsWhatsApp] = useState(ownerPhoneIsWhatsApp);
+  const [extras, setExtras] = useState<ImportPhone[]>(extraPhones);
+  const setExtra = (index: number, change: Partial<ImportPhone>) =>
+    setExtras((prev) => prev.map((row, i) => (i === index ? { ...row, ...change } : row)));
+  /** Numbers in the advert not used above — offered as one-click additions. */
+  const unusedCandidates = phoneCandidates.filter(
+    (c) => c !== phone && !extras.some((row) => row.phone === c)
+  );
+  const [upfront, setUpfront] = useState<string>(upfrontType(parsed));
+  const [keyMoney, setKeyMoney] = useState(
+    parsed.keyMoney == null ? '' : String(parsed.keyMoney)
+  );
   /*
    * The pasted post text is CONTROLLED and mirrored into the editor form below.
    *
@@ -142,6 +166,7 @@ export function ReviewForm({
   const locked = published || discarded || pending;
 
   const missing = requiredMissing(required, phone);
+  if (upfront === 'key_money' && !(Number(keyMoney) > 0)) missing.push('key money amount');
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -158,14 +183,12 @@ export function ReviewForm({
         </section>
       )}
 
-      {resolvedVia === 'og' && !published && (
+      {resolvedVia === 'og' && isTruncatedPreview(rawText) && !published && (
         <section className="flex gap-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-3 text-sm text-sky-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Only Facebook&rsquo;s public preview came back — usually just the first line
-            of the post and the cover photo. The rest of the ad, including the phone
-            number, is not in what Facebook sends us. Paste the full text below and add
-            the other photos.
+            Only Facebook&rsquo;s public preview came back, cut off after about 200
+            characters. Paste the full text below and add the other photos.
           </p>
         </section>
       )}
@@ -320,13 +343,40 @@ export function ReviewForm({
             onValueChange={setField('rentPerMonth')}
             required
           />
-          <Field
-            label="Deposit (months)"
-            name="depositMonths"
-            type="number"
-            defaultValue={parsed.depositMonths}
-            placeholder="e.g. 3"
-          />
+          {/* One or the other. The hidden half is not submitted, and the server
+              clears it, so a listing can never quote both. */}
+          <div className="space-y-1.5">
+            <SegmentedToggle
+              name="depositType"
+              label="Upfront payment"
+              value={upfront}
+              options={UPFRONT_OPTIONS}
+              onChange={setUpfront}
+              disabled={locked}
+            />
+            {upfront === 'key_money' ? (
+              <Input
+                key="keyMoney"
+                name="keyMoney"
+                type="number"
+                min={1}
+                value={keyMoney}
+                onChange={(e) => setKeyMoney(e.target.value)}
+                placeholder="Amount in LKR, e.g. 500000"
+                aria-label="Key money (LKR)"
+              />
+            ) : (
+              <Input
+                key="depositMonths"
+                name="depositMonths"
+                type="number"
+                min={0}
+                defaultValue={parsed.depositMonths ?? ''}
+                placeholder="e.g. 3"
+                aria-label="Deposit (months)"
+              />
+            )}
+          </div>
           <Field label="Address" name="address" defaultValue={parsed.address} />
 
           <div className="space-y-1.5 sm:col-span-2">
@@ -396,6 +446,18 @@ export function ReviewForm({
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+94771234567"
               />
+              <WhatsAppCheckbox checked={phoneIsWhatsApp} onChange={setPhoneIsWhatsApp} />
+              {!phoneIsWhatsApp && !isPasted && (
+                <p className="text-xs text-amber-800">
+                  The consent request is a WhatsApp message, so it cannot be sent to this
+                  number.
+                </p>
+              )}
+              <input
+                type="hidden"
+                name="ownerPhoneIsWhatsApp"
+                value={phoneIsWhatsApp ? 'true' : 'false'}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ownerName">Owner name</Label>
@@ -411,6 +473,69 @@ export function ReviewForm({
               </p>
             </div>
           </div>
+        </fieldset>
+
+        <fieldset disabled={locked} className="space-y-3">
+          <legend className="mb-2 text-sm font-semibold text-slate-900">
+            Additional phone numbers
+          </legend>
+          <p className="text-sm text-slate-500">
+            Shown on the listing next to the owner&rsquo;s number. Tick the ones that are
+            on WhatsApp. We never message these.
+          </p>
+          <input type="hidden" name="extraPhones" value={JSON.stringify(extras)} />
+
+          {extras.map((row, index) => (
+            <div key={index} className="flex flex-wrap items-center gap-3">
+              <Input
+                value={row.phone}
+                onChange={(e) => setExtra(index, { phone: e.target.value })}
+                type="tel"
+                placeholder="0771234567"
+                aria-label={`Additional phone number ${index + 1}`}
+                className="w-56"
+              />
+              <WhatsAppCheckbox
+                checked={row.isWhatsApp}
+                onChange={(isWhatsApp) => setExtra(index, { isWhatsApp })}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove additional phone number ${index + 1}`}
+                onClick={() => setExtras((prev) => prev.filter((_, i) => i !== index))}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+
+          {extras.length < MAX_EXTRA_PHONES && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setExtras((prev) => [...prev, { phone: '', isWhatsApp: false }])}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add number
+              </Button>
+              {unusedCandidates.map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  onClick={() =>
+                    setExtras((prev) => [...prev, { phone: candidate, isWhatsApp: false }])
+                  }
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-sm hover:bg-slate-50"
+                >
+                  + {candidate}
+                </button>
+              ))}
+            </div>
+          )}
         </fieldset>
 
         <fieldset disabled={locked} className="space-y-2">
@@ -595,7 +720,7 @@ export function ReviewForm({
               <Button
                 type="submit"
                 formAction={(fd) => start(() => publishImportAction(fd))}
-                disabled={missing.length > 0 || pending}
+                disabled={missing.length > 0 || !phoneIsWhatsApp || pending}
               >
                 {pending ? (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -681,6 +806,27 @@ function requiredMissing(
   if (!fields.rentPerMonth.trim()) missing.push('rent');
   if (!phone.trim()) missing.push('phone number');
   return missing;
+}
+
+function WhatsAppCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4"
+      />
+      <MessageCircle className="h-4 w-4 text-emerald-600" />
+      WhatsApp
+    </label>
+  );
 }
 
 /** Controlled when `value`/`onValueChange` are given, uncontrolled otherwise. */

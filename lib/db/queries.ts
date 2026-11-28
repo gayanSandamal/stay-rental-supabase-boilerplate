@@ -329,7 +329,14 @@ export async function getActiveListings(filters?: {
     // Pricing
     filters?.minPrice ? gte(listings.rentPerMonth, filters.minPrice.toString()) : undefined,
     filters?.maxPrice ? lte(listings.rentPerMonth, filters.maxPrice.toString()) : undefined,
-    filters?.depositMonths ? lte(listings.depositMonths, filters.depositMonths) : undefined,
+    // Key money listings have no deposit_months, so the same ceiling is applied
+    // to the amount — otherwise the filter would hide every one of them.
+    filters?.depositMonths
+      ? or(
+          lte(listings.depositMonths, filters.depositMonths),
+          sql`${listings.keyMoney} <= ${listings.rentPerMonth} * ${filters.depositMonths}::int`
+        )
+      : undefined,
     filters?.utilitiesIncluded !== undefined
       ? eq(listings.utilitiesIncluded, filters.utilitiesIncluded)
       : undefined,
@@ -710,6 +717,7 @@ export async function getListingsForOps(filters?: {
       areaSqft: listings.areaSqft,
       rentPerMonth: listings.rentPerMonth,
       depositMonths: listings.depositMonths,
+      keyMoney: listings.keyMoney,
       utilitiesIncluded: listings.utilitiesIncluded,
       serviceCharge: listings.serviceCharge,
       powerBackup: listings.powerBackup,

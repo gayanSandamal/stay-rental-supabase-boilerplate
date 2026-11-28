@@ -169,6 +169,8 @@ export const listings = pgTable('listings', {
   // Pricing
   rentPerMonth: decimal('rent_per_month', { precision: 12, scale: 2 }).notNull(),
   depositMonths: integer('deposit_months').default(3),
+  /** Lump sum in LKR, INSTEAD of a deposit — see lib/listings/upfront.ts (0068). */
+  keyMoney: decimal('key_money', { precision: 12, scale: 2 }),
   utilitiesIncluded: boolean('utilities_included').default(false),
   serviceCharge: decimal('service_charge', { precision: 12, scale: 2 }),
   
@@ -880,6 +882,10 @@ export const postImports = pgTable('post_imports', {
   photoUrls: text('photo_urls'), // JSON string[] — already in our bucket
   /** E.164 as the operator confirmed it. UNVERIFIED: see users.waPhoneVerifiedAt. */
   ownerPhone: varchar('owner_phone', { length: 20 }),
+  /** Operator's mark on the owner's number; publishing copies it (0068). */
+  ownerPhoneIsWhatsApp: boolean('owner_phone_is_whatsapp').notNull().default(true),
+  /** JSON ImportPhone[] — the advert's other numbers. See lib/imports/phones.ts. */
+  extraPhones: text('extra_phones'),
   ownerName: text('owner_name'),
   /**
    * Operator ticked "also post this to our social channels" on the review

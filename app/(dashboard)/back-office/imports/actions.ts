@@ -22,6 +22,13 @@ import {
 } from '@/lib/imports/extract';
 import { ImportPublishError, parsePayload, publishImport } from '@/lib/imports/publish';
 import { grantManualImportConsent, requestImportConsent } from '@/lib/imports/consent';
+import { parseKeyMoney } from '@/lib/listings/upfront';
+import {
+  cleanExtraPhones,
+  parseExtraPhones,
+  serializeExtraPhones,
+  unreadablePhones,
+} from '@/lib/imports/phones';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 
 const BASE_PATH = '/back-office/imports';
@@ -309,7 +316,7 @@ export async function addPhotoUrlsAction(formData: FormData): Promise<void> {
       // are the same album arriving by two routes. Deduped because an operator
       // re-pasting the list after a partial refusal is the normal way to retry.
       photoUrls: JSON.stringify([...new Set([...kept, ...stored])]),
-      ownerPhone: normalizePhone(String(formData.get('ownerPhone') ?? '')),
+      ...phonesFromForm(formData, existing),
       ownerName: String(formData.get('ownerName') ?? '').trim() || null,
       shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
@@ -318,6 +325,32 @@ export async function addPhotoUrlsAction(formData: FormData): Promise<void> {
 
   revalidatePath(`${BASE_PATH}/${id}`);
   redirect(`${BASE_PATH}/${id}?added=${stored.length}&refused=${refused}`);
+}
+
+/**
+ * Every phone column, from the form. Like keepRawText, a field the form did not
+ * carry keeps what is stored.
+ */
+function phonesFromForm(
+  formData: FormData,
+  existing: { ownerPhoneIsWhatsApp: boolean; extraPhones: string | null }
+) {
+  const ownerPhone = normalizePhone(String(formData.get('ownerPhone') ?? ''));
+  return {
+    ownerPhone,
+    ownerPhoneIsWhatsApp: formData.has('ownerPhoneIsWhatsApp')
+      ? formData.get('ownerPhoneIsWhatsApp') === 'true'
+      : existing.ownerPhoneIsWhatsApp,
+    extraPhones: formData.has('extraPhones')
+      ? serializeExtraPhones(
+          cleanExtraPhones(
+            parseExtraPhones(String(formData.get('extraPhones'))),
+            ownerPhone,
+            normalizePhone
+          )
+        )
+      : existing.extraPhones,
+  };
 }
 
 /** Save the reviewed fields. Validation that matters happens at publish. */
@@ -343,7 +376,7 @@ export async function updateDraftAction(formData: FormData): Promise<void> {
       rawText: keepRawText(formData, existing.rawText),
       parsedPayload: JSON.stringify(parsed),
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
-      ownerPhone: normalizePhone(String(formData.get('ownerPhone') ?? '')),
+      ...phonesFromForm(formData, existing),
       ownerName: String(formData.get('ownerName') ?? '').trim() || null,
       shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
@@ -373,7 +406,6 @@ export async function publishImportAction(formData: FormData): Promise<void> {
     .getAll('photoUrls')
     .map((v) => String(v))
     .filter(Boolean);
-  const ownerPhone = normalizePhone(String(formData.get('ownerPhone') ?? ''));
   const ownerName = String(formData.get('ownerName') ?? '').trim() || null;
 
   const [saved] = await db
@@ -382,7 +414,7 @@ export async function publishImportAction(formData: FormData): Promise<void> {
       rawText: keepRawText(formData, existing.rawText),
       parsedPayload: JSON.stringify(parsed),
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
-      ownerPhone,
+      ...phonesFromForm(formData, existing),
       ownerName,
       shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
@@ -406,6 +438,19 @@ export async function publishImportAction(formData: FormData): Promise<void> {
   }
   if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
     redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  // The switch says key money but there is no amount. Going on would publish
+  // the default deposit, i.e. terms nobody chose.
+  if (formData.get('depositType') === 'key_money' && parsed.keyMoney == null) {
+    redirect(`${BASE_PATH}/${id}?error=key_money_missing`);
+  }
+  if (unreadablePhones(parseExtraPhones(saved.extraPhones)).length) {
+    redirect(`${BASE_PATH}/${id}?error=bad_extra_phone`);
+  }
+  // The ask travels on WhatsApp and each owner is asked once, so it must not be
+  // spent on a number the operator has said is not there.
+  if (!saved.ownerPhoneIsWhatsApp) {
+    redirect(`${BASE_PATH}/${id}?error=owner_not_whatsapp`);
   }
   /*
    * A PASTED IMPORT CANNOT BE ASKED WITH THIS TEMPLATE.
@@ -487,7 +532,6 @@ export async function publishManualConsentAction(formData: FormData): Promise<vo
     .getAll('photoUrls')
     .map((v) => String(v))
     .filter(Boolean);
-  const ownerPhone = normalizePhone(String(formData.get('ownerPhone') ?? ''));
   const ownerName = String(formData.get('ownerName') ?? '').trim() || null;
 
   const [saved] = await db
@@ -496,7 +540,7 @@ export async function publishManualConsentAction(formData: FormData): Promise<vo
       rawText: keepRawText(formData, existing.rawText),
       parsedPayload: JSON.stringify(parsed),
       photoUrls: photoUrls.length ? JSON.stringify(photoUrls) : null,
-      ownerPhone,
+      ...phonesFromForm(formData, existing),
       ownerName,
       shareOnSocial: formData.get('shareOnSocial') === 'on',
       updatedAt: new Date(),
@@ -509,6 +553,14 @@ export async function publishManualConsentAction(formData: FormData): Promise<vo
   }
   if (!parsed.title || !parsed.city || parsed.bedrooms == null || parsed.rentPerMonth == null) {
     redirect(`${BASE_PATH}/${id}?error=incomplete`);
+  }
+  // The switch says key money but there is no amount. Going on would publish
+  // the default deposit, i.e. terms nobody chose.
+  if (formData.get('depositType') === 'key_money' && parsed.keyMoney == null) {
+    redirect(`${BASE_PATH}/${id}?error=key_money_missing`);
+  }
+  if (unreadablePhones(parseExtraPhones(saved.extraPhones)).length) {
+    redirect(`${BASE_PATH}/${id}?error=bad_extra_phone`);
   }
 
   let record = await grantManualImportConsent(id, user.id);
@@ -584,6 +636,7 @@ function fillEmpty(existing: ParsedIntake, fresh: ParsedIntake): ParsedIntake {
     bathrooms: keep('bathrooms'),
     rentPerMonth: keep('rentPerMonth'),
     depositMonths: keep('depositMonths'),
+    keyMoney: keep('keyMoney'),
   };
 }
 
@@ -603,6 +656,16 @@ function mergeParsedFromForm(base: ParsedIntake, formData: FormData): ParsedInta
   };
 
   const propertyType = text('propertyType');
+
+  // The switch decides which of the two survives; the other is cleared, so a
+  // draft can never hold both.
+  const upfrontFromForm = () =>
+    formData.get('depositType') === 'key_money'
+      ? { depositMonths: null, keyMoney: parseKeyMoney(formData.get('keyMoney')) }
+      : {
+          depositMonths: number('depositMonths'),
+          keyMoney: formData.has('depositType') ? null : (base.keyMoney ?? null),
+        };
 
   return {
     ...base,
@@ -625,6 +688,6 @@ function mergeParsedFromForm(base: ParsedIntake, formData: FormData): ParsedInta
     bedrooms: number('bedrooms'),
     bathrooms: number('bathrooms'),
     rentPerMonth: number('rentPerMonth'),
-    depositMonths: number('depositMonths'),
+    ...upfrontFromForm(),
   };
 }

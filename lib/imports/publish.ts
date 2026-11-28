@@ -42,6 +42,8 @@ import { tidyImportedAdvert } from './advert-text';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
 import { createNotificationsForOpsAndAdmin } from '@/lib/notifications';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
+import { resolveUpfront } from '@/lib/listings/upfront';
+import { isPublishablePhone, parseExtraPhones } from './phones';
 import { assertImportConsent } from './consent';
 import { notifyImportedOwner, type NotifyOutcome } from './notify';
 
@@ -105,6 +107,9 @@ export async function publishImport(
     throw new ImportPublishError('Confirm the owner’s phone number before publishing.');
   }
 
+  const upfront = resolveUpfront(parsed);
+  if ('error' in upfront) throw new ImportPublishError(upfront.error);
+
   const ops = await getOrCreateOpsIdentity();
 
   // The owner gets their own account so the edit and delete links in our
@@ -130,29 +135,55 @@ export async function publishImport(
   const contactScope = owner
     ? { userId: owner.userId }
     : { businessAccountId: ops.businessAccountId };
-  let contact = await db.query.userContactNumbers.findFirst({
-    where: and(
-      owner
-        ? eq(userContactNumbers.userId, owner.userId)
-        : eq(userContactNumbers.businessAccountId, ops.businessAccountId),
-      eq(userContactNumbers.phoneNumber, record.ownerPhone)
-    ),
-  });
-  if (!contact) {
-    [contact] = await db
+  const contactIds: number[] = [];
+  const phones = [
+    {
+      phone: record.ownerPhone,
+      isWhatsApp: record.ownerPhoneIsWhatsApp,
+      label: record.ownerName ?? 'Owner',
+    },
+    // The advert's other numbers, as the operator marked them. They are typed
+    // into a public advert exactly like the owner's, so equally unverified.
+    ...parseExtraPhones(record.extraPhones)
+      .filter((p) => isPublishablePhone(p.phone) && p.phone !== record.ownerPhone)
+      .map((p) => ({ ...p, label: 'Additional' })),
+  ];
+  for (const { phone, isWhatsApp, label } of phones) {
+    const existing = await db.query.userContactNumbers.findFirst({
+      where: and(
+        owner
+          ? eq(userContactNumbers.userId, owner.userId)
+          : eq(userContactNumbers.businessAccountId, ops.businessAccountId),
+        eq(userContactNumbers.phoneNumber, phone)
+      ),
+    });
+    if (existing) {
+      // A verified number's WhatsApp mark was proven by WhatsApp; an operator
+      // reading an advert does not outrank that.
+      if (!existing.verified && existing.isWhatsApp !== isWhatsApp) {
+        await db
+          .update(userContactNumbers)
+          .set({ isWhatsApp, updatedAt: new Date() })
+          .where(eq(userContactNumbers.id, existing.id));
+      }
+      contactIds.push(existing.id);
+      continue;
+    }
+    const [created] = await db
       .insert(userContactNumbers)
       .values({
         ...contactScope,
-        phoneNumber: record.ownerPhone,
-        // Assumed, not proven — almost every Sri Lankan mobile is on WhatsApp,
-        // and being wrong here costs a renter one failed tap, not a bad message.
-        isWhatsApp: true,
-        label: record.ownerName ?? 'Owner',
+        phoneNumber: phone,
+        // The operator's mark, not proof. Being wrong costs a renter one
+        // failed tap, not a bad message.
+        isWhatsApp,
+        label: label.slice(0, 50),
         // NOT verified. Nobody has confirmed this number belongs to them, and
         // the verified badge is a trust signal the marketplace is built on.
         verified: false,
       })
       .returning();
+    contactIds.push(created.id);
   }
 
   const cap = photoCap();
@@ -184,9 +215,8 @@ export async function publishImport(
       bedrooms: parsed.bedrooms,
       bathrooms: parsed.bathrooms,
       rentPerMonth: String(parsed.rentPerMonth),
-      // Omitted rather than passed as null when unset: the column defaults to
-      // 3, and an explicit null would override that default with nothing.
-      ...(parsed.depositMonths != null ? { depositMonths: parsed.depositMonths } : {}),
+      // Key money or a deposit, never both; unset means the usual 3 months.
+      ...upfront,
       photos: kept.length ? JSON.stringify(kept) : null,
       ...(manifestEntries.length ? { photosManifest: serializeManifest(manifestEntries) } : {}),
       ...(moderationArmed ? { moderationStatus: 'queued' as const } : {}),
@@ -224,11 +254,13 @@ export async function publishImport(
     })
     .returning();
 
-  await db.insert(listingContactNumbers).values({
-    listingId: listing.id,
-    contactNumberId: contact.id,
-    isNew: true,
-  });
+  await db.insert(listingContactNumbers).values(
+    contactIds.map((contactNumberId) => ({
+      listingId: listing.id,
+      contactNumberId,
+      isNew: true,
+    }))
+  );
 
   await db
     .update(postImports)

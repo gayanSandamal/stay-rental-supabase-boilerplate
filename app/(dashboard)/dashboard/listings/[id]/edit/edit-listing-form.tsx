@@ -2,6 +2,7 @@
 
 import { FormBuilder } from '@/components/form-builder';
 import { formConfigs } from '@/lib/forms';
+import { upfrontType } from '@/lib/listings/upfront';
 import { useFeatureFlag } from '@/lib/hooks/use-feature-flags';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -58,7 +59,9 @@ export function EditListingForm({ listing }: EditListingFormProps) {
     bathrooms: listing.bathrooms || undefined,
     areaSqft: listing.areaSqft || undefined,
     rentPerMonth: Number(listing.rentPerMonth),
+    depositType: upfrontType(listing),
     depositMonths: listing.depositMonths || 3,
+    keyMoney: listing.keyMoney ? Number(listing.keyMoney) : undefined,
     utilitiesIncluded: listing.utilitiesIncluded || false,
     serviceCharge: listing.serviceCharge ? Number(listing.serviceCharge) : undefined,
     powerBackup: listing.powerBackup || '',

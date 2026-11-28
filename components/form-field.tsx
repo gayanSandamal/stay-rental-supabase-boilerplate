@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImageUploader } from '@/components/image-uploader';
 import { ContactNumberSelector } from '@/components/contact-number-selector';
+import { SegmentedToggle } from '@/components/ui/segmented-toggle';
 import { cn } from '@/lib/utils';
 
 export type FieldType =
@@ -15,6 +16,7 @@ export type FieldType =
   | 'number'
   | 'textarea'
   | 'select'
+  | 'toggle' // segmented switch between a few options
   | 'checkbox'
   | 'date'
   | 'url'
@@ -307,6 +309,19 @@ export function FormField({
               </option>
             ))}
           </select>
+        );
+
+      case 'toggle':
+        return (
+          <SegmentedToggle
+            id={fieldId}
+            name={name}
+            label={label}
+            value={String(displayValue ?? '')}
+            options={options ?? []}
+            onChange={handleChange}
+            disabled={disabled}
+          />
         );
 
       case 'checkbox':

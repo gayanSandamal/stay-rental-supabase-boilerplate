@@ -16,6 +16,7 @@ import {
   reconcileManifest,
   serializeManifest,
 } from '@/lib/images/manifest';
+import { resolveUpfront } from '@/lib/listings/upfront';
 import { photoCap } from '@/lib/images/cap';
 import { unhostedPhotos } from '@/lib/images/photo-urls';
 import { isModerationConfigured } from '@/lib/moderation/config';
@@ -405,6 +406,16 @@ export async function PUT(
         ? body.district
         : null;
 
+    // Written back onto the body so the re-approval diff below compares what
+    // will be STORED: the form seeds a default deposit even when the listing
+    // uses key money, and that must not read as an edit.
+    const upfront = resolveUpfront(body);
+    if ('error' in upfront) {
+      return NextResponse.json({ error: upfront.error }, { status: 400 });
+    }
+    body.depositMonths = upfront.depositMonths;
+    body.keyMoney = upfront.keyMoney;
+
     // Prepare update data (only allow editing of listing content, not status/approval fields)
     const updates: any = {
       title: body.title,
@@ -421,7 +432,8 @@ export async function PUT(
       bathrooms: toNumberOrNull(body.bathrooms),
       areaSqft: toNumberOrNull(body.areaSqft),
       rentPerMonth: Number(body.rentPerMonth),
-      depositMonths: toNumberOrNull(body.depositMonths) ?? 3,
+      depositMonths: upfront.depositMonths,
+      keyMoney: upfront.keyMoney,
       utilitiesIncluded: Boolean(body.utilitiesIncluded),
       serviceCharge: toNumberOrNull(body.serviceCharge),
       powerBackup: toStringOrNull(body.powerBackup),
@@ -458,7 +470,7 @@ export async function PUT(
     // including a photos-only reorder. Compare against the stored row instead.
     const CONTENT_FIELDS = [
       'title', 'description', 'address', 'city', 'district', 'latitude', 'longitude',
-      'propertyType', 'bedrooms', 'bathrooms', 'areaSqft', 'rentPerMonth', 'depositMonths',
+      'propertyType', 'bedrooms', 'bathrooms', 'areaSqft', 'rentPerMonth', 'depositMonths', 'keyMoney',
       'utilitiesIncluded', 'serviceCharge', 'powerBackup', 'waterSource', 'waterTankSize',
       'hasFiber', 'fiberISPs', 'acUnits', 'fans', 'ventilation', 'isGated', 'hasGuard',
       'hasCCTV', 'hasBurglarBars', 'parking', 'parkingSpaces', 'petsAllowed',

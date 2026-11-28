@@ -49,9 +49,9 @@ export async function resolvePost(input: string): Promise<ResolvedPost> {
 
   const og = await fetchOpenGraph(parsed.canonicalUrl).catch(() => null);
   if (og) {
-    // og:description is a TRUNCATED preview. Saying so is the difference
-    // between an operator checking the rent against the original and one
-    // trusting a number that was cut off mid-sentence.
+    // Usually the whole post (see embedded.ts). When only the truncated preview
+    // came back, saying so is the difference between an operator checking the
+    // rent against the original and trusting a number cut off mid-sentence.
     return {
       canonicalUrl: parsed.canonicalUrl,
       platform,
@@ -64,11 +64,11 @@ export async function resolvePost(input: string): Promise<ResolvedPost> {
       text: dropDuplicateLeadLine(composeOgText(og.title, og.description)),
       imageUrls: og.imageUrls,
       authorName: null,
-      note:
-        'Facebook only served its public preview — usually the first line of ' +
-        'the post and the cover photo, and nothing else. The rest of the ad, ' +
-        'including the phone number, is not in what it sends us. Open the ' +
-        'original, paste the full text below and add the other photos.',
+      note: og.truncated
+        ? 'Facebook only served its public preview of this post, cut off after ' +
+          'about 200 characters. Open the original, paste the full text below ' +
+          'and add the other photos.'
+        : null,
     };
   }
 

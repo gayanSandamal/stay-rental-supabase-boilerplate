@@ -318,6 +318,7 @@ export async function declineImportConsent(importId: number): Promise<void> {
       rawText: null,
       parsedPayload: null,
       photoUrls: null,
+      extraPhones: null,
       ownerName: null,
       consentTokenHash: null,
       updatedAt: new Date(),

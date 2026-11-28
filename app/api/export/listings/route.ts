@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
       areaSqft: listings.areaSqft,
       rentPerMonth: listings.rentPerMonth,
       depositMonths: listings.depositMonths,
+      keyMoney: listings.keyMoney,
       verified: listings.verified,
       visited: listings.visited,
       createdAt: listings.createdAt,
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const headers = [
     'ID', 'Title', 'Status', 'Address', 'City', 'District', 'Type',
-    'Bedrooms', 'Bathrooms', 'Area (sqft)', 'Rent/Month (LKR)', 'Deposit (months)',
+    'Bedrooms', 'Bathrooms', 'Area (sqft)', 'Rent/Month (LKR)', 'Deposit (months)', 'Key Money (LKR)',
     'Verified', 'Visited', 'Created At', 'Published At', 'Expires At',
     'Landlord Name', 'Landlord Email',
   ];
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
     l.areaSqft ?? '',
     l.rentPerMonth,
     l.depositMonths ?? '',
+    l.keyMoney ?? '',
     l.verified ? 'Yes' : 'No',
     l.visited ? 'Yes' : 'No',
     l.createdAt ? new Date(l.createdAt).toISOString() : '',
