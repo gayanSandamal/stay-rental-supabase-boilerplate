@@ -33,6 +33,7 @@ const expectedNonImportNavigation = [
   ['/back-office/whatsapp-intakes', 'MessageCircle', 'WhatsApp Intakes'],
   ['/back-office/moderation', 'ShieldCheck', 'Moderation'],
   ['/back-office/social', 'Share2', 'Social'],
+  ['/back-office/reports', 'FileBarChart', 'Reports'],
   ['/back-office/settings', 'Settings', 'Settings'],
 ];
 
