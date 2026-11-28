@@ -1,7 +1,7 @@
 import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Download, Plus } from 'lucide-react';
+import { Download, FileBarChart, Plus } from 'lucide-react';
 import { requireBackOfficeAccess } from '@/lib/auth/back-office';
 import { db } from '@/lib/db/drizzle';
 import { postImports } from '@/lib/db/schema';
@@ -122,12 +122,22 @@ export default async function ImportsPage({
         title="Imports"
         summary={`${counts.all.toLocaleString()} total`}
         actions={
+          <>
+          {flags.enableDataExport && (
+            <Button asChild variant="outline">
+              <Link href="/back-office/reports/import-follow-up">
+                <FileBarChart className="mr-1.5 h-4 w-4" />
+                Follow-up report
+              </Link>
+            </Button>
+          )}
           <Button asChild>
             <Link href={`${BASE_PATH}/new`}>
               <Plus className="mr-1.5 h-4 w-4" />
               Import a post
             </Link>
           </Button>
+          </>
         }
       />
 

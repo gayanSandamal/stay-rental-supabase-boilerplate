@@ -12,6 +12,7 @@ export const maxDuration = 60;
 const ERRORS: Record<string, string> = {
   bad_url:
     'That is not a Facebook post URL we can open. Paste the link to a single post — the address bar of the post itself, not a profile or a group home page.',
+  no_input: 'Paste a post link, the post text, or both.',
   no_url:
     'A link to the original post is needed, even when you paste the text. It is what anyone reviewing the listing later opens to check it against the advert.',
   resolve_failed:
@@ -21,14 +22,16 @@ const ERRORS: Record<string, string> = {
 export default async function NewImportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; discarded?: string }>;
 }) {
   await requireBackOfficeAccess();
   const flags = await loadFeatureFlags();
   if (!flags.enableFacebookImport) notFound();
 
-  const { error } = await searchParams;
+  const { error, published, discarded } = await searchParams;
   const message = error ? ERRORS[error] : null;
+  // Ids only, so a hand-edited URL cannot put text on the screen.
+  const doneId = [published, discarded].find((id) => id && /^\d+$/.test(id)) ?? null;
 
   return (
     <section className="flex-1 p-4 lg:p-8">
@@ -50,6 +53,23 @@ export default async function NewImportPage({
         </section>
       )}
 
+      {doneId && !message && (
+        <section
+          role="status"
+          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+        >
+          <span>
+            {published
+              ? `Import #${doneId} was published. If automated checks are on, it goes live once they pass.`
+              : `Import #${doneId} was discarded.`}{' '}
+            Ready for the next post.
+          </span>
+          <Link href={`/back-office/imports/${doneId}`} className="font-medium underline">
+            View import #{doneId}
+          </Link>
+        </section>
+      )}
+
       <div className="max-w-2xl space-y-4">
         {/*
           One line, above the form, because it changes what the operator does in
@@ -65,7 +85,8 @@ export default async function NewImportPage({
           advert a landlord sent you directly, with no post behind it.
         </p>
 
-        <ImportUrlForm />
+        {/* Keyed on what was just finished: the next post always starts blank. */}
+        <ImportUrlForm key={doneId ?? 'new'} />
 
         {/*
           The reasoning, one tap away rather than in the way. An operator meets

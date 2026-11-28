@@ -609,6 +609,18 @@ top and made the limit look worse than it is:
   is composed here and pasted by hand. An inbound reply carrying `FB-<id>` only
   notifies ops; it must never swallow the message, which IS the submission.
 
+## Back-office reports (2026-11-29)
+
+`/back-office/reports`, admin/ops, behind `enableDataExport`. One
+`ReportDefinition` in `lib/back-office/reports/` gives a report its screen, CSV
+download, file name (`<id>_<date>_<time>.csv`, Colombo time) and `data_exported`
+audit entry. What to build next: `docs/back-office-reports-plan.md`.
+
+- **Cells are strangers' text.** `csvCell` neutralises spreadsheet formulas, which
+  is why phones export as `077 123 4567` (`localPhone`), never `+94…`.
+- **Owners who declined never appear in a follow-up report**, and an unanswered
+  consent request never reads as a prompt to message again.
+
 ## Public view counts (2026-09-11)
 
 The listing page prints, to everyone, how many people have seen a listing: its

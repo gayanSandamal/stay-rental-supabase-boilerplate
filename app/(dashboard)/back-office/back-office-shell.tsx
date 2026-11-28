@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Share2,
   Download,
+  FileBarChart,
 } from 'lucide-react';
 
 export function getBackOfficeNavItems(showImports: boolean) {
@@ -31,6 +32,7 @@ export function getBackOfficeNavItems(showImports: boolean) {
       : []),
     { href: '/back-office/moderation', icon: ShieldCheck, label: 'Moderation' },
     { href: '/back-office/social', icon: Share2, label: 'Social' },
+    { href: '/back-office/reports', icon: FileBarChart, label: 'Reports' },
     { href: '/back-office/settings', icon: Settings, label: 'Settings' },
   ];
 }

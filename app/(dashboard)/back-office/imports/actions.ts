@@ -579,7 +579,7 @@ export async function publishManualConsentAction(formData: FormData): Promise<vo
     await publishImport(record, user.id);
   } catch (err) {
     if (err instanceof ImportPublishError && err.message.includes('already been published')) {
-      redirect(`${BASE_PATH}/${id}?published=1`);
+      redirect(`${BASE_PATH}/new?published=${id}`);
     }
     // The attestation stands even though publishing failed — same rule the
     // WhatsApp-yes webhook path follows: it was freely given and must not be
@@ -591,7 +591,8 @@ export async function publishManualConsentAction(formData: FormData): Promise<vo
 
   revalidatePath(BASE_PATH);
   revalidatePath(`${BASE_PATH}/${id}`);
-  redirect(`${BASE_PATH}/${id}?published=1`);
+  // On to a blank form: the next thing an operator does is import another post.
+  redirect(`${BASE_PATH}/new?published=${id}`);
 }
 
 export async function discardImportAction(formData: FormData): Promise<void> {
@@ -612,7 +613,7 @@ export async function discardImportAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath(BASE_PATH);
-  redirect(`${BASE_PATH}?discarded=1`);
+  redirect(`${BASE_PATH}/new?discarded=${id}`);
 }
 
 /**
