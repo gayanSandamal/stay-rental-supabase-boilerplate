@@ -147,6 +147,11 @@ Consequences worth knowing:
 | `admin_review_listing` | admin | ops, admin | Approve / reject, verified / visited |
 | `admin_activate_visibility` | admin | ops, admin | Boost / Feature / Urgent / bundle after offline payment |
 | `admin_recent_audit_log` | admin | admin | |
+| `admin_list_imports` | admin | ops, admin | Facebook imports, consent state, what is missing |
+| `admin_get_import` | admin | ops, admin | One import in full |
+| `admin_update_import` | admin | ops, admin | Fill in / correct a draft import |
+| `admin_request_import_consent` | admin | ops, admin | Sends the WhatsApp consent template; the owner's YES creates the listing |
+| `admin_publish_import` | admin | ops, admin | Manual consent: needs `allowManualImportConsent` + `ownerConsentConfirmed: true`; website only unless `shareOnSocial` |
 
 Adding a tool: write it with `defineTool` in `lib/mcp/tools/*.ts`, give it a
 zod `input` (it is both validator and advertised JSON Schema — see
