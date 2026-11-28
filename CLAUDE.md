@@ -72,7 +72,7 @@ Next.js 15 (App Router, canary) · React 19 · TypeScript · Drizzle ORM · **Su
 - **Rate limiting**: `lib/rate-limit.ts` — in-memory (per-instance, resets on deploy). Applied to listing creation, contact numbers, uploads, view tracking.
 - **Storage**: Supabase `property-images` bucket (5 MB, JPEG/PNG/WebP/GIF) via `lib/storage.ts` / `/api/upload`. Photos are stored on `listings.photos` as a JSON array string.
 - **Notifications**: in-app center (`notifications` table, `lib/notifications.ts`) + transactional email via Resend (`lib/email.ts`). Without `RESEND_API_KEY`, emails log to console.
-- **Cron** — every `/api/cron/*` route is secured by the `CRON_SECRET` bearer token, and `lib/cron/schedule.ts` is the one table of what runs when and WHO runs it. **Vercel is on the Hobby plan, which rejects every deployment whose `vercel.json` has a cron firing more than once a day** (it blocked all deploys on 2026-11-04). So `vercel.json` keeps only the daily/weekly jobs, and the frequent ones (WhatsApp intake and moderation every 2 min, social every 5, expiry and suggestions every 15, alerts every 6 h) are fired by **Supabase pg_cron + pg_net** calling the same endpoints with the same token. Register/update them with `DATABASE_URL=… CRON_SECRET=… CRON_BASE_URL=https://easyrent.lk pnpm cron:setup-supabase` (`--status` to see runs and HTTP codes; a 401 means Vault's secret ≠ Vercel's). The secret lives in Supabase Vault, never in the job text. It is deliberately not a numbered migration — `db:migrate-all` replays against local databases, which would then call production. Never put a frequent cron back in `vercel.json`, and never schedule one job on both runners; `tests/unit/cron-schedule.test.ts` enforces both.
+- **Cron** — every `/api/cron/*` route is secured by the `CRON_SECRET` bearer token, and `lib/cron/schedule.ts` is the one table of what runs when and WHO runs it. **Vercel is on the Hobby plan, which rejects every deployment whose `vercel.json` has a cron firing more than once a day** (it blocked all deploys on 2026-11-04). So `vercel.json` keeps only the daily/weekly jobs, and the frequent ones (WhatsApp intake and moderation every 2 min, social every 5, expiry and suggestions every 15, alerts every 6 h) are fired by **Supabase pg_cron + pg_net** calling the same endpoints with the same token. Register/update them with `DATABASE_URL=… CRON_SECRET=… CRON_BASE_URL=https://easyrent.lk pnpm cron:setup-supabase` (`--status` to see runs and HTTP codes; a 401 means Vault's secret ≠ Vercel's). The secret lives in Supabase Vault, never in the job text. A job with `wakeWhen` asks the database first and calls only when its flag is on and there is work (plus once an hour regardless) — see "Function time is the Hobby budget" below. It is deliberately not a numbered migration — `db:migrate-all` replays against local databases, which would then call production. Never put a frequent cron back in `vercel.json`, and never schedule one job on both runners; `tests/unit/cron-schedule.test.ts` enforces both.
 
 ## Database & migrations — IMPORTANT GOTCHA
 
@@ -735,6 +735,35 @@ production** running the same queries.
   with postgres-js's `debug` hook, which puts query parameters into error logs. Raising
   `max` does not fix it either: postgres-js pipelines new queries onto busy connections,
   dead one included.
+
+## Function time is the Hobby budget (2026-11-25)
+
+On 2026-11-13 Vercel soft-blocked the project — `FAIR_USE_LIMITS_EXCEEDED`, overage
+`fluidDuration` — and every page answered **402 `DEPLOYMENT_DISABLED`** until the next
+billing cycle (`unpauseAt` 2026-12-13) or an upgrade. Not traffic: our own crons. Hobby
+runs every function at a fixed 2 GB, bills provisioned memory for the whole time an
+instance is handling a request (I/O waits and `waitUntil` included), and allows 360
+GB-hours a month. The DB idle hold above kept every query-running request alive ~35s
+(`idle_timeout` 30 + 5s margin), and pg_cron fires ~1,900 calls a day, almost all onto
+empty queues: ~37 GB-hours a day, gone in nine days.
+
+- **`idle_timeout` stays ≤ 5s** (`lib/db/drizzle.ts`, now 2s; asserted in
+  `tests/unit/db-idle-hold.test.ts`). It is a floor on what EVERY DB-touching request
+  costs. The reconnect it trades for is a few in-region round trips, since functions run
+  in `sin1` beside the pooler.
+- **A frequent pg_cron job says when it is worth waking** (`wakeWhen` in
+  `lib/cron/schedule.ts`): its flag must be on and its queue non-empty, checked in SQL
+  before `net.http_get`, so an empty tick never leaves the database. Guarded jobs still
+  fire unconditionally once an hour. Conditions must be a superset of what the route acts
+  on; `tests/unit/cron-schedule.test.ts` pins each to the selection it mirrors and fails
+  any job more frequent than every 15 minutes that has none. Re-run
+  `pnpm cron:setup-supabase` after changing one — the live job text is only rewritten then.
+- **Every page is capped at 60s** by `export const maxDuration = 60` in `app/layout.tsx`
+  (pages inherit segment config from layouts; a page's own value wins). Route handlers do
+  not inherit — a new one that does slow external work declares its own `maxDuration`.
+- To read the block: `vercel api /v2/teams/<teamId>` → `softBlock`. Per-route duration
+  older than 30 minutes needs Observability Plus, which Hobby does not have, so a cost
+  investigation is reconstructed from schedules and code — keep the numbers in this file.
 
 ## When making changes
 
