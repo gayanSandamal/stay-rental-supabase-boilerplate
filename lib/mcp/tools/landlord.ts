@@ -54,7 +54,8 @@ const contentShape = {
   bathrooms: z.number().int().min(0).max(20),
   areaSqft: z.number().int().min(50).max(100000),
   rentPerMonth: z.number().int().min(1000).max(100_000_000).describe('Monthly rent in LKR'),
-  depositMonths: z.number().int().min(0).max(24).describe('Deposit, in months of rent (default 3)'),
+  depositMonths: z.number().int().min(0).max(24).describe('Deposit, in months of rent (default 3). Not used together with keyMoney'),
+  keyMoney: z.number().int().min(1).max(1_000_000_000).describe('Key money: a lump sum in LKR, INSTEAD of a deposit in months'),
   utilitiesIncluded: z.boolean(),
   serviceCharge: z.number().int().min(0).max(10_000_000).describe('Monthly service charge in LKR (apartments)'),
   noticePeriodDays: z.number().int().min(0).max(365).describe('Notice period in days (default 30)'),
@@ -327,6 +328,10 @@ export const updateListing = defineTool({
     body.latitude = current.latitude;
     body.longitude = current.longitude;
     Object.assign(body, patch);
+    // Deposit and key money replace each other, so the one being set wins over
+    // the one the stored row already had.
+    if (patch.keyMoney !== undefined) body.depositType = 'key_money';
+    else if (patch.depositMonths !== undefined) body.depositType = 'deposit';
     body.photos = parsePhotos(current.photos);
     if (contactNumberIds) body.contactNumbers = contactNumberIds;
 

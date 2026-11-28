@@ -27,6 +27,7 @@ export interface CaptionListing {
   areaSqft?: number | null;
   rentPerMonth: string | number;
   depositMonths?: number | null;
+  keyMoney?: string | number | null;
   powerBackup?: string | null;
   waterSource?: string | null;
   hasFiber?: boolean | null;
@@ -152,7 +153,9 @@ function coreLines(listing: CaptionListing, opts: BuildOptions): string[] {
   lines.push(`🏠 ${propertyLine(listing)} for rent in ${locationLine(listing)}`);
   lines.push('');
   lines.push(`💰 LKR ${formatLkr(listing.rentPerMonth)}/month`);
-  if (listing.depositMonths) {
+  if (listing.keyMoney) {
+    lines.push(`🔐 Key money LKR ${formatLkr(listing.keyMoney)}`);
+  } else if (listing.depositMonths) {
     lines.push(`🔐 ${listing.depositMonths} month${listing.depositMonths === 1 ? '' : 's'} deposit`);
   }
 

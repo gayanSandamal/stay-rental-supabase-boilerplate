@@ -46,6 +46,13 @@ recorded in `CLAUDE.md` under "Facebook post import (2026-09-07)".
 
 ---
 
+
+> **Update 2026-11-29.** The post TEXT is recoverable: Facebook embeds the full
+> body as JSON in the same response as the ~200-character `og:description`, and
+> `lib/imports/facebook/embedded.ts` reads it. Where this document says the body
+> "is not in the response", that now applies only when Facebook serves a login
+> wall. The album is still not imported.
+
 ## Why it exists
 
 Sri Lankan rental supply lives in Facebook groups. Getting one of those ads onto

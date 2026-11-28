@@ -69,6 +69,7 @@ const MIGRATIONS = [
   '0064_broker_pivot.sql',
   '0065_pasted_imports.sql',
   '0067_mcp_connector.sql',
+  '0068_key_money_and_import_phones.sql',
 ];
 
 function splitStatements(sql: string): string[] {

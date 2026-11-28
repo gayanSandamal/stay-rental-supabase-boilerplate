@@ -13,6 +13,7 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { loadLocations } from '@/lib/locations/store';
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { isUserPremium } from '@/lib/subscription';
+import { resolveUpfront } from '@/lib/listings/upfront';
 import { photoCap } from '@/lib/images/cap';
 import { unhostedPhotos } from '@/lib/images/photo-urls';
 import { manifestFromLegacyPhotos, serializeManifest } from '@/lib/images/manifest';
@@ -49,7 +50,9 @@ export async function POST(request: NextRequest) {
       bathrooms,
       areaSqft,
       rentPerMonth,
+      depositType,
       depositMonths,
+      keyMoney,
       utilitiesIncluded,
       serviceCharge,
       powerBackup,
@@ -106,6 +109,11 @@ export async function POST(request: NextRequest) {
         { error: 'Add a street address, or use a town we recognise' },
         { status: 400 }
       );
+    }
+
+    const upfront = resolveUpfront({ depositType, depositMonths, keyMoney });
+    if ('error' in upfront) {
+      return NextResponse.json({ error: upfront.error }, { status: 400 });
     }
 
     // landlordId is required — without this guard the landlord lookup below
@@ -244,7 +252,8 @@ export async function POST(request: NextRequest) {
         bathrooms: toNumberOrNull(bathrooms),
         areaSqft: toNumberOrNull(areaSqft),
         rentPerMonth: Number(rentPerMonth),
-        depositMonths: toNumberOrNull(depositMonths) ?? 3,
+        depositMonths: upfront.depositMonths,
+        keyMoney: upfront.keyMoney,
         utilitiesIncluded: Boolean(utilitiesIncluded),
         serviceCharge: toNumberOrNull(serviceCharge),
         powerBackup: toStringOrNull(powerBackup),

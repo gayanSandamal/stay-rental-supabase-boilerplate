@@ -1,4 +1,5 @@
 import { FormConfig } from '@/components/form-builder';
+import { UPFRONT_OPTIONS } from '@/lib/listings/upfront';
 import { DISTRICTS } from '@/lib/intake/parser/gazetteer';
 
 // Single source for the "temporary rental" copy, reused by the create/edit form,
@@ -151,12 +152,30 @@ export const listingFormConfig: FormConfig = {
       helpText: 'Enter the monthly rental amount in LKR',
     },
     {
+      name: 'depositType',
+      label: 'Upfront payment',
+      type: 'toggle',
+      defaultValue: 'deposit',
+      options: [...UPFRONT_OPTIONS],
+    },
+    {
       name: 'depositMonths',
       label: 'Deposit (months)',
       type: 'number',
       min: 0,
       defaultValue: 3,
       helpText: 'Number of months of rent required as deposit',
+      hideIf: { field: 'depositType', operator: 'equals', value: 'key_money' },
+    },
+    {
+      name: 'keyMoney',
+      label: 'Key money (LKR)',
+      type: 'number',
+      required: true,
+      min: 1,
+      step: 0.01,
+      helpText: 'The one-off amount you take upfront, instead of a deposit',
+      showIf: { field: 'depositType', operator: 'equals', value: 'key_money' },
     },
     {
       name: 'serviceCharge',

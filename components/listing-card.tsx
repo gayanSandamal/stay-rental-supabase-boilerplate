@@ -327,7 +327,12 @@ export function ListingCard({ listing, viewMode = 'grid', showPublisher = false 
                 LKR {Number(listing.rentPerMonth).toLocaleString()}
                 <span className="text-xs font-normal text-slate-500 ml-1">/mo</span>
               </div>
-              {!!listing.depositMonths && (
+              {!!listing.keyMoney && (
+                <div className="text-xs text-slate-500">
+                  Key money: LKR {Number(listing.keyMoney).toLocaleString()}
+                </div>
+              )}
+              {!listing.keyMoney && !!listing.depositMonths && (
                 <div className="text-xs text-slate-500">Deposit: {listing.depositMonths} mo</div>
               )}
             </div>

@@ -27,6 +27,12 @@ export interface ParsedIntake {
    * field.
    */
   depositMonths: number | null;
+  /**
+   * Lump-sum key money in LKR, set by hand on the import review screen INSTEAD
+   * of depositMonths (lib/listings/upfront.ts). Never extracted, so optional:
+   * every parser construction site leaves it out.
+   */
+  keyMoney?: number | null;
   description: string | null;
   /** Required-for-publication fields the message didn't contain. */
   missingFields: string[];

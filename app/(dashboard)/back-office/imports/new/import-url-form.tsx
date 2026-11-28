@@ -281,8 +281,8 @@ export function ImportUrlForm() {
           className="w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-base leading-relaxed shadow-xs outline-none placeholder:text-slate-400 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-200 disabled:opacity-50 sm:text-sm"
         />
         <p className="text-xs text-slate-500">
-          Optional — but this is the whole advert, and Facebook will almost never
-          give it to us. Photos are added on the next screen either way.
+          Optional. We read the full text from public posts ourselves; paste it here
+          when Facebook refuses. Photos are added on the next screen either way.
         </p>
       </div>
 

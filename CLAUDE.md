@@ -528,6 +528,29 @@ with a one-tap edit/remove link. Two flags, both OFF: `enableFacebookImport`
   loses the rent to `UTILITY_BEFORE_RE` — which is *why* a human reviews before
   anything publishes.
 
+### The full post text IS in Facebook's response (2026-11-29)
+
+The sections below say the bytes are not there. For the TEXT that was wrong:
+`og:description` is cut at ~200 characters, but the same crawler response embeds
+the whole post as JSON ~490–510 KB in, group posts included. Measured on ten
+real imports: ten of ten complete, phone numbers included.
+
+- `lib/imports/facebook/embedded.ts` recovers it. **The preview is the key**: a
+  candidate must START WITH the preview served for that URL, because a page also
+  carries other people's posts. Never relax that to "the longest text".
+- It is undocumented markup, so every failure falls back to the preview and logs
+  `[imports] no embedded post body`. `MAX_HTML_BYTES` is 2 MB for this reason —
+  512 KB only just reached the body. `resolvedVia` is still `og` either way;
+  `isTruncatedPreview(rawText)` is what tells the two apart on the review screen.
+- `post_imports.extra_phones` / `owner_phone_is_whatsapp` (migration 0068) hold
+  the advert's other numbers and the WhatsApp marks. All publish
+  `verified: false`. The owner's number is still the only one we ever message,
+  and the consent ask is refused when it is not marked as WhatsApp.
+- **Deposit and key money are one or the other.** `listings.key_money` is a lump
+  sum in LKR; `resolveUpfront` (`lib/listings/upfront.ts`) is the only thing
+  that writes the pair and always nulls one. The max-deposit filter compares key
+  money against `rent × months`, or it would hide every key money listing.
+
 ### "It loses the photos, cuts the caption, misses the phone and the name" (2026-09-10)
 
 Reported again, and **three of the four are the OpenGraph limit above, not a

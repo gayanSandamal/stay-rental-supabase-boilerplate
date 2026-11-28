@@ -621,7 +621,12 @@ export default async function ListingDetailPage({
                   LKR {Number(listing.rentPerMonth).toLocaleString()}
                   <span className="text-lg font-normal text-gray-600">/month</span>
                 </div>
-                {!!listing.depositMonths && (
+                {!!listing.keyMoney && (
+                  <div className="text-gray-600 mb-2">
+                    Key money: LKR {Number(listing.keyMoney).toLocaleString()}
+                  </div>
+                )}
+                {!listing.keyMoney && !!listing.depositMonths && (
                   <div className="text-gray-600 mb-2">
                     Deposit: {listing.depositMonths} months (
                     {(

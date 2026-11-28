@@ -6,14 +6,13 @@
  *
  *  1. Graph API, for OUR OWN Page only. Full message text and every attachment.
  *     Reliable, and irrelevant to the main use case.
- *  2. OpenGraph meta tags on the public HTML. Facebook serves these to crawlers
- *     for some public content. `og:description` is TRUNCATED — it is a preview,
- *     not the post — so what comes back is a starting point for the operator,
- *     never a finished extraction.
- *  3. Nothing. Group posts and most third-party page posts return a login wall.
- *     Meta removed the Groups API on 2024-04-22 and gated third-party page
- *     reads behind App Review + Business Verification, so there is no supported
- *     path and no clever header that opens one.
+ *  2. The public HTML Facebook serves to crawlers. `og:description` is cut at
+ *     ~200 characters, but the same response embeds the WHOLE post text as JSON
+ *     — group posts included — and ./embedded.ts recovers it. When it cannot,
+ *     the preview is what comes back and the operator is told to paste.
+ *  3. Nothing. Some posts return a login wall. Meta removed the Groups API on
+ *     2024-04-22 and gated third-party page reads behind App Review + Business
+ *     Verification, so there is no supported path when the public page refuses.
  *
  * Case 3 is a NORMAL OUTCOME, not an error: the caller routes it to the same
  * review screen with a note asking the operator to paste. Anything else would
@@ -25,17 +24,24 @@
  */
 
 import { GRAPH_API_BASE, socialConfig } from '@/lib/social/config';
+import { embeddedPostText, isTruncatedPreview } from './embedded';
 import { isAllowedFacebookHost, isAllowedImageHost } from './url';
 
-/** Enough for <head>; a post page is megabytes of script we have no use for. */
-const MAX_HTML_BYTES = 512 * 1024;
+/**
+ * Enough for the embedded post body, not just <head>. It sits ~490-510 KB into
+ * a live response, so the old 512 KB cap cleared it by luck on a good day.
+ */
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10_000;
 /** Redirect chains are short and legitimate ones stay on Facebook. */
 const MAX_REDIRECTS = 3;
 
 export interface OpenGraphPost {
   title: string | null;
+  /** The whole post when the response embedded it, else Facebook's preview. */
   description: string | null;
+  /** True when `description` is still the cut-off preview. */
+  truncated: boolean;
   imageUrls: string[];
 }
 
@@ -112,12 +118,7 @@ async function readCapped(res: Response): Promise<string> {
   }
   await reader.cancel().catch(() => {});
   return new TextDecoder().decode(
-    chunks.reduce<Uint8Array>((acc, chunk) => {
-      const next = new Uint8Array(acc.length + chunk.length);
-      next.set(acc);
-      next.set(chunk, acc.length);
-      return next;
-    }, new Uint8Array())
+    Buffer.concat(chunks)
   );
 }
 
@@ -214,14 +215,21 @@ export async function fetchOpenGraph(url: string): Promise<OpenGraphPost | null>
   if (!html) return null;
 
   const title = stripSiteSuffix(metaContent(html, 'og:title'));
-  const description = metaContent(html, 'og:description');
+  const preview = metaContent(html, 'og:description');
+  const description = embeddedPostText(html, preview) ?? preview;
   const imageUrls = metaContentAll(html, 'og:image');
 
   // A login wall still renders a generic og:title ("Facebook"), so a title on
   // its own proves nothing. Real content has a description or an image.
   if (!description && !imageUrls.length) return null;
 
-  return { title, description, imageUrls };
+  const truncated = isTruncatedPreview(description) && description === preview;
+  if (truncated) {
+    // Facebook's markup is undocumented; this is how we find out it moved.
+    console.log('[imports] no embedded post body, using the preview', { htmlLength: html.length });
+  }
+
+  return { title, description, truncated, imageUrls };
 }
 
 /**

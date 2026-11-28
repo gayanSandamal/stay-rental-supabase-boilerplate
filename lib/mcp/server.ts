@@ -25,7 +25,7 @@ export const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
 export const DEFAULT_NEGOTIATED_VERSION = '2025-03-26';
 
 export const SERVER_INSTRUCTIONS = `Easy Rent (easyrent.lk) is a verified marketplace for MID-TO-LONG-TERM house and apartment rentals in Sri Lanka (1-12+ month leases), not holiday stays.
-- Prices are in Sri Lankan rupees (LKR) per month. Deposits are counted in MONTHS of rent; notice periods in days.
+- Prices are in Sri Lankan rupees (LKR) per month. Deposits are counted in MONTHS of rent, or a listing asks a lump sum of key money instead; notice periods in days.
 - Sri Lankan renters care about power backup (generator/solar/UPS), water source (mains/tank/borehole), and fibre internet — search_listings filters on all of them.
 - Renters contact landlords directly by phone or WhatsApp; there is no booking or in-app messaging. get_listing returns the landlord's published numbers and a link to the listing page.
 - Only ever describe listings these tools returned. Always give the listing URL so the user can check photos and details themselves.

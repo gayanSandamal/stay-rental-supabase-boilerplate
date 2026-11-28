@@ -6,6 +6,7 @@ import { loadFeatureFlags } from '@/lib/feature-flags-store';
 import { normalizePhone } from '@/lib/auth/phone-verification';
 import { ImportPublishError, parsePayload, parsePhotoUrls, publishImport } from '@/lib/imports/publish';
 import { grantManualImportConsent, requestImportConsent } from '@/lib/imports/consent';
+import { MAX_EXTRA_PHONES, cleanExtraPhones, parseExtraPhones, serializeExtraPhones, unreadablePhones } from '@/lib/imports/phones';
 import type { ParsedIntake } from '@/lib/intake/parser/types';
 import { ToolError, defineTool, type ToolContext } from '../types';
 import { PROPERTY_TYPES, listingUrl } from './shared';
@@ -150,8 +151,11 @@ export const adminGetImport = defineTool({
         bathrooms: parsed.bathrooms,
         rentPerMonth: parsed.rentPerMonth,
         depositMonths: parsed.depositMonths,
+        keyMoney: parsed.keyMoney ?? null,
       },
       photos: parsePhotoUrls(record.photoUrls),
+      ownerPhoneIsWhatsApp: record.ownerPhoneIsWhatsApp,
+      extraPhones: parseExtraPhones(record.extraPhones),
     };
   },
 });
@@ -177,13 +181,20 @@ export const adminUpdateImport = defineTool({
     bedrooms: z.number().int().min(1).max(20).optional(),
     bathrooms: z.number().int().min(0).max(20).optional(),
     rentPerMonth: z.number().int().min(1000).max(100_000_000).optional().describe('Monthly rent in LKR'),
-    depositMonths: z.number().int().min(0).max(24).optional(),
+    depositMonths: z.number().int().min(0).max(24).optional().describe('Deposit in months of rent; replaces key money'),
+    keyMoney: z.number().int().min(1).max(1_000_000_000).optional().describe('Key money: a lump sum in LKR, INSTEAD of a deposit'),
+    ownerPhoneIsWhatsApp: z.boolean().optional(),
+    extraPhones: z
+      .array(z.object({ phone: z.string().max(30), isWhatsApp: z.boolean().default(false) }))
+      .max(MAX_EXTRA_PHONES)
+      .optional()
+      .describe('The advert\'s other numbers, shown on the listing. Replaces the current list; [] clears it'),
     ownerPhone: z.string().max(30).optional().describe('The owner\'s mobile, e.g. 0771234567'),
     ownerName: z.string().max(100).optional(),
     shareOnSocial: z.boolean().optional().describe('Also post to Easy Rent\'s Facebook/Instagram/TikTok once live'),
   }),
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  async handler({ importId, ownerPhone, ownerName, shareOnSocial, ...fields }, ctx) {
+  async handler({ importId, ownerPhone, ownerName, shareOnSocial, ownerPhoneIsWhatsApp, extraPhones, keyMoney, ...fields }, ctx) {
     await requireImportsEnabled();
     const record = await loadImport(importId);
     if (!EDITABLE.has(record.status)) {
@@ -201,17 +212,35 @@ export const adminUpdateImport = defineTool({
       if (fields[key] !== undefined) (next as any)[key] = fields[key];
     }
 
+    // One replaces the other, and key money wins if both are passed.
+    if (keyMoney !== undefined) {
+      next.keyMoney = keyMoney;
+      next.depositMonths = null;
+    } else if (fields.depositMonths !== undefined) {
+      next.keyMoney = null;
+    }
+
     let phone = record.ownerPhone;
     if (ownerPhone !== undefined) {
       phone = ownerPhone.trim() ? normalizePhone(ownerPhone) : null;
       if (ownerPhone.trim() && !phone) throw new ToolError(`"${ownerPhone}" is not a phone number we can use.`);
     }
 
+    const extras = cleanExtraPhones(
+      extraPhones ?? parseExtraPhones(record.extraPhones),
+      phone,
+      normalizePhone
+    );
+    const unreadable = extraPhones ? unreadablePhones(extras) : [];
+    if (unreadable.length) throw new ToolError(`"${unreadable[0]}" is not a phone number we can use.`);
+
     const [saved] = await db
       .update(postImports)
       .set({
         parsedPayload: JSON.stringify(next),
         ownerPhone: phone,
+        extraPhones: serializeExtraPhones(extras),
+        ...(ownerPhoneIsWhatsApp !== undefined ? { ownerPhoneIsWhatsApp } : {}),
         ...(ownerName !== undefined ? { ownerName: ownerName.trim() || null } : {}),
         ...(shareOnSocial !== undefined ? { shareOnSocial } : {}),
         updatedAt: new Date(),
@@ -241,6 +270,7 @@ export const adminRequestImportConsent = defineTool({
     if (!record.sourceUrl) {
       throw new ToolError('A pasted import has no Facebook post, so the consent template would be untrue. Use admin_publish_import once the owner has agreed.');
     }
+    if (!record.ownerPhoneIsWhatsApp) throw new ToolError('The owner\'s number is not marked as WhatsApp, and the consent request is a WhatsApp message.');
     if (record.consentRequestedAt) throw new ToolError('This owner has already been asked once; they will not be asked again.');
 
     const { outcome, previewUrl } = await requestImportConsent(record, ctx.user.id);
