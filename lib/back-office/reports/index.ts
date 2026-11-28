@@ -1,9 +1,17 @@
 import type { FeatureFlags } from '@/lib/feature-flags';
+import { expiringListingsReport } from './expiring-listings';
 import { importFollowUpReport } from './import-follow-up';
+import { incompleteListingsReport } from './incomplete-listings';
+import { noResponseListingsReport } from './no-response-listings';
 import type { ReportDefinition } from './types';
 
 /** Every report, in display order. What to add next: docs/back-office-reports-plan.md */
-export const REPORTS: ReportDefinition[] = [importFollowUpReport];
+export const REPORTS: ReportDefinition[] = [
+  importFollowUpReport,
+  expiringListingsReport,
+  noResponseListingsReport,
+  incompleteListingsReport,
+];
 
 export function availableReports(flags: FeatureFlags): ReportDefinition[] {
   if (!flags.enableDataExport) return [];

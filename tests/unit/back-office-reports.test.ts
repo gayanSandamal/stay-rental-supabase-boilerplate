@@ -16,6 +16,10 @@ import {
 import { parseReportFilters } from '@/lib/back-office/reports/filters';
 import { REPORTS, availableReports, findReport } from '@/lib/back-office/reports';
 import { followUpFor, missingDetails } from '@/lib/back-office/reports/import-follow-up';
+import { expiryFollowUp } from '@/lib/back-office/reports/expiring-listings';
+import { missingListingDetails } from '@/lib/back-office/reports/incomplete-listings';
+import { phoneCells } from '@/lib/back-office/reports/listing-rows';
+import { responseFollowUp } from '@/lib/back-office/reports/no-response-listings';
 import { featureFlagDefaults, type FeatureFlags } from '@/lib/feature-flags';
 
 const NOW = new Date('2026-11-29T08:35:33Z');
@@ -133,5 +137,68 @@ describe('after publishing or discarding', () => {
     const src = readFileSync('app/(dashboard)/back-office/imports/actions.ts', 'utf8');
     expect(src.match(/\/new\?published=\$\{id\}/g)).toHaveLength(2);
     expect(src).toContain('/new?discarded=${id}');
+  });
+});
+
+describe('listing reports', () => {
+  const at = (iso: string) => expiryFollowUp(new Date(iso), NOW);
+
+  it('counts days to and from expiry', () => {
+    expect(at('2026-12-02T08:00:00Z')).toMatch(/^Expires in 3 days/);
+    expect(at('2026-11-29T20:00:00Z')).toMatch(/^Expires within a day/);
+    expect(at('2026-11-29T01:00:00Z')).toMatch(/^Expired today/);
+    expect(at('2026-11-27T01:00:00Z')).toMatch(/^Expired 2 days ago/);
+    expect(at('2026-11-28T01:00:00Z')).toMatch(/^Expired 1 day ago/);
+  });
+
+  it('separates "nobody sees it" from "people see it and do not call"', () => {
+    expect(responseFollowUp(0, 0)).toMatch(/^Few people see it/);
+    expect(responseFollowUp(80, 0)).toMatch(/^People look but do not call/);
+    expect(responseFollowUp(80, 2)).toBe('None');
+  });
+
+  it('asks only for what is missing', () => {
+    const full = {
+      photoCount: 5, description: 'x'.repeat(60), propertyType: 'house', contactCount: 1,
+      bathrooms: 1, areaSqft: 900, waterSource: 'mains', depositMonths: 3, keyMoney: null,
+    };
+    expect(missingListingDetails(full)).toEqual({ key: [], other: [] });
+    expect(missingListingDetails({ ...full, depositMonths: 0 }).other).toEqual([]);
+    expect(missingListingDetails({ ...full, depositMonths: null, keyMoney: '500000.00' }).other).toEqual([]);
+    expect(
+      missingListingDetails({
+        ...full, photoCount: 1, description: 'short', propertyType: null, contactCount: 0,
+        bathrooms: null, depositMonths: null,
+      })
+    ).toEqual({
+      key: ['more photos (has 1)', 'longer description', 'property type', 'contact number'],
+      other: ['bathrooms', 'deposit or key money'],
+    });
+  });
+
+  it('gives one number to call, deduplicated, with the WhatsApp one linked', () => {
+    expect(
+      phoneCells(
+        [
+          { phone: '+94 11 234 5678', isWhatsApp: false },
+          { phone: '0771234567', isWhatsApp: true },
+          { phone: '+94771234567', isWhatsApp: true },
+        ],
+        '+94700000000'
+      )
+    ).toEqual({
+      ownerPhone: '011 234 5678',
+      whatsApp: 'https://wa.me/94771234567',
+      otherPhones: '077 123 4567 (WhatsApp)',
+    });
+    expect(phoneCells([], '+94700000000').ownerPhone).toBe('070 000 0000');
+    expect(phoneCells([], null)).toEqual({ ownerPhone: null, whatsApp: null, otherPhones: null });
+  });
+
+  it('never runs queries concurrently or exports an email', () => {
+    for (const f of ['listing-rows', 'expiring-listings', 'no-response-listings', 'incomplete-listings']) {
+      const src = readFileSync(`lib/back-office/reports/${f}.ts`, 'utf8');
+      expect(src).not.toMatch(/Promise\.all|users\.email|photosManifest/);
+    }
   });
 });

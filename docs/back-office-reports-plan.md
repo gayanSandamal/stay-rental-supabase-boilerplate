@@ -15,6 +15,9 @@ entry come with it.
 | Report | Answers |
 | --- | --- |
 | Facebook import follow-up | Which imported owners need a call, at what number, about which post? |
+| Expiring and expired listings | Which listings end in the next 14 days or ended in the last 30, with the owner's number? |
+| Listings with no response | Which listings live 14+ days get no calls or WhatsApp taps, or under 10 viewers? |
+| Incomplete listings | Which listings lack photos, a description, a type or a contact number? |
 
 ## Proposed, in build order
 
@@ -22,17 +25,14 @@ All of these use data that already exists. Nothing needs a migration.
 
 | # | Report | Answers | What someone does with it | Source |
 | --- | --- | --- | --- | --- |
-| 1 | **Expiring and expired listings** | Which listings end in the next 14 days or ended in the last 30, with the owner's number? | Call: still available? Renew or close | `listings.expires_at`, contact numbers |
-| 2 | **Listings with no response** | Which live listings have had 14+ days with few views or no call/WhatsApp taps? | Suggest photos or a price change; offer Boost | `listing_views`, `listing_contact_events` |
-| 3 | **Incomplete listings** | Which live listings lack photos, a description or key details? | Ask the owner for what is missing | `listings` |
-| 4 | **Visibility sales** | Which Boost, Featured, Urgent and bundles are running, when do they end, what was activated this month? | Renewal calls; match to bank slips | `listings` visibility columns, `audit_logs` |
-| 5 | **Owners and brokers** | Who has how many listings, on which plan, with what numbers? | Broker account management; plan upsell | `users`, `landlords`, `business_accounts` |
-| 6 | **Unmet demand** | What do renters search for and find little of, by town, rent and bedrooms? | Choose which Facebook groups to import from | `search_queries`, `saved_searches` |
-| 7 | **WhatsApp intake follow-up** | Which senders stalled part-way, and what did we last ask? | Finish the listing by phone | `whatsapp_intakes` |
-| 8 | **Moderation queue** | What was held or rejected, why, and how long did it wait? | Clear the backlog; spot bad rules | `listing_moderations` |
-| 9 | **Social performance** | What was posted where, with what views? Unknown stays blank, never 0 | Decide what to post; show owners their reach | `listing_social_posts` |
-| 10 | **Team activity** | Imports, publishes, approvals and activations per person | Workload and quality | `audit_logs`, `post_imports.imported_by` |
-| 11 | **Market rents** | Median rent by town and bedrooms, with sample size | Price advice, press, marketing | `market_rent_snapshots` (silent below the sample floor) |
+| 1 | **Visibility sales** | Which Boost, Featured, Urgent and bundles are running, when do they end, what was activated this month? | Renewal calls; match to bank slips | `listings` visibility columns, `audit_logs` |
+| 2 | **Owners and brokers** | Who has how many listings, on which plan, with what numbers? | Broker account management; plan upsell | `users`, `landlords`, `business_accounts` |
+| 3 | **Unmet demand** | What do renters search for and find little of, by town, rent and bedrooms? | Choose which Facebook groups to import from | `search_queries`, `saved_searches` |
+| 4 | **WhatsApp intake follow-up** | Which senders stalled part-way, and what did we last ask? | Finish the listing by phone | `whatsapp_intakes` |
+| 5 | **Moderation queue** | What was held or rejected, why, and how long did it wait? | Clear the backlog; spot bad rules | `listing_moderations` |
+| 6 | **Social performance** | What was posted where, with what views? Unknown stays blank, never 0 | Decide what to post; show owners their reach | `listing_social_posts` |
+| 7 | **Team activity** | Imports, publishes, approvals and activations per person | Workload and quality | `audit_logs`, `post_imports.imported_by` |
+| 8 | **Market rents** | Median rent by town and bedrooms, with sample size | Price advice, press, marketing | `market_rent_snapshots` (silent below the sample floor) |
 
 ## Rules for every report
 
